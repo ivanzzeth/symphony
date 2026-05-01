@@ -104,10 +104,9 @@ type WorkspaceConfig struct {
 }
 
 type HooksConfig struct {
-	// TODO: Hook fields are parsed from workflow YAML, but execution is not
-	// implemented yet.
 	BeforeRun    string `yaml:"before_run"`
 	AfterRun     string `yaml:"after_run"`
+	AfterCreate  string `yaml:"after_create"`
 	BeforeRemove string `yaml:"before_remove"`
 }
 
@@ -287,6 +286,13 @@ func (c *WorkflowConfig) HookAfterRun() string {
 		return ""
 	}
 	return c.Hooks.AfterRun
+}
+
+func (c *WorkflowConfig) HookAfterCreate() string {
+	if c == nil {
+		return ""
+	}
+	return c.Hooks.AfterCreate
 }
 
 func (c *WorkflowConfig) HookBeforeRemove() string {

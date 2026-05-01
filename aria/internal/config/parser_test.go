@@ -226,6 +226,7 @@ workspace:
   branch_prefix: task/
 hooks:
   before_run: ./scripts/before.sh
+  after_create: ./scripts/create.sh
   after_run: ./scripts/after.sh
   before_remove: ./scripts/cleanup.sh
 codex:
@@ -255,6 +256,7 @@ Prompt body.
 	assert.Equal(t, "linear", cfg.Polling.BackoffStrategy)
 	assert.Equal(t, "task/", cfg.Workspace.BranchPrefix)
 	assert.Equal(t, "./scripts/before.sh", cfg.HookBeforeRun())
+	assert.Equal(t, "./scripts/create.sh", cfg.HookAfterCreate())
 	assert.Equal(t, "./scripts/after.sh", cfg.HookAfterRun())
 	assert.Equal(t, "./scripts/cleanup.sh", cfg.HookBeforeRemove())
 	assert.Equal(t, "/usr/local/bin/codex", cfg.CodexBinaryPath())
