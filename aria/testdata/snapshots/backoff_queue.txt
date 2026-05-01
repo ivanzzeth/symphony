@@ -4,7 +4,7 @@
 │ │                    │                                                                       │    
 │ │                    │                                                                       │    
 │ │                    │ ┌───────────────────────────────────────────────────────────────────┐ │    
-│ │                    │ │ CONTRABASS STATUS                                                 │ │    
+│ │                    │ │ ARIA STATUS                                                       │ │    
 │ │                    │ │ Agents: 0/0    Throughput: collecting...    Runtime: 0s           │ │    
 │ │                    │ │ Tokens: collecting...                                             │ │    
 │ │                    │ │ Model:     Scope: -                                               │ │    
