@@ -16,6 +16,7 @@ const (
 	defaultTrackerType         = "internal"
 	defaultBackoffStrategy     = "exponential"
 	defaultWorkspaceBaseDir    = "."
+	defaultWorkspaceBaseBranch = "develop"
 	defaultBranchPrefix        = "symphony/"
 	defaultCodexBinaryPath     = "codex app-server"
 	defaultApprovalPolicy      = "auto-edit"
@@ -100,10 +101,13 @@ type PollingConfig struct {
 
 type WorkspaceConfig struct {
 	BaseDir      string `yaml:"base_dir"`
+	BaseBranch   string `yaml:"base_branch"`
 	BranchPrefix string `yaml:"branch_prefix"`
 }
 
 type HooksConfig struct {
+	// Hook fields support both the aria convention (after_run) and the
+	// Elixir WORKFLOW.md convention (after_create) for cross-compatibility.
 	BeforeRun    string `yaml:"before_run"`
 	AfterRun     string `yaml:"after_run"`
 	AfterCreate  string `yaml:"after_create"`
@@ -274,11 +278,32 @@ func (c *WorkflowConfig) WorkspaceBaseDir() string {
 	return c.Workspace.BaseDir
 }
 
+func (c *WorkflowConfig) WorkspaceBaseBranch() string {
+	if c == nil || c.Workspace.BaseBranch == "" {
+		return defaultWorkspaceBaseBranch
+	}
+	return c.Workspace.BaseBranch
+}
+
+func (c *WorkflowConfig) WorkspaceBranchPrefix() string {
+	if c == nil || c.Workspace.BranchPrefix == "" {
+		return defaultBranchPrefix
+	}
+	return c.Workspace.BranchPrefix
+}
+
 func (c *WorkflowConfig) HookBeforeRun() string {
 	if c == nil {
 		return ""
 	}
 	return c.Hooks.BeforeRun
+}
+
+func (c *WorkflowConfig) HookAfterCreate() string {
+	if c == nil {
+		return ""
+	}
+	return c.Hooks.AfterCreate
 }
 
 func (c *WorkflowConfig) HookAfterRun() string {
@@ -288,11 +313,16 @@ func (c *WorkflowConfig) HookAfterRun() string {
 	return c.Hooks.AfterRun
 }
 
-func (c *WorkflowConfig) HookAfterCreate() string {
+// HookAfterRunAny returns the after_create hook if set (Elixir WORKFLOW.md
+// convention), falling back to the aria-native after_run.
+func (c *WorkflowConfig) HookAfterRunAny() string {
 	if c == nil {
 		return ""
 	}
-	return c.Hooks.AfterCreate
+	if c.Hooks.AfterCreate != "" {
+		return c.Hooks.AfterCreate
+	}
+	return c.Hooks.AfterRun
 }
 
 func (c *WorkflowConfig) HookBeforeRemove() string {

@@ -1066,8 +1066,8 @@ func TestOrchestrator_PromptRenderFailure(t *testing.T) {
 	mw := workspace.NewMockManager(t.TempDir())
 	mr := &agent.MockRunner{}
 	cfg := &staticConfig{cfg: testConfig()}
-	// Use an invalid liquid template that will cause RenderPrompt to fail
-	cfg.cfg.PromptTemplate = "{{ invalid_var_that_does_not_exist }}"
+	// Use an invalid prompt template that references a nonexistent variable
+	cfg.cfg.PromptTemplate = "{{ issue.nonexistent_field }}"
 	orch := NewOrchestrator(mt, mw, mr, cfg, nil)
 	events := newEventCollector(orch.Events())
 
