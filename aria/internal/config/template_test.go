@@ -218,14 +218,19 @@ func TestRenderHook(t *testing.T) {
 		want     string
 	}{
 		{
-			name:     "hook with base branch",
+			name:     "hook with base branch (shell-quoted)",
 			template: "git clone --branch {{ workspace.base_branch }} https://github.com/example/repo .",
-			want:     "git clone --branch develop https://github.com/example/repo .",
+			want:     "git clone --branch 'develop' https://github.com/example/repo .",
 		},
 		{
-			name:     "hook with workspace path",
+			name:     "hook with workspace path (shell-quoted)",
 			template: "cd {{ workspace.path }} && make build",
-			want:     "cd /tmp/ws/WEB-39 && make build",
+			want:     "cd '/tmp/ws/WEB-39' && make build",
+		},
+		{
+			name:     "hook with shell-quoted empty title",
+			template: "git commit -m {{ issue.title }}",
+			want:     "git commit -m ''",
 		},
 	}
 

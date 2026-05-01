@@ -50,8 +50,63 @@ func RenderPrompt(cfg *WorkflowConfig, issue types.Issue, workspacePath string, 
 }
 
 // RenderHook expands liquid template variables in a hook command string.
+// All string bindings are shell-quoted before interpolation to prevent command
+// injection from user-controlled issue tracker values (titles, descriptions, etc.).
 func RenderHook(hookTemplate string, ctx TemplateContext) (string, error) {
-	return RenderTemplate(hookTemplate, ctx)
+	engine := liquid.NewEngine()
+	engine.StrictVariables()
+	return engine.ParseAndRenderString(hookTemplate, shellQuotedBindings(ctx))
+}
+
+// shellQuotedBindings returns bindings with all string values shell-quoted
+// for safe use in sh -c command strings.
+func shellQuotedBindings(ctx TemplateContext) map[string]any {
+	labels := ctx.Issue.Labels
+	if labels == nil {
+		labels = []string{}
+	}
+
+	issueState := ""
+	if ctx.Issue.State != types.Unclaimed {
+		issueState = ctx.Issue.State.String()
+	}
+
+	quotedLabels := make([]string, len(labels))
+	for i, l := range labels {
+		quotedLabels[i] = shellQuote(l)
+	}
+
+	return map[string]any{
+		"issue": map[string]any{
+			"id":          shellQuote(ctx.Issue.ID),
+			"identifier":  shellQuote(ctx.Issue.Identifier),
+			"title":       shellQuote(ctx.Issue.Title),
+			"description": shellQuote(ctx.Issue.Description),
+			"url":         shellQuote(ctx.Issue.URL),
+			"state":       shellQuote(issueState),
+			"labels":      quotedLabels,
+			"priority":    ctx.Issue.Priority,
+		},
+		"workspace": map[string]any{
+			"base_branch": shellQuote(ctx.Workspace.BaseBranch),
+			"path":        shellQuote(ctx.Workspace.Path),
+		},
+		"tracker": map[string]any{
+			"repo":        shellQuote(ctx.Tracker.Repo),
+			"team_id":     shellQuote(ctx.Tracker.TeamID),
+			"project_url": shellQuote(ctx.Tracker.ProjectURL),
+		},
+		"attempt": ctx.Attempt,
+	}
+}
+
+// shellQuote wraps a string in single quotes and escapes embedded single quotes
+// for safe use in sh -c command strings. Returns '' for empty strings.
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 // buildBindings returns a map of all template bindings derived from the context.
