@@ -18,11 +18,17 @@ defmodule SymphonyElixir.PromptBuilder do
     |> Solid.render!(
       %{
         "attempt" => Keyword.get(opts, :attempt),
-        "issue" => issue |> Map.from_struct() |> to_solid_map()
+        "issue" => issue |> Map.from_struct() |> to_solid_map(),
+        "workspace" => workspace_template_vars()
       },
       @render_opts
     )
     |> IO.iodata_to_binary()
+  end
+
+  defp workspace_template_vars do
+    ws = Config.settings!().workspace
+    %{"root" => ws.root, "base_branch" => ws.base_branch}
   end
 
   defp prompt_template!({:ok, %{prompt_template: prompt}}), do: default_prompt(prompt)
