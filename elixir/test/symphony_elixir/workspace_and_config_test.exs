@@ -1303,4 +1303,30 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
       File.rm_rf(test_root)
     end
   end
+
+  test "agent.kind validates and defaults correctly" do
+    # Defaults to "codex" when omitted
+    write_workflow_file!(Workflow.workflow_file_path())
+    assert Config.settings!().agent.kind == "codex"
+
+    # Explicit "codex" is valid
+    write_workflow_file!(Workflow.workflow_file_path(), agent_kind: "codex")
+    assert Config.settings!().agent.kind == "codex"
+    assert :ok = Config.validate!()
+
+    # "claude" is valid
+    write_workflow_file!(Workflow.workflow_file_path(), agent_kind: "claude")
+    assert Config.settings!().agent.kind == "claude"
+    assert :ok = Config.validate!()
+
+    # "cursor" is valid
+    write_workflow_file!(Workflow.workflow_file_path(), agent_kind: "cursor")
+    assert Config.settings!().agent.kind == "cursor"
+    assert :ok = Config.validate!()
+
+    # Invalid kind is rejected
+    write_workflow_file!(Workflow.workflow_file_path(), agent_kind: "invalid")
+    assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
+    assert message =~ "agent.kind"
+  end
 end
