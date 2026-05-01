@@ -23,7 +23,7 @@ defmodule SymphonyElixir.GitHubTrackerTest do
     assert issue.identifier == "gh-101"
     assert issue.title == "Open issue"
     assert issue.description == "Needs work"
-    assert issue.state == "OPEN"
+    assert issue.state == "open"
     assert issue.labels == ["backend", "priority:high"]
     assert issue.assigned_to_worker
     assert %DateTime{} = issue.created_at
@@ -114,22 +114,26 @@ defmodule SymphonyElixir.GitHubTrackerTest do
           exit 17
           ;;
         *)
-          printf '%s\\n' '[{"number":101,"title":"Open issue","body":"Needs work","state":"OPEN","labels":[{"name":"Backend"},{"name":"priority:high"}],"url":"https://github.example/issues/101","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","id":"gid-101"},{"number":102,"title":"Closed issue","body":"Already done","state":"closed","labels":[],"url":"https://github.example/issues/102","createdAt":"2026-01-03T00:00:00Z","updatedAt":"2026-01-04T00:00:00Z","id":"gid-102"}]'
+          printf '%s\\n' '[{"number":101,"title":"Open issue","body":"Needs work","state":"open","labels":[{"name":"Backend"},{"name":"priority:high"}],"url":"https://github.example/issues/101","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","id":"gid-101"},{"number":102,"title":"Closed issue","body":"Already done","state":"closed","labels":[],"url":"https://github.example/issues/102","createdAt":"2026-01-03T00:00:00Z","updatedAt":"2026-01-04T00:00:00Z","id":"gid-102"}]'
           exit 0
           ;;
       esac
     fi
 
-    case "$mode" in
-      error)
-        printf '%s\\n' 'gh failed'
-        exit 17
-        ;;
-      *)
-        printf '%s\\n' 'ok'
-        exit 0
-        ;;
-    esac
+    if [ "$cmd" = "issue" ] && { [ "$subcmd" = "comment" ] || [ "$subcmd" = "close" ] || [ "$subcmd" = "reopen" ]; }; then
+      case "$mode" in
+        error)
+          printf '%s\\n' 'gh failed'
+          exit 17
+          ;;
+        *)
+          exit 0
+          ;;
+      esac
+    fi
+
+    printf '%s\\n' 'unknown command'
+    exit 99
     """)
 
     File.chmod!(fake_gh, 0o755)
