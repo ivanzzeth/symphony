@@ -106,10 +106,11 @@ type WorkspaceConfig struct {
 }
 
 type HooksConfig struct {
-	// TODO: Hook fields are parsed from workflow YAML, but execution is not
-	// implemented yet.
+	// Hook fields support both the aria convention (after_run) and the
+	// Elixir WORKFLOW.md convention (after_create) for cross-compatibility.
 	BeforeRun    string `yaml:"before_run"`
 	AfterRun     string `yaml:"after_run"`
+	AfterCreate  string `yaml:"after_create"`
 	BeforeRemove string `yaml:"before_remove"`
 }
 
@@ -301,6 +302,11 @@ func (c *WorkflowConfig) HookBeforeRun() string {
 func (c *WorkflowConfig) HookAfterRun() string {
 	if c == nil {
 		return ""
+	}
+	// after_create is the Elixir WORKFLOW.md convention; prefer it over
+	// the aria-native after_run when both are set for compatibility.
+	if c.Hooks.AfterCreate != "" {
+		return c.Hooks.AfterCreate
 	}
 	return c.Hooks.AfterRun
 }

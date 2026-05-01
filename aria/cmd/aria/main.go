@@ -500,18 +500,16 @@ func trackerAssigneeID(cfg *config.WorkflowConfig) string {
 	return os.Getenv("LINEAR_ASSIGNEE")
 }
 
+const hookExecutionTimeout = 5 * time.Minute
+
 // configHooks implements workspace.HooksHandler using the workflow config hooks
 // with liquid template expansion.
 type configHooks struct {
-	cfg    *config.WorkflowConfig
-	logger *log.Logger
+	cfg *config.WorkflowConfig
 }
 
 func newConfigHooks(cfg *config.WorkflowConfig) *configHooks {
-	return &configHooks{
-		cfg:    cfg,
-		logger: log.NewWithOptions(os.Stderr, log.Options{Level: log.WarnLevel}),
-	}
+	return &configHooks{cfg: cfg}
 }
 
 func (h *configHooks) RunAfterCreate(ctx context.Context, workspacePath string, issue types.Issue) error {
@@ -549,11 +547,22 @@ func (h *configHooks) runHook(ctx context.Context, hookCmd string, workspacePath
 		return fmt.Errorf("expanding hook template: %w", err)
 	}
 
-	cmd := exec.CommandContext(ctx, "sh", "-c", expanded)
+	hookCtx, cancel := context.WithTimeout(ctx, hookExecutionTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(hookCtx, "sh", "-c", expanded)
 	cmd.Dir = workspacePath
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("hook command failed: %w\noutput: %s", err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("hook command failed: %w\noutput: %s", err, truncateOutput(string(output)))
 	}
 	return nil
+}
+
+func truncateOutput(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 1024 {
+		return s[:1024] + "... (truncated)"
+	}
+	return s
 }
