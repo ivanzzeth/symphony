@@ -102,6 +102,11 @@ func (m *Manager) Create(ctx context.Context, issue types.Issue) (string, error)
 
 	workspacePath := m.workspacePath(issue.ID)
 
+	workspacePath, err := Canonicalize(m.baseDir, workspacePath)
+	if err != nil {
+		return "", fmt.Errorf("create workspace: %w", err)
+	}
+
 	m.mu.RLock()
 	trackedPath, tracked := m.active[issue.ID]
 	m.mu.RUnlock()
@@ -157,6 +162,12 @@ func (m *Manager) Cleanup(ctx context.Context, issueID string) error {
 	defer unlock()
 
 	workspacePath := m.workspacePath(issueID)
+
+	workspacePath, err := Canonicalize(m.baseDir, workspacePath)
+	if err != nil {
+		return fmt.Errorf("cleanup workspace: %w", err)
+	}
+
 	if _, err := os.Stat(workspacePath); errors.Is(err, os.ErrNotExist) {
 		m.mu.Lock()
 		delete(m.active, issueID)
