@@ -7,6 +7,7 @@ defmodule SymphonyElixir.Claude.Adapter do
   """
   @behaviour SymphonyElixir.CodingAgent
 
+  import Bitwise
   require Logger
   alias SymphonyElixir.{Config, SSH}
 
@@ -41,7 +42,13 @@ defmodule SymphonyElixir.Claude.Adapter do
   # --- private ---
 
   defp generate_session_id do
-    "#{:erlang.unique_integer([:positive])}-#{System.system_time(:millisecond)}"
+    <<a::32, b::16, c::16, d::16, e::48>> = :crypto.strong_rand_bytes(16)
+    c_v4 = (c &&& 0x0FFF) ||| 0x4000
+    d_variant = (d &&& 0x3FFF) ||| 0x8000
+    hex = Base.encode16(<<a::32, b::16, c_v4::16, d_variant::16, e::48>>, case: :lower)
+
+    <<p0::binary-size(8), p1::binary-size(4), p2::binary-size(4), p3::binary-size(4), p4::binary-size(12)>> = hex
+    "#{p0}-#{p1}-#{p2}-#{p3}-#{p4}"
   end
 
   defp build_cli_args(session, prompt) do
