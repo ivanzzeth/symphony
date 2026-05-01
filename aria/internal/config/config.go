@@ -311,6 +311,13 @@ func (c *WorkflowConfig) HookAfterRun() string {
 	return c.Hooks.AfterRun
 }
 
+func (c *WorkflowConfig) HookAfterCreate() string {
+	if c == nil {
+		return ""
+	}
+	return c.Hooks.AfterCreate
+}
+
 func (c *WorkflowConfig) HookBeforeRemove() string {
 	if c == nil {
 		return ""
