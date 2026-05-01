@@ -152,7 +152,7 @@ func (o *Orchestrator) completeRun(ctx context.Context, issueID string, doneErr 
 		"err", finalAttempt.Error,
 	)
 
-	o.enqueueBackoffFromRunResult(ctx, entry.issue, finalAttempt)
+	o.enqueueBackoffFromRunResult(ctx, entry.issue, finalAttempt, entry.rateLimited)
 }
 
 func resolveFinalPhase(phase types.RunPhase, message string, doneErr error) (types.RunPhase, string) {
@@ -229,7 +229,7 @@ func hasExplicitSuccessSignal(message string) bool {
 	return strings.Contains(normalized, "completed") && strings.Contains(normalized, "success")
 }
 
-func (o *Orchestrator) enqueueBackoffFromRunResult(ctx context.Context, issue types.Issue, attempt types.RunAttempt) {
+func (o *Orchestrator) enqueueBackoffFromRunResult(ctx context.Context, issue types.Issue, attempt types.RunAttempt, rateLimited bool) {
 	if issueTransitionErr := TransitionIssueState(types.Running, types.RetryQueued); issueTransitionErr == nil {
 		if updateErr := o.tracker.UpdateIssueState(ctx, issue.ID, types.RetryQueued); updateErr != nil {
 			logging.LogIssueEvent(o.logger, issue.ID, "update_retry_queued_failed", "err", updateErr)
@@ -249,8 +249,8 @@ func (o *Orchestrator) enqueueBackoffFromRunResult(ctx context.Context, issue ty
 	// Extend backoff when rate-limited.
 	o.mu.Lock()
 	limits := o.rateLimits
-	entry, ok := o.running[issue.ID]
-	if ok && entry != nil && entry.rateLimited {
+	o.mu.Unlock()
+	if rateLimited {
 		// Apply additional backoff when the run was rate-limited.
 		if ext := rateLimitBackoffExtension(limits); ext > 0 {
 			extMs := int(ext.Milliseconds())
@@ -260,7 +260,6 @@ func (o *Orchestrator) enqueueBackoffFromRunResult(ctx context.Context, issue ty
 			}
 		}
 	}
-	o.mu.Unlock()
 
 	retryAt := time.Now().Add(time.Duration(delayMs) * time.Millisecond)
 	nextAttempt := attempt.Attempt + 1
@@ -305,7 +304,7 @@ func (o *Orchestrator) enqueueBackoffFromRunning(ctx context.Context, issue type
 			attempt.Phase = types.Failed
 		}
 	}
-	o.enqueueBackoffFromRunResult(ctx, issue, attempt)
+	o.enqueueBackoffFromRunResult(ctx, issue, attempt, false)
 }
 
 func (o *Orchestrator) releaseClaimAndQueueContinuation(ctx context.Context, issueID string, attempt int, cause error) {
