@@ -245,6 +245,384 @@ func TestDetectStall_Boundaries(t *testing.T) {
 	}
 }
 
+func TestParseRateLimits(t *testing.T) {
+	tests := []struct {
+		name string
+		data map[string]interface{}
+		want func(t *testing.T, info *types.RateLimitInfo)
+	}{
+		{
+			name: "nil_data",
+			data: nil,
+			want: func(t *testing.T, info *types.RateLimitInfo) {
+				assert.Nil(t, info)
+			},
+		},
+		{
+			name: "empty_map",
+			data: map[string]interface{}{},
+			want: func(t *testing.T, info *types.RateLimitInfo) {
+				assert.Nil(t, info)
+			},
+		},
+		{
+			name: "direct_buckets_in_data",
+			data: map[string]interface{}{
+				"primary": map[string]interface{}{
+					"remaining":    float64(500),
+					"limit":        float64(1000),
+					"reset_in_s":   float64(30),
+					"requests_used": float64(500),
+				},
+				"secondary": map[string]interface{}{
+					"remaining": float64(20000),
+					"limit":     float64(20000),
+				},
+			},
+			want: func(t *testing.T, info *types.RateLimitInfo) {
+				require.NotNil(t, info)
+				require.NotNil(t, info.Primary)
+				assert.Equal(t, float64(500), info.Primary.Remaining)
+				assert.Equal(t, float64(1000), info.Primary.Limit)
+				assert.Equal(t, float64(30), info.Primary.ResetInS)
+				require.NotNil(t, info.Secondary)
+				assert.Equal(t, float64(20000), info.Secondary.Remaining)
+			},
+		},
+		{
+			name: "rate_limits_key_wrapper",
+			data: map[string]interface{}{
+				"rate_limits": map[string]interface{}{
+					"limit_id": "model-tokens",
+					"primary": map[string]interface{}{
+						"remaining": float64(0),
+						"limit":     float64(800),
+						"reset_in_s": float64(45),
+					},
+				},
+			},
+			want: func(t *testing.T, info *types.RateLimitInfo) {
+				require.NotNil(t, info)
+				assert.Equal(t, "model-tokens", info.LimitID)
+				require.NotNil(t, info.Primary)
+				assert.Equal(t, float64(0), info.Primary.Remaining)
+				assert.Equal(t, float64(45), info.Primary.ResetInS)
+			},
+		},
+		{
+			name: "nested_in_usage",
+			data: map[string]interface{}{
+				"usage": map[string]interface{}{
+					"prompt_tokens": float64(100),
+					"rate_limits": map[string]interface{}{
+						"credits": map[string]interface{}{
+							"remaining": float64(50),
+							"limit":     float64(1000),
+						},
+					},
+				},
+			},
+			want: func(t *testing.T, info *types.RateLimitInfo) {
+				require.NotNil(t, info)
+				require.NotNil(t, info.Credits)
+				assert.Equal(t, float64(50), info.Credits.Remaining)
+				assert.Equal(t, float64(1000), info.Credits.Limit)
+			},
+		},
+		{
+			name: "with_reset_at_iso8601",
+			data: map[string]interface{}{
+				"primary": map[string]interface{}{
+					"remaining":  float64(10),
+					"limit":      float64(1000),
+					"reset_at":   "2026-01-01T00:00:30Z",
+				},
+			},
+			want: func(t *testing.T, info *types.RateLimitInfo) {
+				require.NotNil(t, info)
+				require.NotNil(t, info.Primary)
+				assert.Equal(t, float64(10), info.Primary.Remaining)
+				assert.False(t, info.Primary.ResetAt.IsZero())
+				assert.Equal(t, 2026, info.Primary.ResetAt.Year())
+			},
+		},
+		{
+			name: "integer_values_as_int",
+			data: map[string]interface{}{
+				"primary": map[string]interface{}{
+					"remaining": int(500),
+					"limit":     int(1000),
+				},
+			},
+			want: func(t *testing.T, info *types.RateLimitInfo) {
+				require.NotNil(t, info)
+				require.NotNil(t, info.Primary)
+				assert.Equal(t, float64(500), info.Primary.Remaining)
+			},
+		},
+		{
+			name: "no_meaningful_buckets_returns_nil",
+			data: map[string]interface{}{
+				"rate_limits": map[string]interface{}{
+					"limit_id": "",
+				},
+			},
+			want: func(t *testing.T, info *types.RateLimitInfo) {
+				assert.Nil(t, info)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			info := parseRateLimits(tt.data)
+			tt.want(t, info)
+		})
+	}
+}
+
+func TestIsRateLimitAgentEvent(t *testing.T) {
+	tests := []struct {
+		name  string
+		event types.AgentEvent
+		want  bool
+	}{
+		{
+			name: "explicit_rate_limit_exceeded_event",
+			event: types.AgentEvent{Type: "rate_limit_exceeded"},
+			want:  true,
+		},
+		{
+			name: "turn_failed_with_rate_limit_message",
+			event: types.AgentEvent{
+				Type: "turn/failed",
+				Data: map[string]interface{}{"error": "rate limit exceeded"},
+			},
+			want: true,
+		},
+		{
+			name: "turn_failed_with_429_message",
+			event: types.AgentEvent{
+				Type: "turn/failed",
+				Data: map[string]interface{}{"error": "HTTP 429 Too Many Requests"},
+			},
+			want: true,
+		},
+		{
+			name: "turn_failed_with_status_code_429",
+			event: types.AgentEvent{
+				Type: "turn/failed",
+				Data: map[string]interface{}{"message": "status code 429"},
+			},
+			want: true,
+		},
+		{
+			name: "turn_failed_with_too_many_requests",
+			event: types.AgentEvent{
+				Type: "turn/failed",
+				Data: map[string]interface{}{"error": "too many requests"},
+			},
+			want: true,
+		},
+		{
+			name: "turn_failed_non_rate_limit_error",
+			event: types.AgentEvent{
+				Type: "turn/failed",
+				Data: map[string]interface{}{"error": "connection refused"},
+			},
+			want: false,
+		},
+		{
+			name:  "turn_started_not_rate_limit",
+			event: types.AgentEvent{Type: "turn/started"},
+			want:  false,
+		},
+		{
+			name:  "session_status_not_rate_limit",
+			event: types.AgentEvent{Type: "session.status"},
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isRateLimitAgentEvent(tt.event))
+		})
+	}
+}
+
+func TestIsRateLimitErrorMessage(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  string
+		want bool
+	}{
+		{"exact_match", "rate limit exceeded", true},
+		{"contains", "request failed: rate limit exceeded after 50 calls", true},
+		{"rate_limited_string", "rate limited", true},
+		{"rate_limit_exceeded_underscore", "rate_limit_exceeded", true},
+		{"too_many_requests", "too many requests", true},
+		{"http_429", "HTTP 429 Too Many Requests", true},
+		{"status_code_429", "status code 429", true},
+		{"case_insensitive", "Rate Limited", true},
+		{"connection_refused_not_rate", "connection refused", false},
+		{"timeout_not_rate", "request timed out", false},
+		{"empty", "", false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isRateLimitErrorMessage(tt.msg))
+		})
+	}
+}
+
+func TestRateLimitBackoffExtension(t *testing.T) {
+	tests := []struct {
+		name   string
+		limits *types.RateLimitInfo
+		want   time.Duration
+	}{
+		{
+			name:   "nil_limits",
+			limits: nil,
+			want:   0,
+		},
+		{
+			name: "primary_has_reset_in_s",
+			limits: &types.RateLimitInfo{
+				Primary: &types.RateLimitBucket{Remaining: 0, ResetInS: 45},
+			},
+			want: 45 * time.Second,
+		},
+		{
+			name: "secondary_has_longer_reset",
+			limits: &types.RateLimitInfo{
+				Primary:   &types.RateLimitBucket{Remaining: 10, ResetInS: 30},
+				Secondary: &types.RateLimitBucket{Remaining: 0, ResetInS: 60},
+			},
+			want: 60 * time.Second,
+		},
+		{
+			name: "reset_at_in_future_takes_precedence",
+			limits: &types.RateLimitInfo{
+				Primary: &types.RateLimitBucket{
+					Remaining: 0,
+					ResetAt:   time.Now().Add(90 * time.Second),
+					ResetInS:  45,
+				},
+			},
+			want: 90 * time.Second,
+		},
+		{
+			name: "all_buckets_nil",
+			limits: &types.RateLimitInfo{
+				LimitID: "test",
+			},
+			want: 0,
+		},
+		{
+			name: "reset_in_past_returns_zero",
+			limits: &types.RateLimitInfo{
+				Primary: &types.RateLimitBucket{
+					Remaining: 0,
+					ResetAt:   time.Now().Add(-10 * time.Second),
+				},
+			},
+			want: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			got := rateLimitBackoffExtension(tt.limits)
+			if tt.want == 0 {
+				assert.Equal(t, time.Duration(0), got)
+			} else {
+				assert.GreaterOrEqual(t, got, tt.want-time.Second,
+					"extension should be at least reset time minus 1s")
+			}
+		})
+	}
+}
+
+func TestIsRateLimited(t *testing.T) {
+	tests := []struct {
+		name   string
+		limits *types.RateLimitInfo
+		want   bool
+	}{
+		{
+			name:   "nil_limits",
+			limits: nil,
+			want:   false,
+		},
+		{
+			name: "primary_exhausted",
+			limits: &types.RateLimitInfo{
+				Primary: &types.RateLimitBucket{Remaining: 0},
+			},
+			want: true,
+		},
+		{
+			name: "credits_exhausted",
+			limits: &types.RateLimitInfo{
+				Credits: &types.RateLimitBucket{Remaining: -1},
+			},
+			want: true,
+		},
+		{
+			name: "all_have_remaining",
+			limits: &types.RateLimitInfo{
+				Primary:   &types.RateLimitBucket{Remaining: 100},
+				Secondary: &types.RateLimitBucket{Remaining: 5000},
+			},
+			want: false,
+		},
+		{
+			name: "no_buckets_set",
+			limits: &types.RateLimitInfo{
+				LimitID: "anon",
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isRateLimited(tt.limits))
+		})
+	}
+}
+
+func TestParseFloat64(t *testing.T) {
+	tests := []struct {
+		name  string
+		value interface{}
+		want  float64
+	}{
+		{"float64", float64(42), 42},
+		{"int", int(42), 42},
+		{"int64", int64(42), 42},
+		{"string", "42.5", 42.5},
+		{"string_int", "42", 42},
+		{"invalid_string", "abc", 0},
+		{"nil_like", nil, 0},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, parseFloat64(tt.value))
+		})
+	}
+}
+
 func expectedFailureBackoff(attempt int, maxMs int) int {
 	if attempt <= 0 {
 		return 0
