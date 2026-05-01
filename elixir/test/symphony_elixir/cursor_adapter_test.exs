@@ -81,7 +81,14 @@ defmodule SymphonyElixir.CursorAdapterTest do
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
 
-    assert {:error, _} = CursorAdapter.run_turn(%{session_id: "sf", workspace: ws, resume_id: nil}, "x", issue(), on_message: on_msg)
+    assert {:error, _} =
+             CursorAdapter.run_turn(
+               %{session_id: "sf", workspace: ws, resume_id: nil},
+               "x",
+               issue(),
+               on_message: on_msg
+             )
+
     assert_received {:m, %{event: :turn_failed}}
   end
 
@@ -89,7 +96,12 @@ defmodule SymphonyElixir.CursorAdapterTest do
     %{binary: bin, workspace: ws, test_root: root} = setup_cursor_env("EXIT")
     write_cursor_config(bin, root)
 
-    assert {:error, {:port_exit, 1}} = CursorAdapter.run_turn(%{session_id: "sx", workspace: ws, resume_id: nil}, "x", issue())
+    assert {:error, {:port_exit, 1}} =
+             CursorAdapter.run_turn(
+               %{session_id: "sx", workspace: ws, resume_id: nil},
+               "x",
+               issue()
+             )
   end
 
   test "emits malformed event for non-JSON lines without crashing" do
@@ -99,7 +111,14 @@ defmodule SymphonyElixir.CursorAdapterTest do
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
 
-    assert {:ok, _} = CursorAdapter.run_turn(%{session_id: "sm", workspace: ws, resume_id: nil}, "x", issue(), on_message: on_msg)
+    assert {:ok, _} =
+             CursorAdapter.run_turn(
+               %{session_id: "sm", workspace: ws, resume_id: nil},
+               "x",
+               issue(),
+               on_message: on_msg
+             )
+
     assert_received {:m, %{event: :turn_completed}}
     assert_received {:m, %{event: :malformed}}
   end
@@ -108,9 +127,13 @@ defmodule SymphonyElixir.CursorAdapterTest do
 
   defp issue do
     %SymphonyElixir.Linear.Issue{
-      id: "issue-1", identifier: "MT-1", title: "Bug",
-      description: "Fix it", state: "In Progress",
-      url: "https://example.org/issues/MT-1", labels: ["backend"]
+      id: "issue-1",
+      identifier: "MT-1",
+      title: "Bug",
+      description: "Fix it",
+      state: "In Progress",
+      url: "https://example.org/issues/MT-1",
+      labels: ["backend"]
     }
   end
 
