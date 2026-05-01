@@ -160,6 +160,8 @@ func TestWorkflowConfig_NewSectionDefaults(t *testing.T) {
 	assert.Equal(t, defaultLocalIssuePrefix, nilCfg.LocalIssuePrefix())
 	assert.Equal(t, defaultPollIntervalMs, nilCfg.PollingIntervalMs())
 	assert.Equal(t, defaultWorkspaceBaseDir, nilCfg.WorkspaceBaseDir())
+	assert.Equal(t, defaultWorkspaceBaseBranch, nilCfg.WorkspaceBaseBranch())
+	assert.Equal(t, defaultBranchPrefix, nilCfg.WorkspaceBranchPrefix())
 	assert.Equal(t, "", nilCfg.HookBeforeRun())
 	assert.Equal(t, "", nilCfg.HookAfterRun())
 	assert.Equal(t, "", nilCfg.HookBeforeRemove())

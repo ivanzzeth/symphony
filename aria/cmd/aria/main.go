@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -23,6 +24,7 @@ import (
 	"github.com/ivanzzeth/symphony/aria/internal/orchestrator"
 	"github.com/ivanzzeth/symphony/aria/internal/tracker"
 	"github.com/ivanzzeth/symphony/aria/internal/tui"
+	"github.com/ivanzzeth/symphony/aria/internal/types"
 	"github.com/ivanzzeth/symphony/aria/internal/update"
 	"github.com/ivanzzeth/symphony/aria/internal/web"
 	"github.com/ivanzzeth/symphony/aria/internal/workspace"
@@ -237,7 +239,10 @@ func run(cfgPath string, noTUI bool, logFile, logLevel string, dryRun bool, port
 	if err != nil {
 		return fmt.Errorf("getting working directory: %w", err)
 	}
-	workspaceMgr := workspace.NewManager(repoPath)
+	workspaceMgr := workspace.NewManager(repoPath,
+		workspace.WithBaseBranch(cfg.WorkspaceBaseBranch()),
+		workspace.WithHooks(newConfigHooks(cfg)),
+	)
 
 	// 8. Create agent runner (reuses createRunner from team.go)
 	agentRunner, err := createRunner(cfg, "orchestrator", nil)
@@ -493,4 +498,62 @@ func trackerAssigneeID(cfg *config.WorkflowConfig) string {
 		return cfgAssignee
 	}
 	return os.Getenv("LINEAR_ASSIGNEE")
+}
+
+// configHooks implements workspace.HooksHandler using the workflow config hooks
+// with liquid template expansion.
+type configHooks struct {
+	cfg    *config.WorkflowConfig
+	logger *log.Logger
+}
+
+func newConfigHooks(cfg *config.WorkflowConfig) *configHooks {
+	return &configHooks{
+		cfg:    cfg,
+		logger: log.NewWithOptions(os.Stderr, log.Options{Level: log.WarnLevel}),
+	}
+}
+
+func (h *configHooks) RunAfterCreate(ctx context.Context, workspacePath string, issue types.Issue) error {
+	hookCmd := h.cfg.HookAfterRun()
+	if hookCmd == "" {
+		return nil
+	}
+	return h.runHook(ctx, hookCmd, workspacePath, issue)
+}
+
+func (h *configHooks) RunBeforeRemove(ctx context.Context, workspacePath string, issue types.Issue) error {
+	hookCmd := h.cfg.HookBeforeRemove()
+	if hookCmd == "" {
+		return nil
+	}
+	return h.runHook(ctx, hookCmd, workspacePath, issue)
+}
+
+func (h *configHooks) runHook(ctx context.Context, hookCmd string, workspacePath string, issue types.Issue) error {
+	templateCtx := config.TemplateContext{
+		Issue: issue,
+		Workspace: config.TemplateWorkspace{
+			BaseBranch: h.cfg.WorkspaceBaseBranch(),
+			Path:       workspacePath,
+		},
+		Tracker: config.TemplateTracker{
+			Repo:       h.cfg.GitHubRepo(),
+			TeamID:     h.cfg.TrackerTeamID(),
+			ProjectURL: h.cfg.TrackerProjectURL(),
+		},
+	}
+
+	expanded, err := config.RenderHook(hookCmd, templateCtx)
+	if err != nil {
+		return fmt.Errorf("expanding hook template: %w", err)
+	}
+
+	cmd := exec.CommandContext(ctx, "sh", "-c", expanded)
+	cmd.Dir = workspacePath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("hook command failed: %w\noutput: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
 }

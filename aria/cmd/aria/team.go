@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -150,6 +152,7 @@ func createRunner(cfg *config.WorkflowConfig, teamName string, logger *slog.Logg
 		if codexBin == "" {
 			codexBin = cfg.CodexBinaryPath()
 		}
+		codexBin = resolveBinaryPath(codexBin)
 		return agent.NewCodexRunner(codexBin, 30*time.Second), nil
 	case "opencode":
 		opencodeBin := os.Getenv("OPENCODE_BINARY")
@@ -531,4 +534,33 @@ func cancelTeam(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Team %q cancelled successfully\n", teamName)
 	return nil
+}
+
+// resolveBinaryPath resolves the agent binary path with claude CLI fallback.
+// If the primary binary path is "codex app-server" or contains "codex", and
+// the codex binary is not found in PATH, this function checks if "claude" is
+// available and returns "claude" as a fallback.
+func resolveBinaryPath(binaryPath string) string {
+	if binaryPath == "" {
+		return binaryPath
+	}
+
+	// Split to get the executable name (first word)
+	parts := strings.SplitN(strings.TrimSpace(binaryPath), " ", 2)
+	exe := parts[0]
+
+	// Check if the binary contains "codex" and try to find it
+	if strings.Contains(exe, "codex") {
+		if _, err := exec.LookPath(exe); err != nil {
+			// codex not found, try claude as fallback
+			if claudePath, claudeErr := exec.LookPath("claude"); claudeErr == nil {
+				if len(parts) > 1 {
+					return claudePath + " " + parts[1]
+				}
+				return claudePath
+			}
+		}
+	}
+
+	return binaryPath
 }
