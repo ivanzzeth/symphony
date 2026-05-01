@@ -299,23 +299,30 @@ func (c *WorkflowConfig) HookBeforeRun() string {
 	return c.Hooks.BeforeRun
 }
 
-func (c *WorkflowConfig) HookAfterRun() string {
-	if c == nil {
-		return ""
-	}
-	// after_create is the Elixir WORKFLOW.md convention; prefer it over
-	// the aria-native after_run when both are set for compatibility.
-	if c.Hooks.AfterCreate != "" {
-		return c.Hooks.AfterCreate
-	}
-	return c.Hooks.AfterRun
-}
-
 func (c *WorkflowConfig) HookAfterCreate() string {
 	if c == nil {
 		return ""
 	}
 	return c.Hooks.AfterCreate
+}
+
+func (c *WorkflowConfig) HookAfterRun() string {
+	if c == nil {
+		return ""
+	}
+	return c.Hooks.AfterRun
+}
+
+// HookAfterRunAny returns the after_create hook if set (Elixir WORKFLOW.md
+// convention), falling back to the aria-native after_run.
+func (c *WorkflowConfig) HookAfterRunAny() string {
+	if c == nil {
+		return ""
+	}
+	if c.Hooks.AfterCreate != "" {
+		return c.Hooks.AfterCreate
+	}
+	return c.Hooks.AfterRun
 }
 
 func (c *WorkflowConfig) HookBeforeRemove() string {
