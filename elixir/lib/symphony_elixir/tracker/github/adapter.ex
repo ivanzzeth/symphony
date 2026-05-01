@@ -19,12 +19,8 @@ defmodule SymphonyElixir.Tracker.GitHub.Adapter do
 
   @spec create_comment(String.t(), String.t()) :: :ok | {:error, term()}
   def create_comment(issue_id, body) when is_binary(issue_id) and is_binary(body) do
-    repo = Config.settings!().tracker.repo
-
-    if is_nil(repo) do
-      {:error, :missing_github_repo}
-    else
-      args = ~w[issue comment #{issue_id} --repo #{repo} --body #{body}]
+    with {:ok, repo} <- tracker_repo() do
+      args = ["issue", "comment", issue_id, "--repo", repo, "--body", body]
 
       case System.cmd("gh", args, stderr_to_stdout: true) do
         {_, 0} -> :ok
@@ -36,18 +32,21 @@ defmodule SymphonyElixir.Tracker.GitHub.Adapter do
   @spec update_issue_state(String.t(), String.t()) :: :ok | {:error, term()}
   def update_issue_state(issue_id, state_name)
       when is_binary(issue_id) and is_binary(state_name) do
-    repo = Config.settings!().tracker.repo
-
-    if is_nil(repo) do
-      {:error, :missing_github_repo}
-    else
+    with {:ok, repo} <- tracker_repo() do
       action = normalize_action(state_name)
-      args = ~w[issue #{action} #{issue_id} --repo #{repo}]
+      args = ["issue", action, issue_id, "--repo", repo]
 
       case System.cmd("gh", args, stderr_to_stdout: true) do
         {_, 0} -> :ok
         {output, exit_code} -> {:error, {:github_cli, exit_code, String.trim(output)}}
       end
+    end
+  end
+
+  defp tracker_repo do
+    case Config.settings!().tracker.repo do
+      repo when is_binary(repo) and repo != "" -> {:ok, repo}
+      _ -> {:error, :missing_github_repo}
     end
   end
 
