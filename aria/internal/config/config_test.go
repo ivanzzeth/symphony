@@ -162,6 +162,7 @@ func TestWorkflowConfig_NewSectionDefaults(t *testing.T) {
 	assert.Equal(t, defaultWorkspaceBaseDir, nilCfg.WorkspaceBaseDir())
 	assert.Equal(t, "", nilCfg.HookBeforeRun())
 	assert.Equal(t, "", nilCfg.HookAfterRun())
+	assert.Equal(t, "", nilCfg.HookAfterCreate())
 	assert.Equal(t, "", nilCfg.HookBeforeRemove())
 	assert.Equal(t, defaultCodexBinaryPath, nilCfg.CodexBinaryPath())
 	assert.Equal(t, "", nilCfg.CodexModel())

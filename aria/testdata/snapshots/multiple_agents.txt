@@ -4,7 +4,7 @@
 │ │                    │                                                                       │    
 │ │                    │                                                                       │    
 │ │                    │ ┌───────────────────────────────────────────────────────────────────┐ │    
-│ │                    │ │ CONTRABASS STATUS                                                 │ │    
+│ │                    │ │ ARIA STATUS                                                       │ │    
 │ │                    │ │ Agents: 3/8    Throughput: 108.8 tok/s    Runtime: 5m 0s          │ │    
 │ │                    │ │ Tokens: in: 23,100 | out: 9,550 | total: 32,650                   │ │    
 │ │                    │ │ Model:     Scope: -                                               │ │    
