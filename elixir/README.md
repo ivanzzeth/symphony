@@ -26,6 +26,18 @@ skills can make raw Linear GraphQL calls.
 If a claimed issue moves to a terminal state (`Done`, `Closed`, `Cancelled`, or `Duplicate`),
 Symphony stops the active agent for that issue and cleans up matching workspaces.
 
+### Using Claude or Cursor as the agent
+
+Symphony can run other coding agents in place of Codex by changing `codex.command`:
+
+- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)**: Set `codex.command: claude` to use
+  Anthropic's CLI agent. Claude Code provides sandboxed tool-use and multi-agent orchestration.
+- **[Cursor](https://docs.cursor.com)**: Set `codex.command` to invoke Cursor's agent mode for
+  IDE-integrated agent sessions.
+
+Only the `codex.command` value changes — the workflow prompt, Linear polling, and workspace
+management stay the same regardless of which agent backend you choose.
+
 ## How to use it
 
 1. Make sure your codebase is set up to work well with agents: see
