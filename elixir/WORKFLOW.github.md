@@ -14,8 +14,8 @@ workspace:
   base_branch: develop
 hooks:
   after_create: |
-    git clone --depth 1 https://github.com/ivanzzeth/symphony .
-    git checkout develop
+    git clone --depth 1 --branch {{ workspace.base_branch }} https://github.com/ivanzzeth/symphony .
+    git checkout {{ workspace.base_branch }}
     if command -v mise >/dev/null 2>&1; then
       cd elixir && mise trust && mise exec -- mix deps.get
     fi
