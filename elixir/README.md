@@ -26,6 +26,35 @@ skills can make raw Linear GraphQL calls.
 If a claimed issue moves to a terminal state (`Done`, `Closed`, `Cancelled`, or `Duplicate`),
 Symphony stops the active agent for that issue and cleans up matching workspaces.
 
+## Using Claude / Cursor as agents
+
+The `codex.command` field in `WORKFLOW.md` controls which agent binary Symphony launches.
+You can replace the default `codex app-server` with any agent that speaks the same
+JSON-RPC 2.0 protocol over stdio, including **Claude** and **Cursor**.
+
+```yaml
+codex:
+  command: claude app-server
+```
+
+To run **Cursor** in app-server mode:
+
+```yaml
+codex:
+  command: cursor app-server
+```
+
+You can also pass model or config flags through the command string, for example:
+
+```yaml
+codex:
+  command: claude --model claude-sonnet-4-6 app-server
+```
+
+Symphony handles process lifecycle (start, prompt, monitor, stop) identically
+regardless of which agent sits behind the interface. This lets you swap agents without
+changing any other part of your workflow configuration.
+
 ## How to use it
 
 1. Make sure your codebase is set up to work well with agents: see
