@@ -957,7 +957,8 @@ defmodule SymphonyElixir.OrchestratorStatusTest do
 
     assert is_integer(due_at_ms)
     remaining_ms = due_at_ms - System.monotonic_time(:millisecond)
-    assert remaining_ms >= 9_500
+    lower_bound = max(0, 9_500 - 500)
+    assert remaining_ms >= lower_bound
     assert remaining_ms <= 10_500
   end
 

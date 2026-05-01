@@ -10,93 +10,81 @@ defmodule SymphonyElixir.Tracker.GitHub.Client do
 
   @spec fetch_candidate_issues() :: {:ok, [Issue.t()]} | {:error, term()}
   def fetch_candidate_issues do
-    tracker = Config.settings!().tracker
+    active =
+      Config.settings!().tracker.active_states
+      |> Enum.map(&normalize_issue_state/1)
+      |> MapSet.new()
 
-    if is_nil(tracker.repo) do
-      {:error, :missing_github_repo}
-    else
-      active = MapSet.new(tracker.active_states |> Enum.map(&normalize_issue_state/1))
+    with {:ok, repo} <- tracker_repo(),
+         {:ok, issues} <- list_issues(repo, "open") do
+      filtered =
+        issues
+        |> Enum.filter(fn issue ->
+          MapSet.member?(active, normalize_issue_state(issue["state"]))
+        end)
+        |> Enum.map(&normalize_issue/1)
 
-      case list_issues(tracker.repo, "open") do
-        {:ok, issues} ->
-          filtered =
-            issues
-            |> Enum.filter(fn issue ->
-              MapSet.member?(active, normalize_issue_state(issue["state"]))
-            end)
-            |> Enum.map(&normalize_issue/1)
-
-          {:ok, filtered}
-
-        {:error, reason} ->
-          {:error, reason}
-      end
+      {:ok, filtered}
     end
   end
 
   @spec fetch_issues_by_states([String.t()]) :: {:ok, [Issue.t()]} | {:error, term()}
   def fetch_issues_by_states(state_names) when is_list(state_names) do
-    normalized = Enum.map(state_names, &normalize_issue_state/1) |> Enum.uniq()
-
-    if normalized == [] do
-      {:ok, []}
-    else
-      tracker = Config.settings!().tracker
-
-      if is_nil(tracker.repo) do
-        {:error, :missing_github_repo}
-      else
-        gh_state = gh_list_state(normalized)
-        wanted = MapSet.new(normalized)
-
-        case list_issues(tracker.repo, gh_state) do
-          {:ok, issues} ->
-            filtered =
-              issues
-              |> Enum.filter(fn issue ->
-                MapSet.member?(wanted, normalize_issue_state(issue["state"]))
-              end)
-              |> Enum.map(&normalize_issue/1)
-
-            {:ok, filtered}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-      end
-    end
+    state_names
+    |> Enum.map(&normalize_issue_state/1)
+    |> Enum.uniq()
+    |> do_fetch_issues_by_states()
   end
 
   @spec fetch_issue_states_by_ids([String.t()]) :: {:ok, [Issue.t()]} | {:error, term()}
   def fetch_issue_states_by_ids(issue_ids) when is_list(issue_ids) do
-    ids = Enum.uniq(issue_ids)
+    issue_ids
+    |> Enum.uniq()
+    |> do_fetch_issue_states_by_ids()
+  end
 
-    if ids == [] do
-      {:ok, []}
-    else
-      tracker = Config.settings!().tracker
+  defp tracker_repo do
+    case Config.settings!().tracker.repo do
+      repo when is_binary(repo) and repo != "" -> {:ok, repo}
+      _ -> {:error, :missing_github_repo}
+    end
+  end
 
-      if is_nil(tracker.repo) do
-        {:error, :missing_github_repo}
-      else
-        wanted = MapSet.new(ids)
+  defp do_fetch_issues_by_states([]), do: {:ok, []}
 
-        case list_issues(tracker.repo, "all") do
-          {:ok, issues} ->
-            filtered =
-              issues
-              |> Enum.filter(fn issue ->
-                number = issue["number"]
-                is_integer(number) and MapSet.member?(wanted, Integer.to_string(number))
-              end)
-              |> Enum.map(&normalize_issue/1)
+  defp do_fetch_issues_by_states(normalized) do
+    gh_state = gh_list_state(normalized)
+    wanted = MapSet.new(normalized)
 
-            {:ok, filtered}
+    with {:ok, repo} <- tracker_repo(),
+         {:ok, issues} <- list_issues(repo, gh_state) do
+      filtered =
+        issues
+        |> Enum.filter(fn issue ->
+          MapSet.member?(wanted, normalize_issue_state(issue["state"]))
+        end)
+        |> Enum.map(&normalize_issue/1)
 
-          {:error, reason} ->
-            {:error, reason}
-        end
-      end
+      {:ok, filtered}
+    end
+  end
+
+  defp do_fetch_issue_states_by_ids([]), do: {:ok, []}
+
+  defp do_fetch_issue_states_by_ids(ids) do
+    wanted = MapSet.new(ids)
+
+    with {:ok, repo} <- tracker_repo(),
+         {:ok, issues} <- list_issues(repo, "all") do
+      filtered =
+        issues
+        |> Enum.filter(fn issue ->
+          number = issue["number"]
+          is_integer(number) and MapSet.member?(wanted, Integer.to_string(number))
+        end)
+        |> Enum.map(&normalize_issue/1)
+
+      {:ok, filtered}
     end
   end
 
@@ -112,9 +100,7 @@ defmodule SymphonyElixir.Tracker.GitHub.Client do
         end
 
       {output, exit_code} ->
-        Logger.error(
-          "gh issue list failed repo=#{repo} state=#{state} exit=#{exit_code}: #{String.trim(output)}"
-        )
+        Logger.error("gh issue list failed repo=#{repo} state=#{state} exit=#{exit_code}: #{String.trim(output)}")
 
         {:error, {:github_cli, exit_code, String.trim(output)}}
     end
