@@ -513,7 +513,7 @@ func newConfigHooks(cfg *config.WorkflowConfig) *configHooks {
 }
 
 func (h *configHooks) RunAfterCreate(ctx context.Context, workspacePath string, issue types.Issue) error {
-	hookCmd := h.cfg.HookAfterRun()
+	hookCmd := h.cfg.HookAfterRunAny()
 	if hookCmd == "" {
 		return nil
 	}
