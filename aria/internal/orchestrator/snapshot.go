@@ -12,6 +12,7 @@ type StateSnapshot struct {
 	Running     []RunningEntry         `json:"running"`
 	Backoff     []types.BackoffEntry   `json:"backoff"`
 	Issues      map[string]types.Issue `json:"issues"`
+	RateLimits  *types.RateLimitInfo   `json:"rate_limits,omitempty"`
 	GeneratedAt time.Time              `json:"generated_at"`
 }
 
@@ -64,6 +65,13 @@ func (o *Orchestrator) Snapshot() StateSnapshot {
 		issuesCopy[id] = issue
 	}
 
+	// Copy rate limits pointer (readonly, set once per event)
+	var rateLimitsCopy *types.RateLimitInfo
+	if o.rateLimits != nil {
+		copy := *o.rateLimits
+		rateLimitsCopy = &copy
+	}
+
 	generatedAt := time.Now()
 
 	o.mu.Unlock()
@@ -73,6 +81,7 @@ func (o *Orchestrator) Snapshot() StateSnapshot {
 		Running:     runningEntries,
 		Backoff:     backoffCopy,
 		Issues:      issuesCopy,
+		RateLimits:  rateLimitsCopy,
 		GeneratedAt: generatedAt,
 	}
 }

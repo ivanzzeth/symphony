@@ -128,3 +128,21 @@ type AgentEvent struct {
 	Data      map[string]interface{} `json:"data"`
 	Timestamp time.Time              `json:"timestamp"`
 }
+
+// RateLimitBucket holds remaining/reset counters for a single rate limit bucket.
+type RateLimitBucket struct {
+	Remaining    float64   `json:"remaining"`
+	Limit        float64   `json:"limit"`
+	ResetAt      time.Time `json:"reset_at"`
+	ResetInS     float64   `json:"reset_in_s"`
+	RequestsUsed float64   `json:"requests_used"`
+}
+
+// RateLimitInfo represents parsed rate limit data from agent API responses.
+type RateLimitInfo struct {
+	Primary   *RateLimitBucket `json:"primary,omitempty"`
+	Secondary *RateLimitBucket `json:"secondary,omitempty"`
+	Credits   *RateLimitBucket `json:"credits,omitempty"`
+	LimitID   string           `json:"limit_id,omitempty"`
+	LimitName string           `json:"limit_name,omitempty"`
+}

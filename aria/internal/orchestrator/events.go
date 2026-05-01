@@ -46,12 +46,13 @@ type EventPayload interface {
 }
 
 type StatusUpdate struct {
-	Stats        Stats
-	BackoffQueue int
-	ModelName    string
-	ProjectURL   string
-	TrackerType  string
-	TrackerScope string
+	Stats        Stats                `json:"stats"`
+	BackoffQueue int                  `json:"backoff_queue"`
+	ModelName    string               `json:"model_name"`
+	ProjectURL   string               `json:"project_url"`
+	TrackerType  string               `json:"tracker_type"`
+	TrackerScope string               `json:"tracker_scope"`
+	RateLimits   *types.RateLimitInfo `json:"rate_limits,omitempty"`
 }
 
 func (StatusUpdate) eventPayload() {}

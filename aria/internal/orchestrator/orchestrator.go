@@ -37,6 +37,7 @@ type runEntry struct {
 	cancel      context.CancelFunc
 	workspace   string
 	lastEventAt time.Time
+	rateLimited bool
 }
 
 type Stats struct {
@@ -59,6 +60,7 @@ type Orchestrator struct {
 	shutdownOnce sync.Once
 	running      map[string]*runEntry
 	backoff      []types.BackoffEntry
+	rateLimits   *types.RateLimitInfo
 	events       chan OrchestratorEvent
 	eventsClosed atomic.Bool
 	stats        Stats
