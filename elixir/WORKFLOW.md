@@ -1,7 +1,7 @@
 ---
 tracker:
   kind: linear
-  project_slug: "symphony-0c79b11b75ea"
+  project_slug: "symphony-079b97dd6409"
   active_states:
     - Todo
     - In Progress
@@ -17,19 +17,22 @@ polling:
   interval_ms: 5000
 workspace:
   root: ~/code/symphony-workspaces
+  base_branch: develop
 hooks:
   after_create: |
-    git clone --depth 1 https://github.com/openai/symphony .
+    git clone --depth 1 https://github.com/ivanzzeth/symphony .
+    git checkout develop
     if command -v mise >/dev/null 2>&1; then
       cd elixir && mise trust && mise exec -- mix deps.get
     fi
   before_remove: |
     cd elixir && mise exec -- mix workspace.before_remove
 agent:
+  kind: claude
   max_concurrent_agents: 10
   max_turns: 20
 codex:
-  command: codex --config shell_environment_policy.inherit=all --config 'model="gpt-5.5"' --config model_reasoning_effort=xhigh app-server
+  command: claude
   approval_policy: never
   thread_sandbox: workspace-write
   turn_sandbox_policy:
