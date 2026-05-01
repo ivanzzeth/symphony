@@ -54,14 +54,17 @@ defmodule SymphonyElixir.Claude.Adapter do
   defp build_cli_args(session, prompt) do
     command = Config.settings!().codex.command
 
-    base = command
+    base =
+      command
       |> String.split(~r/\s+/, trim: true)
       |> Kernel.++([
         "--print",
-        "--output-format", "stream-json",
+        "--output-format",
+        "stream-json",
         "--verbose",
         "--dangerously-skip-permissions",
-        "--add-dir", session.workspace
+        "--add-dir",
+        session.workspace
       ])
 
     session_arg =
@@ -72,6 +75,7 @@ defmodule SymphonyElixir.Claude.Adapter do
       end
 
     escaped_prompt = shell_escape(prompt)
+
     (base ++ session_arg ++ ["--", escaped_prompt])
     |> Enum.join(" ")
   end
@@ -226,24 +230,7 @@ defmodule SymphonyElixir.Claude.Adapter do
   defp default_on_message(_message), do: :ok
 
   defp port_env do
-    home = System.user_home()
-    settings_path = Path.join(home, ".claude/settings.json")
-
-    claude_settings_env =
-      case File.read(settings_path) do
-        {:ok, content} ->
-          case Jason.decode(content) do
-            {:ok, %{"env" => env}} when is_map(env) ->
-              Enum.map(env, fn {k, v} -> {to_string(k), to_string(v)} end) |> Map.new()
-
-            _ ->
-              %{}
-          end
-
-        _ ->
-          %{}
-      end
-
+    claude_settings_env = read_claude_settings_env()
     system_env = System.get_env() |> Map.new()
 
     merged =
@@ -252,6 +239,18 @@ defmodule SymphonyElixir.Claude.Adapter do
       |> Map.merge(system_env)
 
     Enum.map(merged, fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end)
+  end
+
+  defp read_claude_settings_env do
+    home = System.user_home()
+    settings_path = Path.join(home, ".claude/settings.json")
+
+    with {:ok, content} <- File.read(settings_path),
+         {:ok, %{"env" => env}} when is_map(env) <- Jason.decode(content) do
+      Enum.map(env, fn {k, v} -> {to_string(k), to_string(v)} end) |> Map.new()
+    else
+      _ -> %{}
+    end
   end
 
   defp shell_escape(value) when is_binary(value) do

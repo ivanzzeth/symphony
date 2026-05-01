@@ -47,15 +47,18 @@ defmodule SymphonyElixir.Cursor.Adapter do
   defp build_cli_args(session, prompt) do
     command = Config.settings!().codex.command
 
-    base = command
+    base =
+      command
       |> String.split(~r/\s+/, trim: true)
       |> Kernel.++([
         "agent",
         "--print",
-        "--output-format", "stream-json",
+        "--output-format",
+        "stream-json",
         "--force",
         "--trust",
-        "--workspace", session.workspace
+        "--workspace",
+        session.workspace
       ])
 
     session_arg =
@@ -66,6 +69,7 @@ defmodule SymphonyElixir.Cursor.Adapter do
       end
 
     escaped_prompt = shell_escape(prompt)
+
     (base ++ session_arg ++ ["--", escaped_prompt])
     |> Enum.join(" ")
   end
