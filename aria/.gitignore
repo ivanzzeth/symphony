@@ -1,0 +1,41 @@
+# Generated binaries and build artifacts
+
+# - Built binaries
+/aria
+
+# - Runtime artifacts
+aria.log
+aria_test.log
+workspaces/
+
+# JavaScript workspace dependencies
+node_modules/
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go vendor directory
+vendor/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.iml
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Orchestration state (not project code)
+.sisyphus/
+.omc/
+.omx/
