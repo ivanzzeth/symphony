@@ -52,6 +52,7 @@ type teamCLIProcess struct {
 	cancel     context.CancelFunc
 	finishOnce sync.Once
 	removeOnce sync.Once
+	tokenAcc   tokenAccumulator
 }
 
 type teamCLIEnvelope struct {
@@ -1035,6 +1036,20 @@ func (r *teamCLIRunner) awaitNextEvent(ctx context.Context, proc *teamCLIProcess
 		"event_type": event.Type,
 		"data":       event.Data,
 	})
+
+	if snapshot := ExtractTokenSnapshot(event.Data); snapshot != nil {
+		if delta := proc.tokenAcc.accumulate(*snapshot); delta != nil {
+			emit("token/usage", map[string]interface{}{
+				"team_name":       proc.teamName,
+				"input_delta":     delta.InputDelta,
+				"output_delta":    delta.OutputDelta,
+				"total_delta":     delta.TotalDelta,
+				"input_reported":  delta.InputReported,
+				"output_reported": delta.OutputReported,
+				"total_reported":  delta.TotalReported,
+			})
+		}
+	}
 }
 
 func formatCommandOutput(output []byte) string {
