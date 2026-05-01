@@ -20,6 +20,23 @@ defmodule SymphonyElixir.Workflow do
     :ok
   end
 
+  @doc """
+  Stores the list of project descriptors discovered from `--projects-dir`.
+  """
+  @spec set_projects([map()]) :: :ok
+  def set_projects(projects) when is_list(projects) do
+    Application.put_env(:symphony_elixir, :projects, projects)
+    :ok
+  end
+
+  @doc """
+  Returns the list of discovered projects, or an empty list.
+  """
+  @spec projects() :: [map()]
+  def projects do
+    Application.get_env(:symphony_elixir, :projects, [])
+  end
+
   @spec clear_workflow_file_path() :: :ok
   def clear_workflow_file_path do
     Application.delete_env(:symphony_elixir, :workflow_file_path)
@@ -35,9 +52,14 @@ defmodule SymphonyElixir.Workflow do
 
   @spec current() :: {:ok, loaded_workflow()} | {:error, term()}
   def current do
-    case Process.whereis(WorkflowStore) do
+    current(WorkflowStore)
+  end
+
+  @spec current(GenServer.server()) :: {:ok, loaded_workflow()} | {:error, term()}
+  def current(workflow_store) do
+    case Process.whereis(workflow_store) do
       pid when is_pid(pid) ->
-        WorkflowStore.current()
+        WorkflowStore.current(workflow_store)
 
       _ ->
         load()

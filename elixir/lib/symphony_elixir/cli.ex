@@ -6,14 +6,17 @@ defmodule SymphonyElixir.CLI do
   alias SymphonyElixir.LogFile
 
   @acknowledgement_switch :i_understand_that_this_will_be_running_without_the_usual_guardrails
-  @switches [{@acknowledgement_switch, :boolean}, logs_root: :string, port: :integer]
+  @switches [{@acknowledgement_switch, :boolean}, logs_root: :string, port: :integer, projects_dir: :string]
 
   @type ensure_started_result :: {:ok, [atom()]} | {:error, term()}
+  @type project_descriptor :: %{name: String.t(), path: Path.t(), workflow_path: Path.t()}
   @type deps :: %{
           file_regular?: (String.t() -> boolean()),
           set_workflow_file_path: (String.t() -> :ok | {:error, term()}),
           set_logs_root: (String.t() -> :ok | {:error, term()}),
           set_server_port_override: (non_neg_integer() | nil -> :ok | {:error, term()}),
+          set_projects: ([project_descriptor()] -> :ok | {:error, term()}),
+          discover_projects: (String.t() -> {:ok, [project_descriptor()]} | {:error, term()}),
           ensure_all_started: (-> ensure_started_result())
         }
 
@@ -35,14 +38,16 @@ defmodule SymphonyElixir.CLI do
       {opts, [], []} ->
         with :ok <- require_guardrails_acknowledgement(opts),
              :ok <- maybe_set_logs_root(opts, deps),
-             :ok <- maybe_set_server_port(opts, deps) do
+             :ok <- maybe_set_server_port(opts, deps),
+             :ok <- maybe_set_projects_dir(opts, deps) do
           run(Path.expand("WORKFLOW.md"), deps)
         end
 
       {opts, [workflow_path], []} ->
         with :ok <- require_guardrails_acknowledgement(opts),
              :ok <- maybe_set_logs_root(opts, deps),
-             :ok <- maybe_set_server_port(opts, deps) do
+             :ok <- maybe_set_server_port(opts, deps),
+             :ok <- maybe_set_projects_dir(opts, deps) do
           run(workflow_path, deps)
         end
 
@@ -70,9 +75,41 @@ defmodule SymphonyElixir.CLI do
     end
   end
 
+  @spec maybe_set_projects_dir(keyword(), deps()) :: :ok | {:error, String.t()}
+  def maybe_set_projects_dir(opts, deps) do
+    case Keyword.get_values(opts, :projects_dir) do
+      [] ->
+        :ok
+
+      values ->
+        projects_dir = values |> List.last() |> String.trim()
+
+        if projects_dir == "" do
+          {:error, usage_message()}
+        else
+          expanded = Path.expand(projects_dir)
+
+          case deps.discover_projects.(expanded) do
+            {:ok, projects} ->
+              if projects == [] do
+                {:error, "No valid projects found in #{expanded} (expected subdirs with WORKFLOW.md)"}
+              else
+                deps.set_projects.(projects)
+              end
+
+            {:error, {:invalid_projects_dir, _path, reason}} ->
+              {:error, "Failed to read projects dir #{expanded}: #{inspect(reason)}"}
+
+            {:error, reason} ->
+              {:error, "Failed to scan projects dir #{expanded}: #{inspect(reason)}"}
+          end
+        end
+    end
+  end
+
   @spec usage_message() :: String.t()
   defp usage_message do
-    "Usage: symphony [--logs-root <path>] [--port <port>] [path-to-WORKFLOW.md]"
+    "Usage: symphony [--logs-root <path>] [--port <port>] [--projects-dir <path>] [path-to-WORKFLOW.md]"
   end
 
   @spec runtime_deps() :: deps()
@@ -82,6 +119,8 @@ defmodule SymphonyElixir.CLI do
       set_workflow_file_path: &SymphonyElixir.Workflow.set_workflow_file_path/1,
       set_logs_root: &set_logs_root/1,
       set_server_port_override: &set_server_port_override/1,
+      set_projects: &SymphonyElixir.Workflow.set_projects/1,
+      discover_projects: &SymphonyElixir.ProjectDiscovery.discover/1,
       ensure_all_started: fn -> Application.ensure_all_started(:symphony_elixir) end
     }
   end

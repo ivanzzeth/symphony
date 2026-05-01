@@ -23,14 +23,38 @@ defmodule SymphonyElixir.Application do
   def start(_type, _args) do
     :ok = SymphonyElixir.LogFile.configure()
 
-    children = [
+    projects = Application.get_env(:symphony_elixir, :projects, [])
+
+    shared_children = [
       {Phoenix.PubSub, name: SymphonyElixir.PubSub},
       {Task.Supervisor, name: SymphonyElixir.TaskSupervisor},
-      SymphonyElixir.WorkflowStore,
-      SymphonyElixir.Orchestrator,
       SymphonyElixir.HttpServer,
       SymphonyElixir.StatusDashboard
     ]
+
+    project_children =
+      if projects == [] do
+        [SymphonyElixir.WorkflowStore, SymphonyElixir.Orchestrator]
+      else
+        Enum.flat_map(projects, fn project ->
+          store_name = String.to_atom("Elixir.SymphonyElixir.WorkflowStore.#{project.name}")
+          orch_name = String.to_atom("Elixir.SymphonyElixir.Orchestrator.#{project.name}")
+
+          [
+            {SymphonyElixir.WorkflowStore,
+             id: store_name,
+             name: store_name,
+             workflow_file_path: project.workflow_path},
+            {SymphonyElixir.Orchestrator,
+             id: orch_name,
+             name: orch_name,
+             workflow_store: store_name,
+             project_name: project.name}
+          ]
+        end)
+      end
+
+    children = shared_children ++ project_children
 
     Supervisor.start_link(
       children,

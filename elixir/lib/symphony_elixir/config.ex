@@ -28,7 +28,7 @@ defmodule SymphonyElixir.Config do
 
   @spec settings() :: {:ok, Schema.t()} | {:error, term()}
   def settings do
-    case Workflow.current() do
+    case Workflow.current(workflow_store()) do
       {:ok, %{config: config}} when is_map(config) ->
         Schema.parse(config)
 
@@ -74,7 +74,7 @@ defmodule SymphonyElixir.Config do
 
   @spec workflow_prompt() :: String.t()
   def workflow_prompt do
-    case Workflow.current() do
+    case Workflow.current(workflow_store()) do
       {:ok, %{prompt_template: prompt}} ->
         if String.trim(prompt) == "", do: @default_prompt_template, else: prompt
 
@@ -89,6 +89,19 @@ defmodule SymphonyElixir.Config do
       port when is_integer(port) and port >= 0 -> port
       _ -> settings!().server.port
     end
+  end
+
+  @doc false
+  @spec workflow_store() :: GenServer.server()
+  def workflow_store do
+    Process.get(:symphony_workflow_store, SymphonyElixir.WorkflowStore)
+  end
+
+  @doc false
+  @spec put_workflow_store(GenServer.server()) :: :ok
+  def put_workflow_store(store) do
+    Process.put(:symphony_workflow_store, store)
+    :ok
   end
 
   @spec validate!() :: :ok | {:error, term()}

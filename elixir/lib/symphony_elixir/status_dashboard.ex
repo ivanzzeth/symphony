@@ -547,30 +547,102 @@ defmodule SymphonyElixir.StatusDashboard do
   def dashboard_url_for_test(host, configured_port, bound_port),
     do: dashboard_url(host, configured_port, bound_port)
 
+  @doc false
+  @spec snapshot_payload_for_test :: {:ok, map()} | :error
+  def snapshot_payload_for_test, do: snapshot_payload()
+
+  @doc false
+  @spec merge_snapshots_for_test([term()]) :: {:ok, map()}
+  def merge_snapshots_for_test(snapshots), do: merge_snapshots(snapshots)
+
   defp snapshot_payload do
     if Process.whereis(Orchestrator) do
-      case Orchestrator.snapshot() do
-        %{
-          running: running,
-          retrying: retrying,
-          codex_totals: codex_totals
-        } = snapshot
-        when is_list(running) and is_list(retrying) ->
-          {:ok,
-           %{
-             running: running,
-             retrying: retrying,
-             codex_totals: codex_totals,
-             rate_limits: Map.get(snapshot, :rate_limits),
-             polling: Map.get(snapshot, :polling)
-           }}
-
-        _ ->
-          :error
-      end
+      single_snapshot(Orchestrator)
     else
-      :error
+      multi_snapshot()
     end
+  end
+
+  defp single_snapshot(server) do
+    case Orchestrator.snapshot(server, 15_000) do
+      %{running: running, retrying: retrying, codex_totals: codex_totals} = snapshot
+      when is_list(running) and is_list(retrying) ->
+        {:ok,
+         %{
+           running: running,
+           retrying: retrying,
+           codex_totals: codex_totals,
+           rate_limits: Map.get(snapshot, :rate_limits),
+           polling: Map.get(snapshot, :polling)
+         }}
+
+      _ ->
+        :error
+    end
+  end
+
+  defp multi_snapshot do
+    projects = SymphonyElixir.Workflow.projects()
+
+    snapshots =
+      Enum.reduce(projects, [], fn project, acc ->
+        orch_name = String.to_atom("Elixir.SymphonyElixir.Orchestrator.#{project.name}")
+
+        case Orchestrator.snapshot(orch_name, 15_000) do
+          %{running: running, retrying: retrying, codex_totals: codex_totals} = snapshot
+          when is_list(running) and is_list(retrying) ->
+            [{running, retrying, codex_totals, snapshot} | acc]
+
+          _ ->
+            acc
+        end
+      end)
+
+    case snapshots do
+      [] -> :error
+      _ -> merge_snapshots(snapshots)
+    end
+  end
+
+  defp merge_snapshots(snapshots) do
+    running = Enum.flat_map(snapshots, fn {r, _, _, _} -> r end)
+    retrying = Enum.flat_map(snapshots, fn {_, r, _, _} -> r end)
+
+    codex_totals = %{
+      input_tokens: snapshots |> Enum.map(fn {_, _, t, _} -> t[:input_tokens] || 0 end) |> Enum.sum(),
+      output_tokens: snapshots |> Enum.map(fn {_, _, t, _} -> t[:output_tokens] || 0 end) |> Enum.sum(),
+      total_tokens: snapshots |> Enum.map(fn {_, _, t, _} -> t[:total_tokens] || 0 end) |> Enum.sum(),
+      seconds_running:
+        snapshots |> Enum.map(fn {_, _, t, _} -> t[:seconds_running] || 0 end) |> Enum.max(fn -> 0 end)
+    }
+
+    rate_limits =
+      Enum.find_value(snapshots, :not_found, fn {_, _, _, s} -> Map.get(s, :rate_limits) end)
+      |> then(fn
+        :not_found -> nil
+        val -> val
+      end)
+
+    pollings = Enum.map(snapshots, fn {_, _, _, s} -> Map.get(s, :polling) end)
+    checking? = Enum.any?(pollings, fn p -> is_map(p) && Map.get(p, :checking?) end)
+
+    next_poll_in_ms =
+      pollings
+      |> Enum.filter(fn p -> is_map(p) && is_integer(Map.get(p, :next_poll_in_ms)) end)
+      |> Enum.map(& &1.next_poll_in_ms)
+      |> case do
+        [] -> nil
+        vals -> Enum.min(vals)
+      end
+
+    {:ok,
+     %{
+       running: running,
+       retrying: retrying,
+       codex_totals: codex_totals,
+       rate_limits: rate_limits,
+       polling: %{checking?: checking?, next_poll_in_ms: next_poll_in_ms}
+     }}
   end
 
   defp format_running_rows(running, running_event_width) do

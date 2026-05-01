@@ -49,7 +49,11 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   @impl true
-  def init(_opts) do
+  def init(opts) do
+    with {:ok, store} <- Keyword.fetch(opts, :workflow_store) do
+      Config.put_workflow_store(store)
+    end
+
     now_ms = System.monotonic_time(:millisecond)
     config = Config.settings!()
 

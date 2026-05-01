@@ -18,14 +18,20 @@ defmodule SymphonyElixir.WorkflowStore do
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+    name = Keyword.get(opts, :name, __MODULE__)
+    GenServer.start_link(__MODULE__, opts, name: name)
   end
 
   @spec current() :: {:ok, Workflow.loaded_workflow()} | {:error, term()}
   def current do
-    case Process.whereis(__MODULE__) do
+    current(__MODULE__)
+  end
+
+  @spec current(GenServer.server()) :: {:ok, Workflow.loaded_workflow()} | {:error, term()}
+  def current(workflow_store) do
+    case Process.whereis(workflow_store) do
       pid when is_pid(pid) ->
-        GenServer.call(__MODULE__, :current)
+        GenServer.call(pid, :current)
 
       _ ->
         Workflow.load()
@@ -47,8 +53,10 @@ defmodule SymphonyElixir.WorkflowStore do
   end
 
   @impl true
-  def init(_opts) do
-    case load_state(Workflow.workflow_file_path()) do
+  def init(opts) do
+    path = Keyword.get(opts, :workflow_file_path, Workflow.workflow_file_path())
+
+    case load_state(path) do
       {:ok, state} ->
         schedule_poll()
         {:ok, state}
