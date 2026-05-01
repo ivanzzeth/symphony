@@ -88,7 +88,14 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
 
-    assert {:error, _} = ClaudeAdapter.run_turn(%{session_id: "sf", workspace: ws, resume_id: nil}, "x", issue(), on_message: on_msg)
+    assert {:error, _} =
+             ClaudeAdapter.run_turn(
+               %{session_id: "sf", workspace: ws, resume_id: nil},
+               "x",
+               issue(),
+               on_message: on_msg
+             )
+
     assert_received {:m, %{event: :turn_failed}}
   end
 
@@ -96,7 +103,12 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("EXIT")
     write_claude_config(bin, root)
 
-    assert {:error, {:port_exit, 1}} = ClaudeAdapter.run_turn(%{session_id: "sx", workspace: ws, resume_id: nil}, "x", issue())
+    assert {:error, {:port_exit, 1}} =
+             ClaudeAdapter.run_turn(
+               %{session_id: "sx", workspace: ws, resume_id: nil},
+               "x",
+               issue()
+             )
   end
 
   test "emits malformed event for non-JSON lines without crashing" do
@@ -106,7 +118,14 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
 
-    assert {:ok, _} = ClaudeAdapter.run_turn(%{session_id: "sm", workspace: ws, resume_id: nil}, "x", issue(), on_message: on_msg)
+    assert {:ok, _} =
+             ClaudeAdapter.run_turn(
+               %{session_id: "sm", workspace: ws, resume_id: nil},
+               "x",
+               issue(),
+               on_message: on_msg
+             )
+
     assert_received {:m, %{event: :turn_completed}}
     assert_received {:m, %{event: :malformed}}
   end
@@ -117,6 +136,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     prev_path = System.get_env("PATH")
     prev_ssh = System.get_env("SYMP_TEST_SSH_TRACE")
+
     on_exit(fn ->
       restore_env("PATH", prev_path)
       restore_env("SYMP_TEST_SSH_TRACE", prev_ssh)
@@ -136,6 +156,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"input_tokens":1,"output_tokens":1}}'
     exit 0
     """)
+
     File.chmod!(fake_ssh, 0o755)
 
     File.write!(fake_claude, fake_claude_script("OK", Path.join(test_root, "claude.trace")))
@@ -144,10 +165,13 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     remote = "/remote/workspace/issue-1"
     write_claude_config("claude", "/remote/workspaces")
 
-    assert {:ok, _} = ClaudeAdapter.run_turn(
-      %{session_id: "ssh", workspace: remote, resume_id: nil},
-      "Fix bug", issue(), worker_host: "worker-01:2200"
-    )
+    assert {:ok, _} =
+             ClaudeAdapter.run_turn(
+               %{session_id: "ssh", workspace: remote, resume_id: nil},
+               "Fix bug",
+               issue(),
+               worker_host: "worker-01:2200"
+             )
 
     trace = File.read!(ssh_trace)
     assert trace =~ "-T -p 2200 worker-01 bash -lc"
@@ -159,9 +183,13 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
   defp issue do
     %SymphonyElixir.Linear.Issue{
-      id: "issue-1", identifier: "MT-1", title: "Bug",
-      description: "Fix it", state: "In Progress",
-      url: "https://example.org/issues/MT-1", labels: ["backend"]
+      id: "issue-1",
+      identifier: "MT-1",
+      title: "Bug",
+      description: "Fix it",
+      state: "In Progress",
+      url: "https://example.org/issues/MT-1",
+      labels: ["backend"]
     }
   end
 

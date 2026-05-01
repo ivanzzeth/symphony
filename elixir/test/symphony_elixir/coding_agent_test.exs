@@ -1,9 +1,9 @@
 defmodule SymphonyElixir.CodingAgentTest do
   use ExUnit.Case
 
-  alias SymphonyElixir.CodingAgent
-  alias SymphonyElixir.Codex.AppServer
   alias SymphonyElixir.Claude.Adapter, as: ClaudeAdapter
+  alias SymphonyElixir.Codex.AppServer
+  alias SymphonyElixir.CodingAgent
   alias SymphonyElixir.Cursor.Adapter, as: CursorAdapter
 
   import SymphonyElixir.TestSupport, only: [write_workflow_file!: 1, write_workflow_file!: 2]
