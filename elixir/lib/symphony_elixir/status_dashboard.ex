@@ -695,7 +695,7 @@ defmodule SymphonyElixir.StatusDashboard do
     if sanitized == "" do
       ""
     else
-      " " <> colorize("error=#{truncate(sanitized, 96)}", @ansi_dim)
+      " " <> colorize("error=#{sanitized}", @ansi_dim)
     end
   end
 

@@ -19,7 +19,8 @@ defmodule SymphonyElixir.PromptBuilder do
       %{
         "attempt" => Keyword.get(opts, :attempt),
         "issue" => issue |> Map.from_struct() |> to_solid_map(),
-        "workspace" => workspace_template_vars()
+        "workspace" => workspace_template_vars(),
+        "tracker" => tracker_template_vars()
       },
       @render_opts
     )
@@ -29,6 +30,11 @@ defmodule SymphonyElixir.PromptBuilder do
   defp workspace_template_vars do
     ws = Config.settings!().workspace
     %{"root" => ws.root, "base_branch" => ws.base_branch}
+  end
+
+  defp tracker_template_vars do
+    t = Config.settings!().tracker
+    %{"repo" => t.repo}
   end
 
   defp prompt_template!({:ok, %{prompt_template: prompt}}), do: default_prompt(prompt)

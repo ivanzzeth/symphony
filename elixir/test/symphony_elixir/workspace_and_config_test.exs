@@ -1374,4 +1374,22 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
     assert prompt =~ "origin/staging"
     refute prompt =~ "origin/main"
   end
+
+  test "tracker.repo appears in prompt template variables" do
+    write_workflow_file!(Workflow.workflow_file_path(),
+      tracker_kind: "github",
+      tracker_repo: "acme/repo",
+      prompt: "Repo: {{ tracker.repo }}"
+    )
+
+    issue = %Issue{
+      id: "test-3",
+      identifier: "MT-3",
+      title: "Test",
+      state: "Todo"
+    }
+
+    prompt = PromptBuilder.build_prompt(issue)
+    assert prompt =~ "Repo: acme/repo"
+  end
 end
