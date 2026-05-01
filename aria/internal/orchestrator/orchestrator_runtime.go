@@ -23,6 +23,7 @@ func (o *Orchestrator) handleRunSignal(ctx context.Context, signal runSignal) {
 
 func (o *Orchestrator) handleAgentEvent(issueID string, event types.AgentEvent) {
 	tokensIn, tokensOut := parseUsageTokens(event.Data)
+	rateLimits := parseRateLimits(event.Data)
 
 	o.mu.Lock()
 	entry, ok := o.running[issueID]
@@ -62,6 +63,18 @@ func (o *Orchestrator) handleAgentEvent(issueID string, event types.AgentEvent) 
 		if message := extractEventError(event.Data); message != "" {
 			entry.attempt.Error = message
 		}
+	}
+
+	// Track rate limit state and detect rate limit exceeded signals.
+	if rateLimits != nil {
+		o.rateLimits = rateLimits
+	}
+	if isRateLimitAgentEvent(event) && isActiveRunPhase(entry.attempt.Phase) {
+		entry.attempt.Phase = types.Failed
+		if entry.attempt.Error == "" {
+			entry.attempt.Error = "rate limit exceeded"
+		}
+		entry.rateLimited = true
 	}
 
 	o.mu.Unlock()
@@ -139,7 +152,7 @@ func (o *Orchestrator) completeRun(ctx context.Context, issueID string, doneErr 
 		"err", finalAttempt.Error,
 	)
 
-	o.enqueueBackoffFromRunResult(ctx, entry.issue, finalAttempt)
+	o.enqueueBackoffFromRunResult(ctx, entry.issue, finalAttempt, entry.rateLimited)
 }
 
 func resolveFinalPhase(phase types.RunPhase, message string, doneErr error) (types.RunPhase, string) {
@@ -216,7 +229,7 @@ func hasExplicitSuccessSignal(message string) bool {
 	return strings.Contains(normalized, "completed") && strings.Contains(normalized, "success")
 }
 
-func (o *Orchestrator) enqueueBackoffFromRunResult(ctx context.Context, issue types.Issue, attempt types.RunAttempt) {
+func (o *Orchestrator) enqueueBackoffFromRunResult(ctx context.Context, issue types.Issue, attempt types.RunAttempt, rateLimited bool) {
 	if issueTransitionErr := TransitionIssueState(types.Running, types.RetryQueued); issueTransitionErr == nil {
 		if updateErr := o.tracker.UpdateIssueState(ctx, issue.ID, types.RetryQueued); updateErr != nil {
 			logging.LogIssueEvent(o.logger, issue.ID, "update_retry_queued_failed", "err", updateErr)
@@ -230,11 +243,28 @@ func (o *Orchestrator) enqueueBackoffFromRunResult(ctx context.Context, issue ty
 		o.emitIssueReleased(issue.ID, attempt.Attempt, releaseTimestamp)
 	}
 
-	delayMs := CalculateBackoff(issue.ID, attempt.Attempt, o.currentConfig().MaxRetryBackoffMs())
+	maxMs := o.currentConfig().MaxRetryBackoffMs()
+	delayMs := CalculateBackoff(issue.ID, attempt.Attempt, maxMs)
+
+	// Extend backoff when rate-limited.
+	o.mu.Lock()
+	limits := o.rateLimits
+	o.mu.Unlock()
+	if rateLimited {
+		// Apply additional backoff when the run was rate-limited.
+		if ext := rateLimitBackoffExtension(limits); ext > 0 {
+			extMs := int(ext.Milliseconds())
+			delayMs += extMs
+			if delayMs > maxMs {
+				delayMs = maxMs
+			}
+		}
+	}
+
 	retryAt := time.Now().Add(time.Duration(delayMs) * time.Millisecond)
 	nextAttempt := attempt.Attempt + 1
 
-	entry := types.BackoffEntry{
+	backoffEntry := types.BackoffEntry{
 		IssueID: issue.ID,
 		Attempt: nextAttempt,
 		RetryAt: retryAt,
@@ -242,7 +272,7 @@ func (o *Orchestrator) enqueueBackoffFromRunResult(ctx context.Context, issue ty
 	}
 
 	o.mu.Lock()
-	o.backoff = upsertBackoff(o.backoff, entry)
+	o.backoff = upsertBackoff(o.backoff, backoffEntry)
 	o.putIssueCacheLocked(issue.ID, issue)
 	eventTimestamp := time.Now()
 	o.mu.Unlock()
@@ -274,7 +304,7 @@ func (o *Orchestrator) enqueueBackoffFromRunning(ctx context.Context, issue type
 			attempt.Phase = types.Failed
 		}
 	}
-	o.enqueueBackoffFromRunResult(ctx, issue, attempt)
+	o.enqueueBackoffFromRunResult(ctx, issue, attempt, false)
 }
 
 func (o *Orchestrator) releaseClaimAndQueueContinuation(ctx context.Context, issueID string, attempt int, cause error) {
@@ -476,6 +506,7 @@ func (o *Orchestrator) emitStatusUpdate() {
 	o.mu.Lock()
 	stats := o.stats
 	backoffQueue := len(o.backoff)
+	limits := o.rateLimits
 	o.mu.Unlock()
 	cfg := o.currentConfig()
 	modelName, _ := cfg.Model()
@@ -494,6 +525,7 @@ func (o *Orchestrator) emitStatusUpdate() {
 			ProjectURL:   projectURL,
 			TrackerType:  trackerType,
 			TrackerScope: trackerScope,
+			RateLimits:   limits,
 		},
 	})
 }
@@ -680,4 +712,219 @@ func extractEventError(data map[string]interface{}) string {
 	}
 
 	return ""
+}
+
+// parseRateLimits extracts rate limit bucket data from an agent event data map.
+// It handles nested structures like {"rate_limits": {...}}, {"usage": {..., "rate_limits": {...}}},
+// or directly {"primary": {...}, "secondary": {...}} in the data.
+func parseRateLimits(data map[string]interface{}) *types.RateLimitInfo {
+	if data == nil {
+		return nil
+	}
+
+	rates := extractRateLimitMap(data)
+	if rates == nil {
+		return nil
+	}
+
+	info := &types.RateLimitInfo{}
+
+	if rawID, ok := rates["limit_id"]; ok {
+		if s, ok := rawID.(string); ok {
+			info.LimitID = s
+		}
+	}
+	if rawName, ok := rates["limit_name"]; ok {
+		if s, ok := rawName.(string); ok {
+			info.LimitName = s
+		}
+	}
+
+	info.Primary = parseRateLimitBucket(rates, "primary")
+	info.Secondary = parseRateLimitBucket(rates, "secondary")
+	info.Credits = parseRateLimitBucket(rates, "credits")
+
+	if info.Primary == nil && info.Secondary == nil && info.Credits == nil &&
+		info.LimitID == "" && info.LimitName == "" {
+		return nil
+	}
+
+	return info
+}
+
+func extractRateLimitMap(data map[string]interface{}) map[string]interface{} {
+	if rates, ok := getRateLimitMap(data); ok {
+		return rates
+	}
+
+	// Check "rate_limits" key
+	if raw, ok := data["rate_limits"]; ok {
+		if m, ok := raw.(map[string]interface{}); ok {
+			return m
+		}
+	}
+
+	// Check nested "usage.rate_limits"
+	if rawUsage, ok := data["usage"]; ok {
+		if usage, ok := rawUsage.(map[string]interface{}); ok {
+			if raw, ok := usage["rate_limits"]; ok {
+				if m, ok := raw.(map[string]interface{}); ok {
+					return m
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func getRateLimitMap(data map[string]interface{}) (map[string]interface{}, bool) {
+	for _, key := range []string{"primary", "secondary", "credits"} {
+		if raw, ok := data[key]; ok {
+			if _, ok := raw.(map[string]interface{}); ok {
+				return data, true
+			}
+		}
+	}
+	return nil, false
+}
+
+func parseRateLimitBucket(rates map[string]interface{}, bucketName string) *types.RateLimitBucket {
+	raw, ok := rates[bucketName]
+	if !ok {
+		return nil
+	}
+	bucket, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	result := &types.RateLimitBucket{}
+	if v, ok := bucket["remaining"]; ok {
+		result.Remaining = parseFloat64(v)
+	}
+	if v, ok := bucket["limit"]; ok {
+		result.Limit = parseFloat64(v)
+	}
+	if v, ok := bucket["reset_in_s"]; ok {
+		result.ResetInS = parseFloat64(v)
+	}
+	if v, ok := bucket["requests_used"]; ok {
+		result.RequestsUsed = parseFloat64(v)
+	}
+
+	// Handle reset_at from string (ISO 8601) or as a float64 unix timestamp.
+	if v, ok := bucket["reset_at"]; ok {
+		switch t := v.(type) {
+		case string:
+			if parsed, err := time.Parse(time.RFC3339, t); err == nil {
+				result.ResetAt = parsed
+			}
+		case float64:
+			result.ResetAt = time.Unix(int64(t), 0)
+		}
+	}
+
+	// If remaining is zero (or reset is set), this is a rate-limited bucket.
+	// Note: a bucket with no fields set returns nil to avoid empty entries.
+	if result.Remaining == 0 && result.Limit == 0 && result.ResetInS == 0 &&
+		result.RequestsUsed == 0 && result.ResetAt.IsZero() {
+		return nil
+	}
+
+	return result
+}
+
+func parseFloat64(v interface{}) float64 {
+	switch t := v.(type) {
+	case float64:
+		return t
+	case int:
+		return float64(t)
+	case int64:
+		return float64(t)
+	case string:
+		var val float64
+		if _, err := fmt.Sscanf(t, "%f", &val); err == nil {
+			return val
+		}
+	}
+	return 0
+}
+
+// isRateLimitAgentEvent detects rate-limit-related signals in agent events.
+// It checks for the "rate_limit_exceeded" event type or specific error patterns
+// in event data that indicate rate limiting.
+func isRateLimitAgentEvent(event types.AgentEvent) bool {
+	if event.Type == "rate_limit_exceeded" {
+		return true
+	}
+	if event.Type == "turn/failed" {
+		if msg := extractEventError(event.Data); msg != "" {
+			if isRateLimitErrorMessage(msg) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isRateLimitErrorMessage(msg string) bool {
+	lower := strings.ToLower(msg)
+	indicators := []string{
+		"rate limit exceeded",
+		"rate limited",
+		"rate_limit_exceeded",
+		"too many requests",
+		"429",
+		"http 429",
+		"status code 429",
+	}
+	for _, indicator := range indicators {
+		if strings.Contains(lower, indicator) {
+			return true
+		}
+	}
+	return false
+}
+
+// rateLimitBackoffExtension computes an additional delay to add to the base backoff
+// when a rate limit is active, based on the longest remaining reset time across
+// all rate limit buckets. Returns 0 if no rate limit is active.
+func rateLimitBackoffExtension(limits *types.RateLimitInfo) time.Duration {
+	if limits == nil {
+		return 0
+	}
+
+	var maxResetS float64
+	for _, b := range []*types.RateLimitBucket{limits.Primary, limits.Secondary, limits.Credits} {
+		if b == nil {
+			continue
+		}
+		if b.ResetInS > maxResetS {
+			maxResetS = b.ResetInS
+		}
+		if remainingReset := time.Until(b.ResetAt).Seconds(); remainingReset > maxResetS {
+			maxResetS = remainingReset
+		}
+	}
+
+	if maxResetS <= 0 {
+		return 0
+	}
+
+	return time.Duration(maxResetS * float64(time.Second))
+}
+
+// isRateLimited checks whether any rate limit bucket has exhausted its remaining count.
+func isRateLimited(limits *types.RateLimitInfo) bool {
+	if limits == nil {
+		return false
+	}
+	for _, b := range []*types.RateLimitBucket{limits.Primary, limits.Secondary, limits.Credits} {
+		if b != nil && b.Remaining <= 0 {
+			return true
+		}
+	}
+	return false
 }
