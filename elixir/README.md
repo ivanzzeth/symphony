@@ -15,16 +15,40 @@ This directory contains the current Elixir/OTP implementation of Symphony, based
 
 1. Polls Linear for candidate work
 2. Creates a workspace per issue
-3. Launches Codex in [App Server mode](https://developers.openai.com/codex/app-server/) inside the
-   workspace
-4. Sends a workflow prompt to Codex
-5. Keeps Codex working on the issue until the work is done
+3. Launches a coding agent (Codex, Claude Code, or Cursor Agent) inside the workspace
+4. Sends a workflow prompt to the agent
+5. Keeps the agent working on the issue until the work is done
 
 During app-server sessions, Symphony also serves a client-side `linear_graphql` tool so that repo
 skills can make raw Linear GraphQL calls.
 
 If a claimed issue moves to a terminal state (`Done`, `Closed`, `Cancelled`, or `Duplicate`),
 Symphony stops the active agent for that issue and cleans up matching workspaces.
+
+## Agent Backends
+
+Symphony supports three coding agent backends. Configure `agent.kind` and `codex.command`
+in `WORKFLOW.md` to select one:
+
+| Backend | `agent.kind` | Typical `codex.command` |
+|---------|-------------|--------------------------|
+| Codex   | `codex`     | `codex app-server` |
+| Claude  | `claude`    | `claude` |
+| Cursor  | `cursor`    | `cursor agent --print --output-format stream-json` |
+
+### Claude Code
+
+Set `agent.kind: claude` and `codex.command: claude` to use Anthropic's Claude Code
+CLI as the coding agent. Each agent turn launches `claude -p <prompt>` in the issue
+workspace. Authentication is read from `~/.claude/settings.json`. You can pass custom
+CLI flags (e.g., `--model`, `--max-turns`) via `codex.command`.
+
+### Cursor Agent
+
+Set `agent.kind: cursor` to use Cursor Agent CLI. Each turn opens a fresh
+`cursor agent --print --output-format stream-json` process in the workspace.
+Authentication is handled through Cursor's own credential storage. Pass the
+full command, including `--model` or other flags, through `codex.command`.
 
 ## How to use it
 
