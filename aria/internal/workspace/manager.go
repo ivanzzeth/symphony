@@ -122,9 +122,18 @@ func (m *Manager) Create(ctx context.Context, issue types.Issue) (string, error)
 		return "", fmt.Errorf("create workspace parent directory: %w", err)
 	}
 
-	if _, err := m.runGit(ctx, "worktree", "add", workspacePath, "-b", issue.ID); err != nil {
-		if _, fallbackErr := m.runGit(ctx, "worktree", "add", workspacePath, issue.ID); fallbackErr != nil {
-			return "", fmt.Errorf("create git worktree for issue %s: primary add with -b failed: %v; fallback add failed: %w", issue.ID, err, fallbackErr)
+	startRef := issue.ID
+	if m.baseBranch != "" {
+		if _, refErr := m.runGit(ctx, "rev-parse", "--verify", "origin/"+m.baseBranch); refErr == nil {
+			startRef = "origin/" + m.baseBranch
+		}
+	}
+
+	if _, err := m.runGit(ctx, "worktree", "add", workspacePath, "-b", issue.ID, startRef); err != nil {
+		if _, fallbackErr := m.runGit(ctx, "worktree", "add", workspacePath, "-b", issue.ID); fallbackErr != nil {
+			if _, fallback2Err := m.runGit(ctx, "worktree", "add", workspacePath, issue.ID); fallback2Err != nil {
+				return "", fmt.Errorf("create git worktree for issue %s: primary add with -b failed: %v; fallback add failed: %w", issue.ID, err, fallback2Err)
+			}
 		}
 	}
 

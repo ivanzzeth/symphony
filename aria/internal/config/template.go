@@ -54,11 +54,9 @@ func RenderHook(hookTemplate string, ctx TemplateContext) (string, error) {
 	return RenderTemplate(hookTemplate, ctx)
 }
 
-// RenderTemplate expands liquid template variables in a template string.
-func RenderTemplate(template string, ctx TemplateContext) (string, error) {
-	engine := liquid.NewEngine()
-	engine.StrictVariables()
-
+// buildBindings returns a map of all template bindings derived from the context.
+// Callers can override or add keys before passing the result to the liquid engine.
+func buildBindings(ctx TemplateContext) map[string]any {
 	labels := ctx.Issue.Labels
 	if labels == nil {
 		labels = []string{}
@@ -69,7 +67,7 @@ func RenderTemplate(template string, ctx TemplateContext) (string, error) {
 		issueState = ctx.Issue.State.String()
 	}
 
-	bindings := map[string]any{
+	return map[string]any{
 		"issue": map[string]any{
 			"id":          ctx.Issue.ID,
 			"identifier":  ctx.Issue.Identifier,
@@ -91,38 +89,25 @@ func RenderTemplate(template string, ctx TemplateContext) (string, error) {
 		},
 		"attempt": ctx.Attempt,
 	}
+}
 
-	return engine.ParseAndRenderString(template, bindings)
+// RenderTemplate expands liquid template variables in a template string.
+func RenderTemplate(template string, ctx TemplateContext) (string, error) {
+	engine := liquid.NewEngine()
+	engine.StrictVariables()
+	return engine.ParseAndRenderString(template, buildBindings(ctx))
 }
 
 // RenderPath expands liquid template variables in a path string.
+// It reuses buildBindings and overrides workspace.path with the base_dir alias.
 func RenderPath(template string, ctx TemplateContext) (string, error) {
 	engine := liquid.NewEngine()
 	engine.StrictVariables()
 
-	labels := ctx.Issue.Labels
-	if labels == nil {
-		labels = []string{}
-	}
-
-	bindings := map[string]any{
-		"issue": map[string]any{
-			"id":          ctx.Issue.ID,
-			"identifier":  ctx.Issue.Identifier,
-			"title":       ctx.Issue.Title,
-			"description": ctx.Issue.Description,
-			"url":         ctx.Issue.URL,
-			"labels":      labels,
-		},
-		"workspace": map[string]any{
-			"base_branch": ctx.Workspace.BaseBranch,
-			"base_dir":    ctx.Workspace.Path,
-		},
-		"tracker": map[string]any{
-			"repo":        ctx.Tracker.Repo,
-			"team_id":     ctx.Tracker.TeamID,
-			"project_url": ctx.Tracker.ProjectURL,
-		},
+	bindings := buildBindings(ctx)
+	bindings["workspace"] = map[string]any{
+		"base_branch": ctx.Workspace.BaseBranch,
+		"base_dir":    ctx.Workspace.Path,
 	}
 
 	rendered, err := engine.ParseAndRenderString(template, bindings)

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -549,8 +550,8 @@ func resolveBinaryPath(binaryPath string) string {
 	parts := strings.SplitN(strings.TrimSpace(binaryPath), " ", 2)
 	exe := parts[0]
 
-	// Check if the binary contains "codex" and try to find it
-	if strings.Contains(exe, "codex") {
+	// Check if the binary base name is "codex" and try to find it
+	if filepath.Base(exe) == "codex" {
 		if _, err := exec.LookPath(exe); err != nil {
 			// codex not found, try claude as fallback
 			if claudePath, claudeErr := exec.LookPath("claude"); claudeErr == nil {
