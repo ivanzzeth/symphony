@@ -16,7 +16,7 @@ type MockManager struct {
 	active map[string]string
 }
 
-func NewMockManager(baseDir string) *MockManager {
+func NewMockManager(baseDir string, opts ...ManagerOption) *MockManager {
 	return &MockManager{
 		baseDir: baseDir,
 		active:  make(map[string]string),

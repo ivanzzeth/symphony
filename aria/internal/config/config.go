@@ -16,6 +16,7 @@ const (
 	defaultTrackerType         = "internal"
 	defaultBackoffStrategy     = "exponential"
 	defaultWorkspaceBaseDir    = "."
+	defaultWorkspaceBaseBranch = "develop"
 	defaultBranchPrefix        = "symphony/"
 	defaultCodexBinaryPath     = "codex app-server"
 	defaultApprovalPolicy      = "auto-edit"
@@ -100,6 +101,7 @@ type PollingConfig struct {
 
 type WorkspaceConfig struct {
 	BaseDir      string `yaml:"base_dir"`
+	BaseBranch   string `yaml:"base_branch"`
 	BranchPrefix string `yaml:"branch_prefix"`
 }
 
@@ -273,6 +275,20 @@ func (c *WorkflowConfig) WorkspaceBaseDir() string {
 		return defaultWorkspaceBaseDir
 	}
 	return c.Workspace.BaseDir
+}
+
+func (c *WorkflowConfig) WorkspaceBaseBranch() string {
+	if c == nil || c.Workspace.BaseBranch == "" {
+		return defaultWorkspaceBaseBranch
+	}
+	return c.Workspace.BaseBranch
+}
+
+func (c *WorkflowConfig) WorkspaceBranchPrefix() string {
+	if c == nil || c.Workspace.BranchPrefix == "" {
+		return defaultBranchPrefix
+	}
+	return c.Workspace.BranchPrefix
 }
 
 func (c *WorkflowConfig) HookBeforeRun() string {

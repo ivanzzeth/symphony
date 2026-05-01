@@ -311,7 +311,7 @@ func (o *Orchestrator) dispatchIssue(
 		logging.LogIssueEvent(o.logger, issue.ID, "phase_transition_failed", "from", runAttempt.Phase.String(), "to", types.BuildingPrompt.String(), "err", phaseErr)
 	}
 
-	prompt, err := config.RenderPrompt(cfg.PromptTemplate, issue)
+	prompt, err := config.RenderPrompt(cfg, issue, workspacePath, attemptNumber)
 	if err != nil {
 		if cleanupErr := o.workspace.Cleanup(ctx, issue.ID); cleanupErr != nil {
 			logging.LogIssueEvent(o.logger, issue.ID, "workspace_cleanup_failed", "stage", "prompt_render", "err", cleanupErr)

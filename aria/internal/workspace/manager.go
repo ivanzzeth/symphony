@@ -11,24 +11,85 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/charmbracelet/log"
+
 	"github.com/ivanzzeth/symphony/aria/internal/types"
 )
 
 type Manager struct {
-	baseDir   string
-	gitBinary string
+	baseDir    string
+	baseBranch string
+	gitBinary  string
+	logger     *log.Logger
+
+	hooks HooksHandler
 
 	mu         sync.RWMutex
 	active     map[string]string
 	issueLocks sync.Map
 }
 
-func NewManager(baseDir string) *Manager {
-	return &Manager{
-		baseDir:   baseDir,
-		gitBinary: "git",
-		active:    make(map[string]string),
+// HooksHandler is an optional callback interface for workspace lifecycle hooks.
+// Implementations are expected to be best-effort; errors are logged but do not
+// block the primary operation.
+type HooksHandler interface {
+	RunAfterCreate(ctx context.Context, workspacePath string, issue types.Issue) error
+	RunBeforeRemove(ctx context.Context, workspacePath string, issue types.Issue) error
+}
+
+// NopHooksHandler is a no-op hooks handler that always succeeds.
+type NopHooksHandler struct{}
+
+func (NopHooksHandler) RunAfterCreate(ctx context.Context, workspacePath string, issue types.Issue) error {
+	return nil
+}
+func (NopHooksHandler) RunBeforeRemove(ctx context.Context, workspacePath string, issue types.Issue) error {
+	return nil
+}
+
+// ManagerOption configures a Manager at construction time.
+type ManagerOption func(*Manager)
+
+// WithBaseBranch sets the base branch for new worktrees.
+func WithBaseBranch(branch string) ManagerOption {
+	return func(m *Manager) {
+		if branch != "" {
+			m.baseBranch = branch
+		}
 	}
+}
+
+// WithHooks sets the hooks handler for workspace lifecycle events.
+func WithHooks(hooks HooksHandler) ManagerOption {
+	return func(m *Manager) {
+		if hooks != nil {
+			m.hooks = hooks
+		}
+	}
+}
+
+// WithLogger sets the logger for the manager.
+func WithLogger(logger *log.Logger) ManagerOption {
+	return func(m *Manager) {
+		if logger != nil {
+			m.logger = logger
+		}
+	}
+}
+
+func NewManager(baseDir string, opts ...ManagerOption) *Manager {
+	m := &Manager{
+		baseDir:    baseDir,
+		baseBranch: "develop",
+		gitBinary:  "git",
+		logger:     log.NewWithOptions(os.Stderr, log.Options{Level: log.WarnLevel}),
+		hooks:      NopHooksHandler{},
+		active:     make(map[string]string),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
 }
 
 func (m *Manager) Create(ctx context.Context, issue types.Issue) (string, error) {
@@ -71,6 +132,10 @@ func (m *Manager) Create(ctx context.Context, issue types.Issue) (string, error)
 	m.active[issue.ID] = workspacePath
 	m.mu.Unlock()
 
+	if err := m.hooks.RunAfterCreate(ctx, workspacePath, issue); err != nil {
+		m.logger.Warn("after_create hook failed", "issue_id", issue.ID, "err", err)
+	}
+
 	return workspacePath, nil
 }
 
@@ -89,6 +154,12 @@ func (m *Manager) Cleanup(ctx context.Context, issueID string) error {
 		m.mu.Unlock()
 		m.issueLocks.Delete(issueID)
 		return nil
+	}
+
+	// Run before_remove hook before removing the worktree.
+	// We pass an issue with just the ID since that's all we reliably have at cleanup time.
+	if err := m.hooks.RunBeforeRemove(ctx, workspacePath, types.Issue{ID: issueID}); err != nil {
+		m.logger.Warn("before_remove hook failed", "issue_id", issueID, "err", err)
 	}
 
 	output, err := m.runGit(ctx, "worktree", "remove", workspacePath, "--force")
