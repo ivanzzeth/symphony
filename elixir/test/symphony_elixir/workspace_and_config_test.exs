@@ -1329,4 +1329,49 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
     assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
     assert message =~ "agent.kind"
   end
+
+  test "workspace.base_branch defaults to main" do
+    write_workflow_file!(Workflow.workflow_file_path())
+    assert Config.settings!().workspace.base_branch == "main"
+  end
+
+  test "workspace.base_branch can be configured" do
+    write_workflow_file!(Workflow.workflow_file_path(), workspace_base_branch: "develop")
+    assert Config.settings!().workspace.base_branch == "develop"
+  end
+
+  test "workspace.base_branch appears in prompt template variables" do
+    write_workflow_file!(Workflow.workflow_file_path(),
+      workspace_base_branch: "develop",
+      prompt: "Base: {{ workspace.base_branch }}"
+    )
+
+    issue = %Issue{
+      id: "test-1",
+      identifier: "MT-1",
+      title: "Test",
+      state: "Todo"
+    }
+
+    prompt = PromptBuilder.build_prompt(issue)
+    assert prompt =~ "Base: develop"
+  end
+
+  test "workspace.base_branch renders origin/branch in prompt instructions" do
+    write_workflow_file!(Workflow.workflow_file_path(),
+      workspace_base_branch: "staging",
+      prompt: "Create branch from origin/{{ workspace.base_branch }}"
+    )
+
+    issue = %Issue{
+      id: "test-2",
+      identifier: "MT-2",
+      title: "Test",
+      state: "Todo"
+    }
+
+    prompt = PromptBuilder.build_prompt(issue)
+    assert prompt =~ "origin/staging"
+    refute prompt =~ "origin/main"
+  end
 end
