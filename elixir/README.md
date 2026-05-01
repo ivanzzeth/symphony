@@ -15,10 +15,25 @@ This directory contains the current Elixir/OTP implementation of Symphony, based
 
 1. Polls Linear for candidate work
 2. Creates a workspace per issue
-3. Launches Codex in [App Server mode](https://developers.openai.com/codex/app-server/) inside the
-   workspace
-4. Sends a workflow prompt to Codex
-5. Keeps Codex working on the issue until the work is done
+3. Launches a coding agent in app-server mode inside the workspace
+4. Sends a workflow prompt to the agent
+5. Keeps the agent working on the issue until the work is done
+
+### Supported coding agents
+
+Symphony supports multiple coding agents via the `codex.command` field in `WORKFLOW.md`. The
+`codex` section name is kept for backward compatibility, but any coding agent that supports
+app-server mode can be used.
+
+| Agent | `codex.command` example | Notes |
+|-------|------------------------|-------|
+| [Codex](https://developers.openai.com/codex/app-server/) | `codex app-server` | Default. Supports `--config` flags for model selection. |
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `claude app-server` | Claude Code in app-server mode. |
+| [Cursor](https://docs.cursor.com/en/cli/overview) | `cursor app-server` | Cursor CLI in app-server mode. |
+
+All three agents use the same protocol, so switching is a one-line config change. The approval
+policy, sandbox, and timeout settings under the `codex` section apply regardless of which agent
+you choose.
 
 During app-server sessions, Symphony also serves a client-side `linear_graphql` tool so that repo
 skills can make raw Linear GraphQL calls.

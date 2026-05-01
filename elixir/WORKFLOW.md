@@ -28,6 +28,10 @@ hooks:
 agent:
   max_concurrent_agents: 10
   max_turns: 20
+# Supported coding agents — uncomment the one you want to use:
+#   codex   → codex --config 'model="gpt-5.5"' --config model_reasoning_effort=xhigh app-server
+#   claude  → claude app-server
+#   cursor  → cursor app-server
 codex:
   command: codex --config shell_environment_policy.inherit=all --config 'model="gpt-5.5"' --config model_reasoning_effort=xhigh app-server
   approval_policy: never
