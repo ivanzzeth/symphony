@@ -174,7 +174,7 @@ defmodule SymphonyElixir.Workspace do
         :ok
 
       command ->
-        run_hook(command, workspace, issue_context, "before_run", worker_host)
+        run_hook(render_hook_command(command), workspace, issue_context, "before_run", worker_host)
     end
   end
 
@@ -188,7 +188,7 @@ defmodule SymphonyElixir.Workspace do
         :ok
 
       command ->
-        run_hook(command, workspace, issue_context, "after_run", worker_host)
+        run_hook(render_hook_command(command), workspace, issue_context, "after_run", worker_host)
         |> ignore_hook_failure()
     end
   end
@@ -207,6 +207,17 @@ defmodule SymphonyElixir.Workspace do
     String.replace(identifier || "issue", ~r/[^a-zA-Z0-9._-]/, "_")
   end
 
+  defp render_hook_command(command) when is_binary(command) do
+    ws = Config.settings!().workspace
+
+    command
+    |> Solid.parse!()
+    |> Solid.render!(%{"workspace" => %{"base_branch" => ws.base_branch}})
+    |> IO.iodata_to_binary()
+  rescue
+    _ -> command
+  end
+
   defp maybe_run_after_create_hook(workspace, issue_context, created?, worker_host) do
     hooks = Config.settings!().hooks
 
@@ -217,7 +228,7 @@ defmodule SymphonyElixir.Workspace do
             :ok
 
           command ->
-            run_hook(command, workspace, issue_context, "after_create", worker_host)
+            run_hook(render_hook_command(command), workspace, issue_context, "after_create", worker_host)
         end
 
       false ->
@@ -236,7 +247,7 @@ defmodule SymphonyElixir.Workspace do
 
           command ->
             run_hook(
-              command,
+              render_hook_command(command),
               workspace,
               %{issue_id: nil, issue_identifier: Path.basename(workspace)},
               "before_remove",
