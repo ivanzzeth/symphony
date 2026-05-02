@@ -1,6 +1,0 @@
-node_modules/
-dist/*
-!dist/.gitkeep
-*.tsbuildinfo
-vite.config.js
-vite.config.d.ts
