@@ -227,6 +227,37 @@ The result should be:
 - No Content-Length headers
 - Handle error code `-32001` (server overload)
 
+### Agent Runners
+
+Aria supports multiple agent runner types configured via `agent.type` in the workflow YAML front matter:
+
+| Type | Description | Binary / Runtime |
+|------|-------------|-----------------|
+| `codex` | Codex app-server (JSONL) | `codex app-server` |
+| `opencode` | OpenCode server | `opencode serve` |
+| `omx` | oh-my-codex team runtime | `omx` |
+| `omc` | oh-my-claudecode team runtime | `omc` |
+
+#### OMC (oh-my-claudecode) Runner
+
+The `omc` agent type launches the OMC team runner, which orchestrates multiple Claude Code agents in parallel using tmux-based process isolation.
+
+Configuration in `WORKFLOW.md`:
+
+```yaml
+agent:
+  type: omc
+omc:
+  binary_path: omc            # path to the OMC CLI binary
+  team_spec: 2:claude         # N workers using claude model
+  poll_interval_ms: 1200
+  startup_timeout_ms: 21000
+```
+
+**Team spec format**: `N:model` where `N` is the number of worker agents and `model` is the Claude model to use (e.g., `claude`, `opus`, `sonnet`, `haiku`). Examples: `1:claude`, `2:claude`, `3:sonnet`.
+
+OMC writes team state under `.aria/state/team/omc/`. The runner requires tmux for process isolation (default worker mode).
+
 ### Concurrency Patterns
 - Use `errgroup.Group` for managing goroutines
 - Use `context.WithCancel` for graceful shutdown
