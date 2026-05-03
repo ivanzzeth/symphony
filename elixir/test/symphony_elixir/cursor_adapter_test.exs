@@ -141,7 +141,7 @@ defmodule SymphonyElixir.CursorAdapterTest do
     write_workflow_file!(Workflow.workflow_file_path(),
       agent_kind: "cursor",
       workspace_root: workspace_root,
-      codex_command: binary
+      agent_command: binary
     )
   end
 
