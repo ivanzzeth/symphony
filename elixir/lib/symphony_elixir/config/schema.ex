@@ -399,7 +399,7 @@ defmodule SymphonyElixir.Config.Schema do
   end
 
   defp resolve_agent_command(agent, codex) do
-    %{agent | command: agent.command || codex.command || "codex app-server"}
+    %{agent | command: agent.command || Map.get(codex, :command) || "codex app-server"}
   end
 
   defp normalize_keys(value) when is_map(value) do
