@@ -1,236 +1,238 @@
-# 스킬 작성 가이드
+# Skill Writing Guide
 
-하네스에서 생성하는 스킬의 품질을 높이기 위한 상세 작성 가이드. SKILL.md Phase 4의 보충 레퍼런스.
-
----
-
-## 목차
-
-1. [Description 작성 패턴](#1-description-작성-패턴)
-2. [본문 작성 스타일](#2-본문-작성-스타일)
-3. [출력 형식 정의 패턴](#3-출력-형식-정의-패턴)
-4. [예시 작성 패턴](#4-예시-작성-패턴)
-5. [Progressive Disclosure 패턴](#5-progressive-disclosure-패턴)
-6. [스크립트 번들링 판단 기준](#6-스크립트-번들링-판단-기준)
-7. [데이터 스키마 표준](#7-데이터-스키마-표준)
-8. [스킬에 포함하지 않을 것](#8-스킬에-포함하지-않을-것)
+Detailed writing guide for producing high-quality skills in the harness. Supplemental reference for SKILL.md Phase 4.
 
 ---
 
-## 1. Description 작성 패턴
+## Table of Contents
 
-Description은 스킬의 유일한 트리거 메커니즘이다. Claude는 `available_skills` 목록에서 name + description만 보고 스킬 사용 여부를 결정한다.
+1. [Description Writing Patterns](#1-description-writing-patterns)
+2. [Body Writing Style](#2-body-writing-style)
+3. [Output Format Definition Patterns](#3-output-format-definition-patterns)
+4. [Example Writing Patterns](#4-example-writing-patterns)
+5. [Progressive Disclosure Patterns](#5-progressive-disclosure-patterns)
+6. [Script Bundling Decision Criteria](#6-script-bundling-decision-criteria)
+7. [Data Schema Standards](#7-data-schema-standards)
+8. [What NOT to Include in Skills](#8-what-not-to-include-in-skills)
 
-### 트리거 메커니즘 이해
+---
 
-Claude는 자신의 기본 도구로 쉽게 처리할 수 있는 단순 작업에는 스킬을 호출하지 않는 경향이 있다. "이 PDF 읽어줘" 같은 단순 요청은 description이 완벽해도 트리거되지 않을 수 있다. 복잡하고 다단계이며 전문적인 작업일수록 스킬 트리거 확률이 높다.
+## 1. Description Writing Patterns
 
-### 작성 원칙
+The description is the skill's sole trigger mechanism. Claude decides whether to use a skill based only on name + description from the `available_skills` list.
 
-1. **스킬이 하는 일** + **구체적 트리거 상황**을 모두 기술
-2. 유사하지만 트리거하면 안 되는 경우를 구분하는 경계 조건 명시
-3. 약간 "pushy"하게 — Claude가 트리거를 보수적으로 판단하는 경향을 보상
+### Understanding the Trigger Mechanism
 
-### 좋은 예시
+Claude tends not to invoke skills for simple tasks that can be easily handled with its built-in tools. Even with a perfect description, a simple request like "read this PDF" may not trigger. Complex, multi-step, specialized tasks have a higher trigger probability.
+
+### Writing Principles
+
+1. Describe both **what the skill does** + **concrete trigger situations**
+2. Specify boundary conditions to distinguish similar-but-not-triggering cases
+3. Be slightly "pushy" — compensate for Claude's conservative trigger tendency
+
+### Good Examples
 
 ```yaml
-description: "PDF 파일 읽기, 텍스트/테이블 추출, 병합, 분할, 회전, 워터마크,
-  암호화/복호화, OCR 등 모든 PDF 작업을 수행. .pdf 파일을 언급하거나
-  PDF 산출물을 요청하면 반드시 이 스킬을 사용할 것. 단순히 PDF를
-  '읽어달라'는 요청이 아닌 변환/편집/분석이 필요할 때 특히 유용."
+description: "Perform all PDF operations: read PDF files, extract text/tables,
+  merge, split, rotate, watermark, encrypt/decrypt, OCR. MUST use this skill
+  whenever a .pdf file is mentioned or a PDF output is requested. Especially
+  useful when transformation/editing/analysis is needed beyond simply
+  'reading' a PDF."
 ```
 
 ```yaml
-description: "엑셀/CSV/TSV 파일의 열 추가, 수식 계산, 서식, 차트,
-  데이터 정제를 포함한 모든 스프레드시트 작업. 사용자가 스프레드시트
-  파일을 언급하면 — 심지어 캐주얼하게('다운로드 폴더의 xlsx')라고만
-  해도 — 이 스킬을 사용할 것."
+description: "All spreadsheet operations including Excel/CSV/TSV files: add
+  columns, formula calculations, formatting, charts, data cleaning. Use this
+  skill whenever the user mentions a spreadsheet file — even casually
+  ('the xlsx in my Downloads folder')."
 ```
 
-### 나쁜 예시
+### Bad Examples
 
-- `"데이터를 처리하는 스킬"` — 너무 모호, 어떤 파일/작업인지 불분명
-- `"PDF 관련 작업"` — 구체적 동작 나열 없음, 트리거 상황 미기술
+- `"Skill for processing data"` — too vague, unclear what files/operations
+- `"PDF related tasks"` — no concrete actions listed, no trigger situations described
 
 ---
 
-## 2. 본문 작성 스타일
+## 2. Body Writing Style
 
-### Why-First 원칙
+### Why-First Principle
 
-LLM은 이유를 이해하면 엣지 케이스에서도 올바르게 판단한다. 강압적 규칙보다 맥락 전달이 효과적이다.
+LLMs that understand the reason make correct decisions in edge cases. Context delivery is more effective than dictatorial rules.
 
-**나쁜 예:**
+**Bad:**
 ```markdown
 ALWAYS use pdfplumber for table extraction. NEVER use PyPDF2 for tables.
 ```
 
-**좋은 예:**
+**Good:**
 ```markdown
-테이블 추출에는 pdfplumber를 사용한다. PyPDF2는 텍스트 추출에 특화되어
-있어 테이블의 행/열 구조를 보존하지 못하기 때문이다. pdfplumber는
-셀 경계를 인식하여 구조화된 데이터를 반환한다.
+Use pdfplumber for table extraction. PyPDF2 is specialized for text extraction
+and cannot preserve table row/column structure. pdfplumber recognizes cell
+boundaries and returns structured data.
 ```
 
-### 일반화 원칙
+### Generalization Principle
 
-피드백이나 테스트 결과에서 문제가 발견되면, 특정 예시에만 맞는 좁은 수정 대신 **원리 수준에서 일반화**한다.
+When issues are found in feedback or test results, generalize at the **principle level** rather than making narrow fixes for specific examples.
 
-**오버피팅 수정:**
+**Overfitting fix:**
 ```markdown
-"Q4 매출" 열이 있으면 해당 열을 숫자로 변환하라.
+If there is a "Q4 Revenue" column, convert that column to numeric.
 ```
 
-**일반화된 수정:**
+**Generalized fix:**
 ```markdown
-열 이름에 "매출", "금액", "수량" 등 수치를 암시하는 키워드가 있으면
-해당 열을 숫자 타입으로 변환한다. 변환 실패 시 원본 값을 유지한다.
+If a column name contains keywords implying numeric values such as "revenue",
+"amount", "quantity", convert that column to numeric type. Preserve the
+original value if conversion fails.
 ```
 
-### 명령형 어조
+### Imperative Tone
 
-"~합니다", "~할 수 있습니다" 대신 "~한다", "~하라" 형태를 사용한다. 스킬은 지시서이다.
+Use direct instructional language ("do X", "use Y"). A skill is a set of instructions.
 
-### 컨텍스트 절약
+### Context Economy
 
-컨텍스트 윈도우는 공공재다. 모든 문장이 토큰 비용을 정당화하는지 자문한다:
-- "Claude가 이미 알고 있는 내용인가?" → 삭제
-- "이 설명이 없으면 Claude가 실수하는가?" → 유지
-- "구체적 예시 하나가 긴 설명보다 효과적인가?" → 예시로 대체
+The context window is a shared resource. For every sentence, ask:
+- "Does Claude already know this?" → delete
+- "Would Claude make mistakes without this explanation?" → keep
+- "Would one concrete example be more effective than a long explanation?" → replace with example
 
 ---
 
-## 3. 출력 형식 정의 패턴
+## 3. Output Format Definition Patterns
 
-산출물의 형식이 중요한 스킬에서 사용:
+Use for skills where output format matters:
 
 ```markdown
-## 보고서 구조
-다음 템플릿을 정확히 따른다:
+## Report Structure
+Follow this template exactly:
 
-# [제목]
-## 요약
-## 핵심 발견
-## 권장 사항
+# [Title]
+## Summary
+## Key Findings
+## Recommendations
 ```
 
-형식 정의는 간결하게, 실제 예시를 포함하면 더 효과적이다.
+Keep format definitions concise. Including real examples is more effective.
 
 ---
 
-## 4. 예시 작성 패턴
+## 4. Example Writing Patterns
 
-예시는 긴 설명보다 효과적이다:
+Examples are more effective than long explanations:
 
 ```markdown
-## 커밋 메시지 형식
+## Commit Message Format
 
-**예시 1:**
-입력: JWT 토큰 기반 사용자 인증 추가
-출력: feat(auth): JWT 기반 인증 구현
+**Example 1:**
+Input: Added JWT token-based user authentication
+Output: feat(auth): implement JWT-based authentication
 
-**예시 2:**
-입력: 로그인 페이지에서 비밀번호 표시 버튼이 동작하지 않는 버그 수정
-출력: fix(login): 비밀번호 표시 토글 버튼 동작 수정
+**Example 2:**
+Input: Fixed bug where password visibility toggle button doesn't work on login page
+Output: fix(login): fix password visibility toggle button behavior
 ```
 
 ---
 
-## 5. Progressive Disclosure 패턴
+## 5. Progressive Disclosure Patterns
 
-### 패턴 1: 도메인별 분리
+### Pattern 1: Domain-Based Separation
 
 ```
 bigquery-skill/
-├── SKILL.md (개요 + 도메인 선택 가이드)
+├── SKILL.md (overview + domain selection guide)
 └── references/
-    ├── finance.md (매출, 빌링 메트릭)
-    ├── sales.md (기회, 파이프라인)
-    └── product.md (API 사용량, 기능)
+    ├── finance.md (revenue, billing metrics)
+    ├── sales.md (opportunities, pipeline)
+    └── product.md (API usage, features)
 ```
 
-사용자가 매출에 대해 물으면 finance.md만 로드.
+When user asks about revenue, only finance.md is loaded.
 
-### 패턴 2: 조건부 상세
+### Pattern 2: Conditional Detail
 
 ```markdown
-# DOCX 처리
+# DOCX Processing
 
-## 문서 생성
-docx-js로 새 문서를 생성한다. → [DOCX-JS.md](references/docx-js.md) 참조.
+## Document Creation
+Create new documents with docx-js. → See [DOCX-JS.md](references/docx-js.md).
 
-## 문서 편집
-단순 편집은 XML을 직접 수정.
-**추적 변경이 필요하면**: [REDLINING.md](references/redlining.md) 참조
+## Document Editing
+For simple edits, modify XML directly.
+**If track changes are needed**: See [REDLINING.md](references/redlining.md)
 ```
 
-### 패턴 3: 대형 레퍼런스 파일 구조
+### Pattern 3: Large Reference File Structure
 
-300줄 이상의 reference 파일은 상단에 목차를 포함한다:
+Reference files over 300 lines must include a Table of Contents at the top:
 
 ```markdown
-# API 레퍼런스
+# API Reference
 
-## 목차
-1. [인증](#인증)
-2. [엔드포인트 목록](#엔드포인트-목록)
-3. [에러 코드](#에러-코드)
-4. [레이트 리밋](#레이트-리밋)
+## Table of Contents
+1. [Authentication](#authentication)
+2. [Endpoint List](#endpoint-list)
+3. [Error Codes](#error-codes)
+4. [Rate Limits](#rate-limits)
 
 ---
 
-## 인증
+## Authentication
 ...
 ```
 
 ---
 
-## 6. 스크립트 번들링 판단 기준
+## 6. Script Bundling Decision Criteria
 
-테스트 실행에서 에이전트들의 트랜스크립트를 관찰한다. 다음 패턴이 보이면 번들링 대상:
+Observe agent transcripts during test runs. Bundle when these patterns appear:
 
-| 신호 | 조치 |
-|------|------|
-| 3개 테스트 중 3개에서 동일한 헬퍼 스크립트 생성 | `scripts/`에 번들링 |
-| 매번 같은 pip install/npm install 실행 | 스킬에 의존성 설치 단계 명시 |
-| 동일한 다단계 접근법 반복 | 스킬 본문에 표준 절차로 기술 |
-| 매번 비슷한 에러 후 같은 회피책 적용 | 스킬에 알려진 문제와 해결법 기술 |
+| Signal | Action |
+|--------|--------|
+| Same helper script generated in 3 out of 3 tests | Bundle in `scripts/` |
+| Same pip install / npm install repeated every run | Specify dependency installation step in skill |
+| Same multi-step approach repeated | Document as standard procedure in skill body |
+| Same error then same workaround repeated | Document known issue and resolution in skill |
 
-번들링된 스크립트는 반드시 실행 테스트를 거친다.
+Bundled scripts must pass execution testing.
 
 ---
 
-## 7. 데이터 스키마 표준
+## 7. Data Schema Standards
 
-스킬 간 데이터 교환의 일관성을 위해 표준 스키마를 사용한다. 하네스에서 생성하는 스킬의 테스트/평가에 사용할 수 있다.
+Use standard schemas for consistency in skill-to-skill data exchange. Usable for testing/evaluating harness-generated skills.
 
 ### eval_metadata.json
 
-각 테스트 케이스의 메타데이터:
+Metadata for each test case:
 
 ```json
 {
   "eval_id": 0,
   "eval_name": "descriptive-name-here",
-  "prompt": "사용자의 작업 프롬프트",
+  "prompt": "The user's task prompt",
   "assertions": [
-    "산출물에 X가 포함되어 있다",
-    "Y 형식으로 파일이 생성되었다"
+    "Output contains X",
+    "File generated in Y format"
   ]
 }
 ```
 
 ### grading.json
 
-assertion 기반 채점 결과:
+Assertion-based scoring results:
 
 ```json
 {
   "expectations": [
     {
-      "text": "산출물에 '서울'이 포함됨",
+      "text": "Output includes 'Seoul'",
       "passed": true,
-      "evidence": "3번째 단계에서 '서울 지역 데이터 추출' 확인"
+      "evidence": "Confirmed 'Seoul region data extraction' in step 3"
     }
   ],
   "summary": {
@@ -242,11 +244,11 @@ assertion 기반 채점 결과:
 }
 ```
 
-**필드명 주의:** `text`, `passed`, `evidence`를 정확히 사용한다 (`name`/`met`/`details` 등 변형 금지).
+**Field name note:** Use `text`, `passed`, `evidence` exactly (no variants like `name`/`met`/`details`).
 
 ### timing.json
 
-실행 시간/토큰 측정:
+Execution time/token measurements:
 
 ```json
 {
@@ -256,13 +258,13 @@ assertion 기반 채점 결과:
 }
 ```
 
-서브에이전트 완료 알림에서 `total_tokens`와 `duration_ms`를 즉시 저장한다. 이 데이터는 알림 시점에만 접근 가능하고 이후 복구 불가.
+Save `total_tokens` and `duration_ms` immediately from sub-agent completion notifications. This data is only accessible at notification time and cannot be recovered later.
 
 ---
 
-## 8. 스킬에 포함하지 않을 것
+## 8. What NOT to Include in Skills
 
-- README.md, CHANGELOG.md, INSTALLATION_GUIDE.md 등 부가 문서
-- 스킬 생성 과정의 메타 정보 (테스트 결과, 반복 이력)
-- 사용자 대상 설명서 (스킬은 AI 에이전트를 위한 지시서)
-- 이미 Claude가 알고 있는 일반적 지식
+- Auxiliary docs: README.md, CHANGELOG.md, INSTALLATION_GUIDE.md
+- Meta-information about the skill creation process (test results, iteration history)
+- User-facing documentation (skills are instructions for AI agents)
+- General knowledge Claude already possesses
