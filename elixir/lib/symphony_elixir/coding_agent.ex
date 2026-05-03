@@ -1,6 +1,29 @@
 defmodule SymphonyElixir.CodingAgent do
   @moduledoc """
   Behaviour for coding agent adapters (Codex, Claude Code, Cursor).
+
+  ## Adapter Selection
+
+  `adapter/0` reads `Config.settings!().agent.kind` and returns the
+  corresponding adapter module:
+
+    * `"codex"`  — `SymphonyElixir.Codex.AppServer` (JSON-RPC 2.0 over stdio)
+    * `"claude"` — `SymphonyElixir.Claude.Adapter` (CLI with `--print --output-format stream-json`)
+    * `"cursor"` — `SymphonyElixir.Cursor.Adapter` (CLI with `agent --print --output-format stream-json`)
+
+  The config schema validates `agent.kind` against `["codex", "claude", "cursor"]`
+  and defaults to `"codex"`.
+
+  ## Adding a New Backend
+
+  1. Create a module (e.g. `SymphonyElixir.MyBackend.Adapter`) that
+     implements `@behaviour SymphonyElixir.CodingAgent` with the three
+     required callbacks: `start_session/2`, `run_turn/4`, `stop_session/1`.
+  2. Add the new `agent.kind` value to the `validate_inclusion` list in
+     `Config.Schema.Agent.changeset/2`.
+  3. Add a clause to `CodingAgent.adapter/0` mapping the kind string to
+     your module.
+  4. Write tests following the pattern in `coding_agent_test.exs`.
   """
 
   alias SymphonyElixir.Config
