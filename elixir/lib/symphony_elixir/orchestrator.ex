@@ -65,6 +65,7 @@ defmodule SymphonyElixir.Orchestrator do
     }
 
     run_terminal_workspace_cleanup()
+    Workspace.reconcile_all_symlinks()
     state = schedule_tick(state, 0)
 
     {:ok, state}

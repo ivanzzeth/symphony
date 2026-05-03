@@ -247,7 +247,12 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
 
       assert {:ok, ^canonical_workspace} = Workspace.create_for_issue("MT-608")
       assert File.dir?(workspace)
-      assert {:ok, []} = File.ls(workspace)
+
+      contents = File.ls!(workspace)
+      assert ".agents" in contents
+      assert ".claude" in contents
+      assert ".cursor" in contents
+      assert ".codex" in contents
     after
       File.rm_rf(workspace_root)
     end

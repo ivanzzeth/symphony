@@ -4,7 +4,7 @@ defmodule SymphonyElixir.Workspace do
   """
 
   require Logger
-  alias SymphonyElixir.{Config, PathSafety, SSH}
+  alias SymphonyElixir.{AgentSymlinks, Config, PathSafety, SSH}
 
   @remote_workspace_marker "__SYMPHONY_WORKSPACE__"
 
@@ -21,7 +21,8 @@ defmodule SymphonyElixir.Workspace do
       with {:ok, workspace} <- workspace_path_for_issue(safe_id, worker_host),
            :ok <- validate_workspace_path(workspace, worker_host),
            {:ok, workspace, created?} <- ensure_workspace(workspace, worker_host),
-           :ok <- maybe_run_after_create_hook(workspace, issue_context, created?, worker_host) do
+           :ok <- maybe_run_after_create_hook(workspace, issue_context, created?, worker_host),
+           :ok <- manage_agent_symlinks(workspace, created?, worker_host) do
         {:ok, workspace}
       end
     rescue
@@ -82,6 +83,25 @@ defmodule SymphonyElixir.Workspace do
     File.rm_rf!(workspace)
     File.mkdir_p!(workspace)
     {:ok, workspace, true}
+  end
+
+  defp manage_agent_symlinks(workspace, true, worker_host) do
+    AgentSymlinks.manage(workspace, worker_host)
+    :ok
+  end
+
+  defp manage_agent_symlinks(workspace, false, worker_host) do
+    AgentSymlinks.manage(workspace, worker_host)
+    :ok
+  end
+
+  @doc """
+  Reconciles agent symlinks in all existing workspaces.
+  Called at orchestrator startup for repair/recovery.
+  """
+  @spec reconcile_all_symlinks() :: :ok
+  def reconcile_all_symlinks do
+    AgentSymlinks.reconcile_all(Config.settings!().workspace.root)
   end
 
   @spec remove(Path.t()) :: {:ok, [String.t()]} | {:error, term(), String.t()}
