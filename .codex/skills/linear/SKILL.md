@@ -373,6 +373,231 @@ mutation FileUpload(
 }
 ```
 
+## Symphony Issue Lifecycle
+
+In the Symphony project, issue states determine whether the orchestrator
+dispatches agents:
+
+- `Backlog` — out of scope. Symphony ignores these issues entirely. Create
+  Backlog issues for future work or follow-up items you discover.
+- `Todo` — queued. Symphony polls and dispatches an agent team. The first action
+  of a Todo issue is to move itself to `In Progress`.
+- `In Progress` — agent actively working.
+- `Human Review` — PR attached, waiting on human approval.
+- `Merging` — approved by human, the agent executes the `land` flow.
+- `Rework` — reviewer requested changes.
+- `Done` / `Canceled` / `Closed` / `Duplicate` — terminal states.
+
+Creating an issue in `Backlog` is the safe way to file work without triggering
+Symphony. Creating an issue in `Todo` will cause Symphony to dispatch agents
+immediately on the next poll tick (default every 5 seconds).
+
+### Verify Symphony activity after Todo creation
+
+When you create a `Todo` issue, Symphony creates a workspace within seconds:
+
+```bash
+ls ~/code/symphony-workspaces/<issue-identifier>
+```
+
+### Creating follow-up issues from an agent session
+
+When discovering out-of-scope improvements during execution, file a follow-up
+`Backlog` issue that:
+- has a clear title, description, and acceptance criteria;
+- is in the same project;
+- links the current issue as `related`;
+- uses `blockedBy` when the follow-up depends on the current issue.
+
+### Create an issue
+
+Use `issueCreate`. The only strictly required field is `teamId` + `title`, but
+you should always set `stateId` to control whether Symphony picks it up.
+
+```graphql
+mutation CreateIssue(
+  $teamId: String!,
+  $title: String!,
+  $description: String,
+  $stateId: String,
+  $priority: Int,
+  $labelIds: [String!],
+  $assigneeId: String
+) {
+  issueCreate(input: {
+    teamId: $teamId,
+    title: $title,
+    description: $description,
+    stateId: $stateId,
+    priority: $priority,
+    labelIds: $labelIds,
+    assigneeId: $assigneeId
+  }) {
+    success
+    issue {
+      id
+      identifier
+      title
+      url
+      state { id name type }
+      priority
+      labels { nodes { id name } }
+      assignee { id name }
+    }
+  }
+}
+```
+
+### Find team ID and workflow states
+
+Creating or moving an issue requires `teamId` and `stateId`. Discover them:
+
+```graphql
+query TeamStates($teamKey: String) {
+  teams(filter: { key: { eq: $teamKey } }, first: 1) {
+    nodes {
+      id
+      name
+      key
+      states {
+        nodes {
+          id
+          name
+          type
+          position
+        }
+      }
+    }
+  }
+}
+```
+
+If you already have a known issue, get its team states directly:
+
+```graphql
+query IssueTeamStates($id: String!) {
+  issue(id: $id) {
+    team {
+      id
+      key
+      states { nodes { id name type } }
+    }
+  }
+}
+```
+
+### Find team labels
+
+Labels are scoped to a team. List them before assigning:
+
+```graphql
+query TeamLabels($teamId: String!) {
+  team(id: $teamId) {
+    id
+    labels { nodes { id name } }
+  }
+}
+```
+
+### Create an issue with labels
+
+After looking up label IDs from the team, pass them in `labelIds`:
+
+```graphql
+mutation CreateIssueWithLabels(
+  $teamId: String!,
+  $title: String!,
+  $stateId: String,
+  $labelIds: [String!]
+) {
+  issueCreate(input: {
+    teamId: $teamId,
+    title: $title,
+    stateId: $stateId,
+    labelIds: $labelIds
+  }) {
+    success
+    issue {
+      id
+      identifier
+      labels { nodes { id name } }
+    }
+  }
+}
+```
+
+### Update an issue (fields beyond state)
+
+`issueUpdate` supports updating title, description, priority, labels,
+assignee, and state simultaneously:
+
+```graphql
+mutation UpdateIssue(
+  $id: String!,
+  $title: String,
+  $description: String,
+  $priority: Int,
+  $stateId: String,
+  $labelIds: [String!],
+  $assigneeId: String
+) {
+  issueUpdate(id: $id, input: {
+    title: $title,
+    description: $description,
+    priority: $priority,
+    stateId: $stateId,
+    labelIds: $labelIds,
+    assigneeId: $assigneeId
+  }) {
+    success
+    issue {
+      id
+      identifier
+      title
+      description
+      state { id name }
+      priority
+      labels { nodes { id name } }
+      assignee { id name }
+    }
+  }
+}
+```
+
+Omitted fields are left unchanged. `labelIds` replaces the full set — to
+preserve existing labels, include their IDs in the list. Priority follows
+Linear's scale (lower = higher priority; 1 = urgent, 4 = low).
+
+### Resolve current viewer
+
+When you need your own user ID for self-assignment:
+
+```graphql
+query Viewer { viewer { id name email } }
+```
+
+### Assign an issue
+
+```graphql
+mutation AssignIssue($id: String!, $assigneeId: String!) {
+  issueUpdate(id: $id, input: { assigneeId: $assigneeId }) {
+    success
+    issue { id identifier assignee { id name } }
+  }
+}
+```
+
+### Unassign an issue
+
+```graphql
+mutation UnassignIssue($id: String!) {
+  issueUpdate(id: $id, input: { assigneeId: null }) {
+    success
+    issue { id identifier assignee { id name } }
+  }
+}
+```
+
 ## Usage rules
 
 - Use `linear_graphql` for comment edits, uploads, and ad-hoc Linear API
