@@ -3,9 +3,9 @@
 Status: Draft v1.1 (language-agnostic)
 
 Purpose: Define a service that orchestrates coding agent teams to get project work done.
-Each project uses a team of specialized agents (planner, implementer, reviewer) that
-collaborate through `.agents/` definitions. Symphony dispatches issues to agent teams and
-manages the harness that keeps agent definitions aligned with the project's WORKFLOW.md.
+Each project uses a team of specialized agents that collaborate through `.agents/` definitions.
+Symphony dispatches issues to agent teams and manages the harness that keeps agent definitions
+aligned with the project's WORKFLOW.md.
 
 ## Normative Language
 
@@ -343,10 +343,8 @@ Cursor, Codex).
 ```
 .agents/
 ├── AGENTS.md                  # Project knowledge map (entry point for any CLI)
-├── agents/                    # Agent persona definitions
-│   ├── planner.md
-│   ├── implementer.md
-│   └── reviewer.md
+├── agents/                    # Agent persona definitions (harness-managed)
+│   └── *.md                   # Role definitions per selected architecture pattern
 ├── skills/                    # Agent skills (including harness meta-skill)
 │   └── harness/
 │       ├── SKILL.md
@@ -366,9 +364,11 @@ AGENTS.md does NOT contain:
 
 These belong in `WORKFLOW.md`'s prompt body, which IS Symphony-specific.
 
-**Agent definitions** (`agents/*.md`) — Persona documents for each agent role. Define role,
-capabilities, communication patterns, and skill bindings. These are created and maintained by the
-harness skill.
+**Agent definitions** (`agents/*.md`) — Persona documents for each agent role. These are not
+pre-determined by Symphony. The harness skill creates them based on the architecture pattern
+selected in its Phase 2 (pipeline, fan-out/fan-in, expert pool, generate-verify, supervisor,
+hierarchical delegation, etc.). Example roles might include planner, implementer, reviewer
+for a pipeline pattern, but the actual set depends on the project's chosen pattern.
 
 **Symphony's responsibilities:**
 
@@ -532,7 +532,7 @@ Fields:
   - Selects the CLI backend for agent sessions.
 - `command` (string shell command)
   - Default: `"claude"` when `kind == "claude"`, `"codex app-server"` when `kind == "codex"`,
-    `"cursor agent"` when `kind == "cursor"`
+    `"cursor"` when `kind == "cursor"`
   - Launched via `bash -lc <command>` in the workspace directory.
 - `max_concurrent_agents` (integer)
   - Default: `10`
@@ -696,7 +696,7 @@ not require recognizing or validating extension fields unless that extension is 
 - `hooks.before_remove`: shell script or null
 - `hooks.timeout_ms`: integer, default `60000`
 - `agent.kind`: string, default `"codex"`, supported: `"claude"`, `"codex"`, `"cursor"`
-- `agent.command`: shell command string, default per kind (`"claude"` / `"codex app-server"` / `"cursor agent"`)
+- `agent.command`: shell command string, default per kind (`"claude"` / `"codex app-server"` / `"cursor"`)
 - `agent.max_concurrent_agents`: integer, default `10`
 - `agent.max_turns`: integer, default `20`
 - `agent.max_retry_backoff_ms`: integer, default `300000` (5m)
@@ -1082,10 +1082,13 @@ Backend-specific session handling:
   prompt on the live thread. Continuation turns use the same thread. `stop_session/1` terminates
   the subprocess.
 - **`claude`**: `start_session/2` may perform initial setup (no long-lived process).
-  `run_turn/4` launches `claude --session-id <id> --resume --output-format stream-json -p "<prompt>"`.
+  `run_turn/4` launches `claude --print --output-format stream-json --verbose
+  --dangerously-skip-permissions --add-dir <workspace> --session-id <id> -- <prompt>`
+  (first turn) or `--resume <id>` (subsequent turns).
   `stop_session/1` is a no-op or cleanup.
 - **`cursor`**: `start_session/2` may perform initial setup. `run_turn/4` launches
-  `cursor agent --print --output-format stream-json --force --trust -p "<prompt>"`.
+  `cursor agent --print --output-format stream-json --force --trust --workspace <path>
+  --resume <id> -- <prompt>` (subsequent turns; `--resume` omitted on first turn).
   `stop_session/1` is a no-op or cleanup.
 
 ### 10.3 Session Identifiers
@@ -1168,7 +1171,7 @@ Backend-specific notes:
   `codex.thread_sandbox`, and `codex.turn_sandbox_policy`. The `codex` config section is
   only meaningful when `agent.kind == "codex"`.
 - **`claude`**: Approval behavior is controlled by Claude Code's own permission system.
-  The `--force` flag or equivalent trust configuration determines auto-approval.
+  `--dangerously-skip-permissions` enables auto-approval.
 - **`cursor`**: `--force --trust` flags enable auto-approval. Without these flags, Cursor
   will prompt for confirmations.
 
