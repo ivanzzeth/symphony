@@ -50,16 +50,25 @@ defmodule SymphonyElixir.Config do
 
   @spec max_concurrent_agents_for_state(term()) :: pos_integer()
   def max_concurrent_agents_for_state(state_name) when is_binary(state_name) do
-    config = settings!()
+    case settings() do
+      {:ok, config} ->
+        Map.get(
+          config.agent.max_concurrent_agents_by_state,
+          Schema.normalize_issue_state(state_name),
+          config.agent.max_concurrent_agents
+        )
 
-    Map.get(
-      config.agent.max_concurrent_agents_by_state,
-      Schema.normalize_issue_state(state_name),
-      config.agent.max_concurrent_agents
-    )
+      {:error, _reason} ->
+        0
+    end
   end
 
-  def max_concurrent_agents_for_state(_state_name), do: settings!().agent.max_concurrent_agents
+  def max_concurrent_agents_for_state(_state_name) do
+    case settings() do
+      {:ok, config} -> config.agent.max_concurrent_agents
+      {:error, _reason} -> 0
+    end
+  end
 
   @spec codex_turn_sandbox_policy(Path.t() | nil) :: map()
   def codex_turn_sandbox_policy(workspace \\ nil) do
