@@ -645,6 +645,8 @@ Dynamic reload is REQUIRED:
   changes.
 - Extensions that manage their own listeners/resources (for example an HTTP server port change) MAY
   require restart unless the implementation explicitly supports live rebind.
+- Process-level configuration from `symphony.yaml` is intentionally excluded from dynamic reload
+  (see Section 6.5.5).
 - Implementations SHOULD also re-validate/reload defensively during runtime operations (for example
   before dispatch) in case filesystem watch events are missed.
 - Invalid reloads MUST NOT crash the service; keep operating with the last known good effective
@@ -681,6 +683,9 @@ This section is intentionally redundant so a coding agent can implement the conf
 Extension fields are documented in the extension section that defines them. Core conformance does
 not require recognizing or validating extension fields unless that extension is implemented.
 
+Process-level keys (`server.*`, `observability.*`) belong in `symphony.yaml` (Section 6.5),
+not in `WORKFLOW.md` front matter.
+
 - `tracker.kind`: string, REQUIRED, currently `linear`
 - `tracker.endpoint`: string, default `https://api.linear.app/graphql` when `tracker.kind=linear`
 - `tracker.api_key`: string or `$VAR`, canonical env `LINEAR_API_KEY` when `tracker.kind=linear`
@@ -707,6 +712,58 @@ not require recognizing or validating extension fields unless that extension is 
 - `codex.approval_policy`: Codex `AskForApproval` value, default implementation-defined (only when `agent.kind == "codex"`)
 - `codex.thread_sandbox`: Codex `SandboxMode` value, default implementation-defined (only when `agent.kind == "codex"`)
 - `codex.turn_sandbox_policy`: Codex `SandboxPolicy` value, default implementation-defined (only when `agent.kind == "codex"`)
+
+### 6.5 Process-Level Configuration (`symphony.yaml`)
+
+A Symphony instance MAY load process-level settings from a `symphony.yaml` (or `symphony.json`)
+file. This file configures how the Symphony daemon itself behaves — it is NOT a per-project artifact
+and SHOULD NOT be version-controlled with project code.
+
+#### 6.5.1 File Location
+
+Config file location resolution (first match wins):
+
+1. Explicit CLI argument: `symphony --config /path/to/symphony.yaml`
+2. Environment variable: `SYMPHONY_CONFIG_PATH`
+3. Default: `~/.config/symphony/symphony.yaml`
+
+Missing file is not an error — Symphony proceeds with built-in defaults when no config file exists.
+
+#### 6.5.2 Config Priority
+
+Effective process config is resolved top-to-bottom; higher source overrides lower:
+
+1. CLI flags (`--port`, `--host`)
+2. Environment variables (`SYMPHONY_PORT`, `SYMPHONY_HOST`)
+3. `symphony.yaml` values
+4. Built-in defaults
+
+#### 6.5.3 Schema
+
+```yaml
+# symphony.yaml
+server:
+  port: 0           # integer, OPTIONAL. Enables HTTP server extension. 0 = ephemeral port.
+  host: "127.0.0.1" # string, default "127.0.0.1". Bind address for HTTP listener.
+
+observability: {}   # map, OPTIONAL. Reserved for implementation-defined observability
+                    # settings (dashboard, refresh intervals, logging, etc.).
+                    # Implementations define their own sub-keys and defaults.
+```
+
+#### 6.5.4 Relationship to WORKFLOW.md
+
+- `server.*` and `observability.*` belong in `symphony.yaml`, NOT in `WORKFLOW.md` front matter.
+- `WORKFLOW.md` carries per-project dispatch configuration (tracker, polling, workspaces, hooks,
+  agent, codex). See Section 6.4.
+- Symphony MUST NOT read server/observability keys from `WORKFLOW.md`. If they appear, the
+  implementation SHOULD log a warning and ignore them.
+
+#### 6.5.5 Dynamic Behavior
+
+- Changes to `symphony.yaml` are NOT hot-reloaded. Restart-required behavior is conformant.
+- This file is intentionally excluded from the dynamic reload requirements in Section 6.2.
+
 
 ## 7. Orchestration State Machine
 
@@ -1500,16 +1557,21 @@ If implemented:
 
 Extension config:
 
+Process-level config belongs in `symphony.yaml` (Section 6.5), not in `WORKFLOW.md` front matter.
+
 - `server.port` (integer, OPTIONAL)
   - Enables the HTTP server extension.
   - `0` requests an ephemeral port for local development and tests.
   - CLI `--port` overrides `server.port` when both are present.
+- `server.host` (string, default `"127.0.0.1"`)
+  - Bind address for the HTTP listener.
+  - CLI `--host` overrides `server.host` when both are present.
 
 Enablement (extension):
 
 - Start the HTTP server when a CLI `--port` argument is provided.
-- Start the HTTP server when `server.port` is present in `WORKFLOW.md` front matter.
-- The `server` top-level key is owned by this extension.
+- Start the HTTP server when `server.port` is present in `symphony.yaml`.
+- The `server` top-level key is defined in `symphony.yaml`; it SHOULD NOT appear in `WORKFLOW.md`.
 - Positive `server.port` values bind that port.
 - Implementations SHOULD bind loopback by default (`127.0.0.1` or host equivalent) unless explicitly
   configured otherwise.
@@ -2232,11 +2294,11 @@ Use the same validation profiles as Section 17:
 
 - HTTP server extension honors CLI `--port` over `server.port`, uses a safe default bind host, and
   exposes the baseline endpoints/error semantics in Section 13.7 if shipped.
+- Process-level configuration loaded from `symphony.yaml` per Section 6.5 resolution order, with
+  `server.*` and `observability.*` keys excluded from `WORKFLOW.md` parsing.
 - `linear_graphql` client-side tool extension exposes raw Linear GraphQL access through the
   app-server session using configured Symphony auth.
 - TODO: Persist retry queue and session metadata across process restarts.
-- TODO: Make observability settings configurable in workflow front matter without prescribing UI
-  implementation details.
 - TODO: Add first-class tracker write APIs (comments/state transitions) in the orchestrator instead
   of only via agent tools.
 - TODO: Add pluggable issue tracker adapters beyond Linear.

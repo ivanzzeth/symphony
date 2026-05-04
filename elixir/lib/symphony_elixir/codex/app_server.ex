@@ -200,7 +200,7 @@ defmodule SymphonyElixir.Codex.AppServer do
             :binary,
             :exit_status,
             :stderr_to_stdout,
-            args: [~c"-lc", String.to_charlist(Config.settings!().codex.command)],
+            args: [~c"-lc", String.to_charlist(Config.settings!().agent.command)],
             cd: String.to_charlist(workspace),
             line: @port_line_bytes
           ]
@@ -218,7 +218,7 @@ defmodule SymphonyElixir.Codex.AppServer do
   defp remote_launch_command(workspace) when is_binary(workspace) do
     [
       "cd #{SSH.shell_escape(workspace)}",
-      "exec #{Config.settings!().codex.command}"
+      "exec #{Config.settings!().agent.command}"
     ]
     |> Enum.join(" && ")
   end
