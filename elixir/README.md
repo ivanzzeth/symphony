@@ -27,10 +27,10 @@ Symphony stops the active agent for that issue and cleans up matching workspaces
 
 ## Agent Backends
 
-Symphony supports three coding agent backends. Configure `agent.kind` and `codex.command`
+Symphony supports three coding agent backends. Configure `agent.kind` and `agent.command`
 in `WORKFLOW.md` to select one:
 
-| Backend | `agent.kind` | Typical `codex.command` |
+| Backend | `agent.kind` | Typical `agent.command` |
 |---------|-------------|--------------------------|
 | Codex   | `codex`     | `codex app-server` |
 | Claude  | `claude`    | `claude` |
@@ -38,17 +38,17 @@ in `WORKFLOW.md` to select one:
 
 ### Claude Code
 
-Set `agent.kind: claude` and `codex.command: claude` to use Anthropic's Claude Code
+Set `agent.kind: claude` and `agent.command: claude` to use Anthropic's Claude Code
 CLI as the coding agent. Each agent turn launches `claude -p <prompt>` in the issue
 workspace. Authentication is read from `~/.claude/settings.json`. You can pass custom
-CLI flags (e.g., `--model`, `--max-turns`) via `codex.command`.
+CLI flags (e.g., `--model`, `--max-turns`) via `agent.command`.
 
 ### Cursor Agent
 
 Set `agent.kind: cursor` to use Cursor Agent CLI. Each turn opens a fresh
 `cursor agent --print --output-format stream-json` process in the workspace.
 Authentication is handled through Cursor's own credential storage. Pass the
-full command, including `--model` or other flags, through `codex.command`.
+full command, including `--model` or other flags, through `agent.command`.
 
 ## How to use it
 
@@ -154,7 +154,7 @@ Notes:
 - `tracker.api_key` reads from `LINEAR_API_KEY` when unset or when value is `$LINEAR_API_KEY`.
 - For path values, `~` is expanded to the home directory.
 - For env-backed path values, use `$VAR`. `workspace.root` resolves `$VAR` before path handling,
-  while `codex.command` stays a shell command string and any `$VAR` expansion there happens in the
+  while `agent.command` stays a shell command string and any `$VAR` expansion there happens in the
   launched shell.
 
 ```yaml
@@ -165,8 +165,8 @@ workspace:
 hooks:
   after_create: |
     git clone --depth 1 "$SOURCE_REPO_URL" .
-codex:
-  command: "$CODEX_BIN --config 'model=\"gpt-5.5\"' app-server"
+agent:
+  command: "$CODEX_BIN app-server"
 ```
 
 - If `WORKFLOW.md` is missing or has invalid YAML at startup, Symphony does not boot.

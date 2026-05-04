@@ -45,8 +45,7 @@ defmodule SymphonyElixir.Cursor.Adapter do
   end
 
   defp build_cli_args(session, prompt) do
-    command = Config.settings!().codex.command
-
+    command = Config.settings!().agent.command
     base =
       command
       |> String.split(~r/\s+/, trim: true)

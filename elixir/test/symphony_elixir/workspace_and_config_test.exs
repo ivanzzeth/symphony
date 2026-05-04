@@ -744,7 +744,7 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
     assert config.workspace.root == Path.join(System.tmp_dir!(), "symphony_workspaces")
     assert config.worker.max_concurrent_agents_per_host == nil
     assert config.agent.max_concurrent_agents == 10
-    assert config.codex.command == "codex app-server"
+    assert config.agent.command == "codex app-server"
 
     assert config.codex.approval_policy == %{
              "reject" => %{
@@ -776,7 +776,7 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
       codex_command: "codex --config 'model=\"gpt-5.5\"' app-server"
     )
 
-    assert Config.settings!().codex.command ==
+    assert Config.settings!().agent.command ==
              "codex --config 'model=\"gpt-5.5\"' app-server"
 
     explicit_root =
@@ -884,7 +884,7 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
            }
 
     write_workflow_file!(Workflow.workflow_file_path(), codex_command: "codex app-server")
-    assert Config.settings!().codex.command == "codex app-server"
+    assert Config.settings!().agent.command == "codex app-server"
   end
 
   test "config resolves $VAR references for env-backed secret and path values" do
@@ -914,7 +914,7 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
     config = Config.settings!()
     assert config.tracker.api_key == api_key
     assert config.workspace.root == Path.expand(workspace_root)
-    assert config.codex.command == "#{codex_bin} app-server"
+    assert config.agent.command == "#{codex_bin} app-server"
   end
 
   test "config no longer resolves legacy env: references" do
