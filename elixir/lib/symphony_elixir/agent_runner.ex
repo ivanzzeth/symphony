@@ -4,7 +4,7 @@ defmodule SymphonyElixir.AgentRunner do
   """
 
   require Logger
-  alias SymphonyElixir.{CodingAgent, Config, Linear.Issue, PromptBuilder, Tracker, Workspace}
+  alias SymphonyElixir.{CodingAgent, Config, Linear.Issue, PromptBuilder, SSH, Tracker, Workspace}
 
   @type worker_host :: String.t() | nil
 
@@ -13,7 +13,7 @@ defmodule SymphonyElixir.AgentRunner do
     # The orchestrator owns host retries so one worker lifetime never hops machines.
     worker_host = selected_worker_host(Keyword.get(opts, :worker_host), Config.settings!().worker.ssh_hosts)
 
-    Logger.info("Starting agent run for #{issue_context(issue)} worker_host=#{worker_host_for_log(worker_host)}")
+    Logger.info("Starting agent run for #{issue_context(issue)} worker_host=#{SSH.worker_host_for_log(worker_host)}")
 
     case run_on_worker_host(issue, codex_update_recipient, opts, worker_host) do
       :ok ->
@@ -26,7 +26,7 @@ defmodule SymphonyElixir.AgentRunner do
   end
 
   defp run_on_worker_host(issue, codex_update_recipient, opts, worker_host) do
-    Logger.info("Starting worker attempt for #{issue_context(issue)} worker_host=#{worker_host_for_log(worker_host)}")
+    Logger.info("Starting worker attempt for #{issue_context(issue)} worker_host=#{SSH.worker_host_for_log(worker_host)}")
 
     case Workspace.create_for_issue(issue, worker_host) do
       {:ok, workspace} ->
@@ -189,9 +189,6 @@ defmodule SymphonyElixir.AgentRunner do
       _ -> List.first(hosts)
     end
   end
-
-  defp worker_host_for_log(nil), do: "local"
-  defp worker_host_for_log(worker_host), do: worker_host
 
   defp normalize_issue_state(state_name) when is_binary(state_name) do
     state_name

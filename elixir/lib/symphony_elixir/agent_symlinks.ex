@@ -71,7 +71,7 @@ defmodule SymphonyElixir.AgentSymlinks do
 
     full_script = [
       "set -eu",
-      remote_shell_assign("workspace", workspace),
+      SSH.remote_shell_assign("workspace", workspace),
       script
     ]
     |> Enum.join("\n")
@@ -184,18 +184,5 @@ defmodule SymphonyElixir.AgentSymlinks do
       {:error, reason} ->
         Logger.warning("Cannot create symlink #{link_path} -> #{target}: #{inspect(reason)}")
     end
-  end
-
-  defp remote_shell_assign(variable_name, raw_path) do
-    escaped = "'" <> String.replace(raw_path, "'", "'\"'\"'") <> "'"
-
-    [
-      "#{variable_name}=#{escaped}",
-      "case \"$#{variable_name}\" in",
-      "  '~') #{variable_name}=\"$HOME\" ;;",
-      "  '~/'*) #{variable_name}=\"$HOME/${#{variable_name}#~/}\" ;;",
-      "esac"
-    ]
-    |> Enum.join("\n")
   end
 end

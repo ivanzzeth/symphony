@@ -217,7 +217,7 @@ defmodule SymphonyElixir.Codex.AppServer do
 
   defp remote_launch_command(workspace) when is_binary(workspace) do
     [
-      "cd #{shell_escape(workspace)}",
+      "cd #{SSH.shell_escape(workspace)}",
       "exec #{Config.settings!().codex.command}"
     ]
     |> Enum.join(" && ")
@@ -1027,10 +1027,6 @@ defmodule SymphonyElixir.Codex.AppServer do
   end
 
   defp maybe_set_usage(metadata, _payload), do: metadata
-
-  defp shell_escape(value) when is_binary(value) do
-    "'" <> String.replace(value, "'", "'\"'\"'") <> "'"
-  end
 
   defp default_on_message(_message), do: :ok
 
