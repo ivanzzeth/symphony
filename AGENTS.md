@@ -108,3 +108,52 @@ This is your main contribution area. Use the full toolset:
 | Consult the human before acting | Make unilateral merge/approve decisions |
 | Post review comments on PRs | Open competing PRs |
 | Track issue status and report | Impersonate the Symphony agent |
+
+## Repository structure & runtime
+
+### Critical: the Symphony orchestrator is in `elixir/`
+
+This is a monorepo. The Symphony implementation lives entirely in the `elixir/` subdirectory. When you need to read/change runtime code, work inside `elixir/`.
+
+| Path | Purpose |
+|------|---------|
+| `elixir/lib/` | Production code (orchestrator, agents, config, tracker, HTTP server) |
+| `elixir/test/` | ExUnit tests |
+| `elixir/WORKFLOW.md` | Runtime config (polling, tracker, agent, hooks, workspace) — hot reloaded |
+| `elixir/log/` | Disk log files (console handler removed at startup, all output lands here) |
+| `elixir/config/` | Compile-time Elixir config |
+| `elixir/mix.exs` | Elixir project manifest |
+
+Other directories at the repo root are scaffolding/workpad artifacts from agents.
+
+### How to start Symphony
+
+```bash
+cd elixir
+mix deps.get                              # first time
+mise exec -- mix run --no-halt -e ':ok'   # start orchestrator (foreground)
+```
+
+It runs inside a tmux session named `symphony` for persistence:
+```bash
+tmux attach -t symphony   # view dashboard
+```
+
+### How to stop Symphony
+
+Send SIGTERM or Ctrl+C in the tmux session. The process handles it cleanly — writes an offline-status snapshot and exits.
+
+### How to test
+
+```bash
+cd elixir
+mise exec -- mix test
+```
+
+### Where logs are
+
+```bash
+tail -f elixir/log/symphony.log.1   # current log
+```
+
+Note: `LogFile.configure/0` removes the console handler at startup, so `mix run` prints nothing to stderr/stdout beyond the dashboard. All log records are on disk.
