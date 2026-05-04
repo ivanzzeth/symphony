@@ -51,4 +51,23 @@ defmodule SymphonyElixir.CodingAgentTest do
     write_workflow_file!(Workflow.workflow_file_path(), agent_kind: "cursor")
     assert CodingAgent.adapter() == CursorAdapter
   end
+
+  test "adapter/0 returns AppServer (default) when kind is omitted" do
+    write_workflow_file!(Workflow.workflow_file_path())
+    assert CodingAgent.adapter() == AppServer
+  end
+
+  test "ClaudeAdapter implements CodingAgent behaviour" do
+    assert {:module, ClaudeAdapter} == Code.ensure_compiled(ClaudeAdapter)
+    assert :erlang.function_exported(ClaudeAdapter, :start_session, 2)
+    assert :erlang.function_exported(ClaudeAdapter, :run_turn, 4)
+    assert :erlang.function_exported(ClaudeAdapter, :stop_session, 1)
+  end
+
+  test "CursorAdapter implements CodingAgent behaviour" do
+    assert {:module, CursorAdapter} == Code.ensure_compiled(CursorAdapter)
+    assert :erlang.function_exported(CursorAdapter, :start_session, 2)
+    assert :erlang.function_exported(CursorAdapter, :run_turn, 4)
+    assert :erlang.function_exported(CursorAdapter, :stop_session, 1)
+  end
 end
