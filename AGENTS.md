@@ -63,7 +63,7 @@ When the human asks you to review PRs, or when you notice issues in `In Review`:
 **If the human says Request Changes (reject):**
 1. **Post a review comment** on the PR explaining each issue found, with file
    paths and line references. Be specific so the agent can fix them.
-2. **Move the Linear issue back to `In Progress`** using `issueUpdate` with the
+2. **Move the Linear issue to `Rework`** using `issueUpdate` with the
    appropriate `stateId`. This triggers Symphony to dispatch an agent to fix
    the problems.
 3. Do NOT create fix branches. Do NOT write code. Do NOT open new PRs.
@@ -72,8 +72,8 @@ When the human asks you to review PRs, or when you notice issues in `In Review`:
 Reject cycle:
   PR in In Review → you review → human says reject →
   1. gh pr review --request-changes with detailed feedback
-  2. linear_graphql MoveIssueToState → In Progress stateId
-  3. Agent picks up from In Progress → fixes → new commits → back to In Review
+  2. linear_graphql MoveIssueToState → Rework stateId
+  3. Agent picks up from Rework → fixes → new commits → back to In Review
 ```
 
 ### Step 4: After agent re-delivers
@@ -103,7 +103,7 @@ This is your main contribution area. Use the full toolset:
 |--------|-----------|
 | Review PRs and report findings | Fix bugs in implementation code |
 | Create Linear issues (Backlog or Todo) | Create commits on feature branches |
-| Move issues to In Progress (reject cycle) | Move your own issues to Done/Merging |
+| Move issues to Rework (reject cycle) | Move your own issues to Done/Merging |
 | Research, plan, and recommend | Write production code changes |
 | Consult the human before acting | Make unilateral merge/approve decisions |
 | Post review comments on PRs | Open competing PRs |
