@@ -1,1 +1,0 @@
-../../.codex/skills/debug/SKILL.md

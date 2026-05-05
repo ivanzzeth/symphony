@@ -4,7 +4,7 @@ defmodule SymphonyElixir.Workspace do
   """
 
   require Logger
-  alias SymphonyElixir.{Config, PathSafety, SSH}
+  alias SymphonyElixir.{AgentSymlinks, Config, PathSafety, SSH}
 
   @remote_workspace_marker "__SYMPHONY_WORKSPACE__"
 
@@ -21,12 +21,13 @@ defmodule SymphonyElixir.Workspace do
       with {:ok, workspace} <- workspace_path_for_issue(safe_id, worker_host),
            :ok <- validate_workspace_path(workspace, worker_host),
            {:ok, workspace, created?} <- ensure_workspace(workspace, worker_host),
-           :ok <- maybe_run_after_create_hook(workspace, issue_context, created?, worker_host) do
+           :ok <- maybe_run_after_create_hook(workspace, issue_context, created?, worker_host),
+           :ok <- manage_agent_symlinks(workspace, created?, worker_host) do
         {:ok, workspace}
       end
     rescue
       error in [ArgumentError, ErlangError, File.Error] ->
-        Logger.error("Workspace creation failed #{issue_log_context(issue_context)} worker_host=#{worker_host_for_log(worker_host)} error=#{Exception.message(error)}")
+        Logger.error("Workspace creation failed #{issue_log_context(issue_context)} worker_host=#{SSH.worker_host_for_log(worker_host)} error=#{Exception.message(error)}")
         {:error, error}
     end
   end
@@ -49,7 +50,7 @@ defmodule SymphonyElixir.Workspace do
     script =
       [
         "set -eu",
-        remote_shell_assign("workspace", workspace),
+        SSH.remote_shell_assign("workspace", workspace),
         "if [ -d \"$workspace\" ]; then",
         "  created=0",
         "elif [ -e \"$workspace\" ]; then",
@@ -84,6 +85,20 @@ defmodule SymphonyElixir.Workspace do
     {:ok, workspace, true}
   end
 
+  defp manage_agent_symlinks(workspace, _created?, worker_host) do
+    AgentSymlinks.manage(workspace, worker_host)
+    :ok
+  end
+
+  @doc """
+  Reconciles agent symlinks in all existing workspaces.
+  Called at orchestrator startup for repair/recovery.
+  """
+  @spec reconcile_all_symlinks() :: :ok
+  def reconcile_all_symlinks do
+    AgentSymlinks.reconcile_all(Config.settings!().workspace.root)
+  end
+
   @spec remove(Path.t()) :: {:ok, [String.t()]} | {:error, term(), String.t()}
   def remove(workspace), do: remove(workspace, nil)
 
@@ -110,7 +125,7 @@ defmodule SymphonyElixir.Workspace do
 
     script =
       [
-        remote_shell_assign("workspace", workspace),
+        SSH.remote_shell_assign("workspace", workspace),
         "rm -rf \"$workspace\""
       ]
       |> Enum.join("\n")
@@ -271,7 +286,7 @@ defmodule SymphonyElixir.Workspace do
       command ->
         script =
           [
-            remote_shell_assign("workspace", workspace),
+            SSH.remote_shell_assign("workspace", workspace),
             "if [ -d \"$workspace\" ]; then",
             "  cd \"$workspace\"",
             "  #{command}",
@@ -330,7 +345,7 @@ defmodule SymphonyElixir.Workspace do
 
     Logger.info("Running workspace hook hook=#{hook_name} #{issue_log_context(issue_context)} workspace=#{workspace} worker_host=#{worker_host}")
 
-    case run_remote_command(worker_host, "cd #{shell_escape(workspace)} && #{command}", timeout_ms) do
+    case run_remote_command(worker_host, "cd #{SSH.shell_escape(workspace)} && #{command}", timeout_ms) do
       {:ok, cmd_result} ->
         handle_hook_command_result(cmd_result, workspace, issue_context, hook_name)
 
@@ -408,18 +423,6 @@ defmodule SymphonyElixir.Workspace do
     end
   end
 
-  defp remote_shell_assign(variable_name, raw_path)
-       when is_binary(variable_name) and is_binary(raw_path) do
-    [
-      "#{variable_name}=#{shell_escape(raw_path)}",
-      "case \"$#{variable_name}\" in",
-      "  '~') #{variable_name}=\"$HOME\" ;;",
-      "  '~/'*) " <> variable_name <> "=\"$HOME/${" <> variable_name <> "#~/}\" ;;",
-      "esac"
-    ]
-    |> Enum.join("\n")
-  end
-
   defp parse_remote_workspace_output(output) do
     lines = String.split(IO.iodata_to_binary(output), "\n", trim: true)
 
@@ -459,13 +462,6 @@ defmodule SymphonyElixir.Workspace do
         {:error, {:workspace_hook_timeout, "remote_command", timeout_ms}}
     end
   end
-
-  defp shell_escape(value) when is_binary(value) do
-    "'" <> String.replace(value, "'", "'\"'\"'") <> "'"
-  end
-
-  defp worker_host_for_log(nil), do: "local"
-  defp worker_host_for_log(worker_host), do: worker_host
 
   defp issue_context(%{id: issue_id, identifier: identifier}) do
     %{

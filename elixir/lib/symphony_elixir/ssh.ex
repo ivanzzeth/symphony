@@ -94,7 +94,34 @@ defmodule SymphonyElixir.SSH do
     String.contains?(destination, "[") and String.contains?(destination, "]")
   end
 
-  defp shell_escape(value) when is_binary(value) do
+  @doc """
+  Escapes a shell value by wrapping it in single quotes.
+  """
+  @spec shell_escape(String.t()) :: String.t()
+  def shell_escape(value) when is_binary(value) do
     "'" <> String.replace(value, "'", "'\"'\"'") <> "'"
   end
+
+  @doc """
+  Generates a shell variable assignment with tilde expansion for remote scripts.
+  """
+  @spec remote_shell_assign(String.t(), String.t()) :: String.t()
+  def remote_shell_assign(variable_name, raw_path)
+      when is_binary(variable_name) and is_binary(raw_path) do
+    [
+      "#{variable_name}=#{shell_escape(raw_path)}",
+      "case \"$#{variable_name}\" in",
+      "  '~') #{variable_name}=\"$HOME\" ;;",
+      "  '~/'*) #{variable_name}=\"$HOME/${#{variable_name}#~/}\" ;;",
+      "esac"
+    ]
+    |> Enum.join("\n")
+  end
+
+  @doc """
+  Returns a human-readable label for a worker host.
+  """
+  @spec worker_host_for_log(String.t() | nil) :: String.t()
+  def worker_host_for_log(nil), do: "local"
+  def worker_host_for_log(worker_host), do: worker_host
 end

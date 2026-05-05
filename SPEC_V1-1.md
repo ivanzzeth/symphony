@@ -365,7 +365,10 @@ Cursor, Codex).
 │       ├── SKILL.md
 │       ├── references/
 │       └── scripts/
-└── mcp/                       # MCP server configurations
+├── rules/                     # Cursor-compatible rule symlinks to skills/*/SKILL.md
+│   └── <skill>.md -> ../skills/<skill>/SKILL.md
+├── mcp/                       # MCP server configurations
+└── worktree_init.sh           # Project setup script
 ```
 
 **AGENTS.md** — The project knowledge map. Provides any CLI tool with a fast understanding of the

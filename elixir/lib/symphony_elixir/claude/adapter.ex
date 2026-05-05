@@ -73,7 +73,7 @@ defmodule SymphonyElixir.Claude.Adapter do
         ["--session-id", session.session_id]
       end
 
-    escaped_prompt = shell_escape(prompt)
+    escaped_prompt = SSH.shell_escape(prompt)
 
     (base ++ session_arg ++ ["--", escaped_prompt])
     |> Enum.join(" ")
@@ -104,7 +104,7 @@ defmodule SymphonyElixir.Claude.Adapter do
   end
 
   defp open_claude_port(workspace, cli_args, worker_host) when is_binary(worker_host) do
-    remote_command = "cd #{shell_escape(workspace)} && exec #{cli_args}"
+    remote_command = "cd #{SSH.shell_escape(workspace)} && exec #{cli_args}"
     SSH.start_port(worker_host, remote_command, line: @port_line_bytes)
   end
 
@@ -250,10 +250,6 @@ defmodule SymphonyElixir.Claude.Adapter do
     else
       _ -> %{}
     end
-  end
-
-  defp shell_escape(value) when is_binary(value) do
-    "'" <> String.replace(value, "'", "'\"'\"'") <> "'"
   end
 
   defp close_port(port) when is_port(port) do

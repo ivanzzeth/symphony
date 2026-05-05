@@ -67,6 +67,8 @@ defmodule SymphonyElixir.Orchestrator do
 
         run_terminal_workspace_cleanup()
         provision_workflow_states_async(config)
+        SymphonyElixir.AgentSymlinks.manage_project_root(File.cwd!())
+        Workspace.reconcile_all_symlinks()
         state = schedule_tick(state, 0)
 
         {:ok, state}
