@@ -5,14 +5,14 @@ tracker:
   active_states:
     - Todo
     - In Progress
+    - Human Review
     - Merging
     - Rework
   terminal_states:
-    - Closed
-    - Cancelled
+    - Backlog
+    - Done
     - Canceled
     - Duplicate
-    - Done
 polling:
   interval_ms: 5000
 workspace:

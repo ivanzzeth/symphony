@@ -70,6 +70,9 @@ Important boundary:
 - Expose operator-visible observability (at minimum structured logs).
 - Support tracker/filesystem-driven restart recovery without requiring a persistent database; exact
   in-memory scheduler state is not restored.
+- On startup, reconcile the Linear team's workflow states against the required states from
+  `WORKFLOW.md` and automatically create any missing states. This ensures the tracker always has
+  the full set of states Symphony needs without manual Linear admin setup.
 
 ### 2.2 Non-Goals
 
@@ -105,21 +108,27 @@ Important boundary:
    - Fetches terminal-state issues during startup cleanup.
    - Normalizes tracker payloads into a stable issue model.
 
-4. `Orchestrator`
+4. `Workflow State Provisioner` (Linear-specific)
+   - Runs at startup before the first poll tick.
+   - Queries the team's current workflow states from Linear.
+   - Creates any missing states required by `WORKFLOW.md` (`active_states` + `terminal_states`).
+   - Assigns consistent colors and positions; is idempotent (no-op when all states exist).
+
+5. `Orchestrator`
    - Owns the poll tick.
    - Owns the in-memory runtime state.
    - Decides which issues to dispatch, retry, stop, or release.
    - Tracks session metrics and retry queue state.
    - On `WORKFLOW.md` change: dispatches a harness agent before the next issue dispatch.
 
-5. `Workspace Manager`
+6. `Workspace Manager`
    - Maps issue identifiers to workspace paths.
    - Ensures per-issue workspace directories exist.
    - Installs `.agents/` symlinks (`.claude/ → .agents/`, `.cursor/ → .agents/`).
    - Runs workspace lifecycle hooks.
    - Cleans workspaces for terminal issues.
 
-6. `Harness Manager`
+7. `Harness Manager`
    - Manages `.symphony/harness-state.json` — a persistent marker recording the
      `WORKFLOW.md` content hash and the list of provisioned agent definitions.
    - On `WORKFLOW.md` change (hash mismatch): dispatches a harness agent session
@@ -132,7 +141,7 @@ Important boundary:
    - The harness agent does NOT consume an issue dispatch slot; it runs in a dedicated
      harness session independent of issue processing.
 
-7. `Agent Runner`
+8. `Agent Runner`
    - Selects the CLI backend from `agent.kind` (`claude`, `codex`, `cursor`).
    - Creates workspace.
    - Installs `.agents/` symlinks into the workspace.
@@ -142,11 +151,11 @@ Important boundary:
    - For `claude` and `cursor`: launches per-turn sessions (no long-lived subprocess).
    - For `codex`: maintains a long-lived app-server subprocess across turns.
 
-8. `Status Surface` (OPTIONAL)
+9. `Status Surface` (OPTIONAL)
    - Presents human-readable runtime status (for example terminal output, dashboard, or other
      operator-facing view).
 
-9. `Logging`
+10. `Logging`
    - Emits structured runtime logs to one or more configured sinks.
 
 ### 3.2 Abstraction Levels
@@ -480,8 +489,11 @@ Fields:
   - REQUIRED for dispatch when `tracker.kind == "linear"`.
 - `active_states` (list of strings)
   - Default: `Todo`, `In Progress`
+  - On startup with `tracker.kind == "linear"`, Symphony reconciles these states
+    (plus `terminal_states`) against the team's Linear workflow and creates any
+    missing states automatically.
 - `terminal_states` (list of strings)
-  - Default: `Closed`, `Cancelled`, `Canceled`, `Duplicate`, `Done`
+  - Default: `Done`, `Canceled`, `Duplicate`
 
 #### 5.3.2 `polling` (object)
 

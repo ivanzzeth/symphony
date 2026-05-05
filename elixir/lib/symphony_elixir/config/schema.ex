@@ -177,6 +177,7 @@ defmodule SymphonyElixir.Config.Schema do
       field(:thread_sandbox, :string, default: "workspace-write")
       field(:turn_sandbox_policy, :map)
       field(:turn_timeout_ms, :integer, default: 3_600_000)
+      field(:stream_timeout_ms, :integer, default: 120_000)
       field(:read_timeout_ms, :integer, default: 5_000)
       field(:stall_timeout_ms, :integer, default: 300_000)
     end
@@ -192,12 +193,14 @@ defmodule SymphonyElixir.Config.Schema do
           :thread_sandbox,
           :turn_sandbox_policy,
           :turn_timeout_ms,
+          :stream_timeout_ms,
           :read_timeout_ms,
           :stall_timeout_ms
         ],
         empty_values: []
       )
       |> validate_number(:turn_timeout_ms, greater_than: 0)
+      |> validate_number(:stream_timeout_ms, greater_than: 0)
       |> validate_number(:read_timeout_ms, greater_than: 0)
       |> validate_number(:stall_timeout_ms, greater_than_or_equal_to: 0)
     end

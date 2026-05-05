@@ -116,6 +116,7 @@ defmodule SymphonyElixir.TestSupport do
           codex_thread_sandbox: "workspace-write",
           codex_turn_sandbox_policy: nil,
           codex_turn_timeout_ms: 3_600_000,
+          codex_stream_timeout_ms: 120_000,
           codex_read_timeout_ms: 5_000,
           codex_stall_timeout_ms: 300_000,
           hook_after_create: nil,
@@ -157,6 +158,7 @@ defmodule SymphonyElixir.TestSupport do
     codex_thread_sandbox = Keyword.get(config, :codex_thread_sandbox)
     codex_turn_sandbox_policy = Keyword.get(config, :codex_turn_sandbox_policy)
     codex_turn_timeout_ms = Keyword.get(config, :codex_turn_timeout_ms)
+    codex_stream_timeout_ms = Keyword.get(config, :codex_stream_timeout_ms)
     codex_read_timeout_ms = Keyword.get(config, :codex_read_timeout_ms)
     codex_stall_timeout_ms = Keyword.get(config, :codex_stall_timeout_ms)
     hook_after_create = Keyword.get(config, :hook_after_create)
@@ -202,6 +204,7 @@ defmodule SymphonyElixir.TestSupport do
         "  thread_sandbox: #{yaml_value(codex_thread_sandbox)}",
         "  turn_sandbox_policy: #{yaml_value(codex_turn_sandbox_policy)}",
         "  turn_timeout_ms: #{yaml_value(codex_turn_timeout_ms)}",
+        "  stream_timeout_ms: #{yaml_value(codex_stream_timeout_ms)}",
         "  read_timeout_ms: #{yaml_value(codex_read_timeout_ms)}",
         "  stall_timeout_ms: #{yaml_value(codex_stall_timeout_ms)}",
         hooks_yaml(hook_after_create, hook_before_run, hook_after_run, hook_before_remove, hook_timeout_ms),

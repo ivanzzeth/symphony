@@ -66,6 +66,7 @@ defmodule SymphonyElixir.Orchestrator do
         }
 
         run_terminal_workspace_cleanup()
+        provision_workflow_states_async(config)
         state = schedule_tick(state, 0)
 
         {:ok, state}
@@ -921,6 +922,18 @@ defmodule SymphonyElixir.Orchestrator do
         {:error, reason} ->
           Logger.warning("Skipping startup terminal workspace cleanup; failed to fetch terminal issues: #{inspect(reason)}")
       end
+    end
+  end
+
+  defp provision_workflow_states_async(config) do
+    if config.tracker.kind == :linear do
+      Task.start(fn ->
+        case SymphonyElixir.Linear.WorkflowProvisioner.provision() do
+          {:ok, []} -> :ok
+          {:ok, created} -> Logger.info("Created Linear workflow states: #{inspect(created)}")
+          {:error, reason} -> Logger.warning("Workflow state provisioning failed: #{inspect(reason)}")
+        end
+      end)
     end
   end
 

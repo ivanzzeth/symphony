@@ -330,7 +330,7 @@ defmodule SymphonyElixir.Codex.AppServer do
     receive_loop(
       port,
       on_message,
-      Config.settings!().codex.turn_timeout_ms,
+      Config.settings!().codex.stream_timeout_ms,
       "",
       tool_executor,
       auto_approve_requests
