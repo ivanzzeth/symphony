@@ -57,7 +57,7 @@ defmodule SymphonyElixir.Linear.WorkflowProvisioner do
     "Backlog" => "#bec2c8",
     "Todo" => "#e2e2e2",
     "In Progress" => "#f2c94c",
-    "Human Review" => "#f2994a",
+    "In Review" => "#f2994a",
     "Merging" => "#5e6ad2",
     "Rework" => "#eb5757",
     "Done" => "#5dc97c",

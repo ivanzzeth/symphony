@@ -383,7 +383,7 @@ dispatches agents:
 - `Todo` — queued. Symphony polls and dispatches an agent team. The first action
   of a Todo issue is to move itself to `In Progress`.
 - `In Progress` — agent actively working.
-- `Human Review` — PR attached, waiting on human approval.
+- `In Review` — PR attached, waiting on human approval.
 - `Merging` — approved by human, the agent executes the `land` flow.
 - `Rework` — reviewer requested changes.
 - `Done` / `Canceled` / `Duplicate` — terminal states.
@@ -441,7 +441,7 @@ Symphony expects these states on the team workflow:
 | Backlog | backlog | Parked work, ignored by Symphony |
 | Todo | unstarted | Queued for agent dispatch |
 | In Progress | started | Agent actively working |
-| Human Review | started | PR attached, waiting for human |
+| In Review | started | PR attached, waiting for human |
 | Merging | started | Human approved, auto-merge |
 | Rework | started | Reviewer requested changes |
 | Done | completed | Terminal success |
@@ -465,14 +465,14 @@ mutation CreateWorkflowState($input: WorkflowStateCreateInput!) {
 
 Input fields:
 - `teamId` (required) — team UUID
-- `name` (required) — display name (e.g. "Human Review")
+- `name` (required) — display name (e.g. "In Review")
 - `type` — one of: `backlog`, `unstarted`, `started`, `completed`, `canceled`
 - `color` — hex color (e.g. "#f2c94c")
 - `position` — float for ordering (e.g. 2.5 between positions 2 and 3)
 
 Color conventions used by Symphony:
 - Backlog → `#bec2c8`, Todo → `#e2e2e2`, In Progress → `#f2c94c`
-- Human Review → `#f2994a`, Merging → `#5e6ad2`, Rework → `#eb5757`
+- In Review → `#f2994a`, Merging → `#5e6ad2`, Rework → `#eb5757`
 - Done → `#5dc97c`, Canceled/Duplicate → `#95a2b3`
 
 ### Verify Symphony activity after Todo creation

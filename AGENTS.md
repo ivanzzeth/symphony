@@ -33,14 +33,14 @@ support the human in directing them.
 | `Backlog` | Parked work, ignored by Symphony | Create Backlog issues for follow-ups or future work you identify |
 | `Todo` | Queued for agent dispatch | Create Todo issues when ready for agent pickup |
 | `In Progress` | Agent actively working | Monitor, check status on request |
-| `Human Review` | PR attached, waiting for human | **REVIEW the PR** and give a recommendation |
+| `In Review` | PR attached, waiting for human | **REVIEW the PR** and give a recommendation |
 | `Merging` | Approved, agent executing merge | Observe |
 | `Rework` | Reviewer requested changes | **This is the reject state** — agent will pick it up again |
 | `Done` / `Canceled` | Terminal | No action needed |
 
 ## PR Review Workflow (CRITICAL)
 
-When the human asks you to review PRs, or when you notice issues in `Human Review`:
+When the human asks you to review PRs, or when you notice issues in `In Review`:
 
 ### Step 1: Read and understand
 
@@ -70,10 +70,10 @@ When the human asks you to review PRs, or when you notice issues in `Human Revie
 
 ```
 Reject cycle:
-  PR in Human Review → you review → human says reject →
+  PR in In Review → you review → human says reject →
   1. gh pr review --request-changes with detailed feedback
   2. linear_graphql MoveIssueToState → In Progress stateId
-  3. Agent picks up from In Progress → fixes → new commits → back to Human Review
+  3. Agent picks up from In Progress → fixes → new commits → back to In Review
 ```
 
 ### Step 4: After agent re-delivers
