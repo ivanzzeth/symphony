@@ -174,4 +174,47 @@ defmodule SymphonyElixir.AgentSymlinksTest do
 
     assert :ok = AgentSymlinks.reconcile_all(root)
   end
+
+  test "manage_project_root creates .claude/ .codex/ .cursor/ symlinks to .agents/" do
+    project_root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-elixir-project-symlinks-#{System.unique_integer([:positive])}"
+      )
+
+    try do
+      File.mkdir_p!(project_root <> "/.agents/skills/harness")
+
+      assert :ok = AgentSymlinks.manage_project_root(project_root)
+
+      for name <- [".claude", ".codex", ".cursor"] do
+        link_path = Path.join(project_root, name)
+        assert {:ok, %File.Stat{type: :symlink}} = File.lstat(link_path)
+        assert {:ok, ".agents"} == File.read_link(link_path)
+      end
+    after
+      File.rm_rf(project_root)
+    end
+  end
+
+  test "manage_project_root repairs broken symlink" do
+    project_root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-elixir-project-repair-#{System.unique_integer([:positive])}"
+      )
+
+    try do
+      File.mkdir_p!(Path.join(project_root, ".agents"))
+      File.ln_s!(".nowhere", Path.join(project_root, ".claude"))
+
+      assert :ok = AgentSymlinks.manage_project_root(project_root)
+
+      assert {:ok, %File.Stat{type: :symlink}} = File.lstat(Path.join(project_root, ".claude"))
+      assert {:ok, ".agents"} == File.read_link(Path.join(project_root, ".claude"))
+      assert {:ok, %File.Stat{type: :symlink}} = File.lstat(Path.join(project_root, ".codex"))
+    after
+      File.rm_rf(project_root)
+    end
+  end
 end

@@ -345,12 +345,17 @@ Cursor, Codex).
 ├── AGENTS.md                  # Project knowledge map (entry point for any CLI)
 ├── agents/                    # Agent persona definitions (harness-managed)
 │   └── *.md                   # Role definitions per selected architecture pattern
-├── skills/                    # Agent skills (including harness meta-skill)
-│   └── harness/
-│       ├── SKILL.md
-│       ├── references/
-│       └── scripts/
-└── mcp/                       # MCP server configurations
+├── skills/                    # Agent skills (harness meta-skill + operational skills)
+│   ├── harness/               # Meta-skill: creates and updates .agents/ definitions
+│   │   ├── SKILL.md
+│   │   ├── references/
+│   │   └── scripts/
+│   └── <skill>/               # Operational skills (commit, debug, land, linear, etc.)
+│       └── SKILL.md
+├── rules/                     # Cursor-compatible rule symlinks to skills/*/SKILL.md
+│   └── <skill>.md -> ../skills/<skill>/SKILL.md
+├── mcp/                       # MCP server configurations
+└── worktree_init.sh           # Project setup script
 ```
 
 **AGENTS.md** — The project knowledge map. Provides any CLI tool with a fast understanding of the
@@ -373,8 +378,8 @@ for a pipeline pattern, but the actual set depends on the project's chosen patte
 **Symphony's responsibilities:**
 
 - Ensure `.agents/` exists in the project directory
-- Create `.claude/ → .agents/` and `.cursor/ → .agents/` symlinks in the project root and in
-  per-issue workspaces
+- Create `.claude/ → .agents/`, `.codex/ → .agents/`, and `.cursor/ → .agents/` symlinks in the
+  project root and in per-issue workspaces
 - Do NOT interpret, validate, or modify `.agents/` contents — that is the harness skill's job
 - Treat `.agents/` as an opaque configuration directory for dispatch purposes
 

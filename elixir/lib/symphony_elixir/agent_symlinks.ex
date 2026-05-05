@@ -88,6 +88,21 @@ defmodule SymphonyElixir.AgentSymlinks do
   end
 
   @doc """
+  Ensures project-root symlinks (.claude/, .codex/, .cursor/) point to .agents/.
+  Always returns :ok; failures are logged but never fatal.
+  """
+  @spec manage_project_root(String.t()) :: :ok
+  def manage_project_root(project_dir) do
+    Logger.debug("Managing agent symlinks in project root=#{project_dir}")
+
+    Enum.each(@symlinks, fn {name, target} ->
+      manage_local_symlink(Path.join(project_dir, name), target, project_dir)
+    end)
+
+    :ok
+  end
+
+  @doc """
   Reconciles symlinks in all existing workspaces under the given root.
   Always returns :ok; failures are logged but never fatal.
   """
