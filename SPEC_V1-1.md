@@ -345,8 +345,14 @@ Cursor, Codex).
 ├── AGENTS.md                  # Project knowledge map (entry point for any CLI)
 ├── agents/                    # Agent persona definitions (harness-managed)
 │   └── *.md                   # Role definitions per selected architecture pattern
-├── skills/                    # Agent skills (including harness meta-skill)
-│   └── harness/
+├── skills/                    # Agent skills (operational + harness meta-skill)
+│   ├── commit/SKILL.md        # operational skills used by agent dispatch
+│   ├── debug/SKILL.md
+│   ├── land/SKILL.md
+│   ├── linear/SKILL.md
+│   ├── pull/SKILL.md
+│   ├── push/SKILL.md
+│   └── harness/               # harness meta-skill (manages agent definitions)
 │       ├── SKILL.md
 │       ├── references/
 │       └── scripts/
@@ -373,14 +379,14 @@ for a pipeline pattern, but the actual set depends on the project's chosen patte
 **Symphony's responsibilities:**
 
 - Ensure `.agents/` exists in the project directory
-- Create `.claude/ → .agents/` and `.cursor/ → .agents/` symlinks in the project root and in
-  per-issue workspaces
+- Create `.claude/ → .agents/`, `.cursor/ → .agents/`, and `.codex/ → .agents/` symlinks
+  in the project root and in per-issue workspaces
 - Do NOT interpret, validate, or modify `.agents/` contents — that is the harness skill's job
 - Treat `.agents/` as an opaque configuration directory for dispatch purposes
 
 **`.codex/` compatibility:** For tooling that expects `.codex/` as the canonical directory (e.g.
-Codex CLI), implementations MAY symlink `.codex/ → .agents/` instead of maintaining a separate
-`.codex/` tree. The canonical source is always `.agents/`.
+Codex CLI), `.codex/ → .agents/` is managed as part of the same symlink set as `.claude/` and
+`.cursor/`. The canonical source is always `.agents/`.
 
 ### 4.4 WORKFLOW.md vs AGENTS.md
 

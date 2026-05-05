@@ -126,17 +126,32 @@ This is a monorepo. The Symphony implementation lives entirely in the `elixir/` 
 
 Other directories at the repo root are scaffolding/workpad artifacts from agents.
 
-### How to start Symphony
+### How to build and start Symphony
 
 ```bash
 cd elixir
-mix deps.get                              # first time
-mise exec -- mix run --no-halt -e ':ok'   # start orchestrator (foreground)
+mix deps.get                             # first time only
+mise exec -- mix build                   # build escript → bin/symphony
+mise exec -- ./bin/symphony \
+  --i-understand-that-this-will-be-running-without-the-usual-guardrails \
+  WORKFLOW.md                            # start orchestrator
 ```
+
+The CLI guardrails flag is required on every invocation. The escript takes an
+optional WORKFLOW.md path; it defaults to `WORKFLOW.md` in the current directory
+when omitted.
 
 It runs inside a tmux session named `symphony` for persistence:
 ```bash
 tmux attach -t symphony   # view dashboard
+```
+
+To run in the background:
+
+```bash
+nohup mise exec -- ./bin/symphony \
+  --i-understand-that-this-will-be-running-without-the-usual-guardrails \
+  WORKFLOW.md &>/tmp/symphony-stdout.log &
 ```
 
 ### How to stop Symphony
