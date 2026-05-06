@@ -27,5 +27,31 @@ defmodule SymphonyElixir.ProcessConfig.Store do
   end
 
   @impl true
-  def handle_call(:get, _from, config), do: {:reply, config, config}
+  def handle_call(:get, _from, config) do
+    # Compute effective config by overlaying runtime overrides on the stored
+    # (file-loaded) config. Crucially we do NOT persist the overridden values
+    # back into state, so a subsequent call re-evaluates Application.env afresh.
+    # This matters in test where overrides are set/unset between tests.
+    effective = apply_overrides(config)
+    {:reply, effective, config}
+  end
+
+  defp apply_overrides(config) do
+    config =
+      case Application.get_env(:symphony_elixir, :server_port_override) do
+        port when is_integer(port) and port >= 0 ->
+          put_in(config.server.port, port)
+
+        _ ->
+          config
+      end
+
+    case Application.get_env(:symphony_elixir, :server_host_override) do
+      host when is_binary(host) and host != "" ->
+        put_in(config.server.host, host)
+
+      _ ->
+        config
+    end
+  end
 end
