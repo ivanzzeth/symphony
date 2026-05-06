@@ -27,5 +27,28 @@ defmodule SymphonyElixir.ProcessConfig.Store do
   end
 
   @impl true
-  def handle_call(:get, _from, config), do: {:reply, config, config}
+  def handle_call(:get, _from, config) do
+    # Re-check Application env overrides that may have been set after init
+    # (e.g., by tests). This mirrors the priority in ProcessConfig.resolve_port/1
+    # and ProcessConfig.resolve_host/1.
+    config =
+      case Application.get_env(:symphony_elixir, :server_port_override) do
+        port when is_integer(port) and port >= 0 ->
+          put_in(config.server.port, port)
+
+        _ ->
+          config
+      end
+
+    config =
+      case Application.get_env(:symphony_elixir, :server_host_override) do
+        host when is_binary(host) and host != "" ->
+          put_in(config.server.host, host)
+
+        _ ->
+          config
+      end
+
+    {:reply, config, config}
+  end
 end
