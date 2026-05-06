@@ -28,6 +28,7 @@ and the AGENTS.md harness context.
 3. **Cursor mirroring** — When `.cursor/` exists, mirror agent and skill definitions there. Cursor reads from `.cursor/agents/` and `.cursor/skills/` natively.
 4. **Audit first** — Before creating or modifying, audit the current state of `.agents/agents/`, `.agents/skills/`, and AGENTS.md.
 5. **Living system** — After every execution, incorporate feedback and update agents, skills, and AGENTS.md.
+6. **Config architecture awareness** — The WORKFLOW.md now contains only project-level config (tracker, polling, workspace, agent, codex, hooks, prompt). Daemon-level settings (server, observability) live in `~/.config/symphony/symphony.yaml`. The `server` and `observability` keys are **disallowed in WORKFLOW.md** and silently stripped with a warning. When auditing/reconfiguring based on WORKFLOW.md changes, ignore process-level config keys since they belong in symphony.yaml.
 
 ## Skills
 
@@ -55,3 +56,4 @@ and the AGENTS.md harness context.
 - **Missing WORKFLOW.md**: Report and exit; cannot configure harness without execution contract.
 - **Parse failures**: Log the error, skip the problematic file, continue with remaining work.
 - **Conflicting definitions**: Prefer the more specific definition; document the conflict in AGENTS.md change history.
+- **Disallowed WORKFLOW.md keys**: If WORKFLOW.md contains `server` or `observability` keys, note that these are process-level config that belongs in `~/.config/symphony/symphony.yaml`. Report to user but do not block — the runtime silently strips them with a warning.

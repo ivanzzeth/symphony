@@ -169,6 +169,77 @@ defmodule SymphonyElixir.ProcessConfigTest do
     str |> String.split("\n", trim: true) |> Enum.map(&(padding <> &1)) |> Enum.join("\n")
   end
 
+  describe "Config.server_port/0 convenience function" do
+    test "reads from SYMPHONY_PORT env var when no CLI override set" do
+      previous = System.get_env("SYMPHONY_PORT")
+      System.put_env("SYMPHONY_PORT", "6000")
+
+      on_exit(fn -> restore_env("SYMPHONY_PORT", previous) end)
+
+      assert SymphonyElixir.Config.server_port() == 6000
+    end
+
+    test "CLI override takes precedence over env var" do
+      Application.put_env(:symphony_elixir, :server_port_override, 7777)
+
+      on_exit(fn -> Application.delete_env(:symphony_elixir, :server_port_override) end)
+
+      previous = System.get_env("SYMPHONY_PORT")
+      System.put_env("SYMPHONY_PORT", "6000")
+
+      on_exit(fn -> restore_env("SYMPHONY_PORT", previous) end)
+
+      assert SymphonyElixir.Config.server_port() == 7777
+    end
+
+    test "falls back to nil when nothing is configured" do
+      previous_port = System.get_env("SYMPHONY_PORT")
+
+      on_exit(fn -> restore_env("SYMPHONY_PORT", previous_port) end)
+
+      System.delete_env("SYMPHONY_PORT")
+
+      Application.delete_env(:symphony_elixir, :server_port_override)
+
+      assert is_nil(SymphonyElixir.Config.server_port())
+    end
+  end
+
+  describe "Config.server_host/0 convenience function" do
+    test "reads from SYMPHONY_HOST env var when no CLI override set" do
+      previous = System.get_env("SYMPHONY_HOST")
+      System.put_env("SYMPHONY_HOST", "10.0.0.1")
+
+      on_exit(fn -> restore_env("SYMPHONY_HOST", previous) end)
+
+      assert SymphonyElixir.Config.server_host() == "10.0.0.1"
+    end
+
+    test "CLI override takes precedence over env var" do
+      Application.put_env(:symphony_elixir, :server_host_override, "192.168.1.1")
+
+      on_exit(fn -> Application.delete_env(:symphony_elixir, :server_host_override) end)
+
+      previous = System.get_env("SYMPHONY_HOST")
+      System.put_env("SYMPHONY_HOST", "10.0.0.1")
+
+      on_exit(fn -> restore_env("SYMPHONY_HOST", previous) end)
+
+      assert SymphonyElixir.Config.server_host() == "192.168.1.1"
+    end
+
+    test "falls back to default host when nothing is configured" do
+      previous_host = System.get_env("SYMPHONY_HOST")
+
+      on_exit(fn -> restore_env("SYMPHONY_HOST", previous_host) end)
+
+      System.delete_env("SYMPHONY_HOST")
+      Application.delete_env(:symphony_elixir, :server_host_override)
+
+      assert SymphonyElixir.Config.server_host() == "127.0.0.1"
+    end
+  end
+
   defp restore_env(key, nil), do: System.delete_env(key)
   defp restore_env(key, value), do: System.put_env(key, value)
 end

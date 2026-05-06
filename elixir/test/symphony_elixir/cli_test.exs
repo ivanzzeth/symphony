@@ -143,6 +143,67 @@ defmodule SymphonyElixir.CLITest do
     assert message =~ ":boom"
   end
 
+  test "accepts --config and passes expanded path to deps" do
+    parent = self()
+
+    deps = %{
+      file_regular?: fn _path -> true end,
+      set_workflow_file_path: fn _path -> :ok end,
+      set_logs_root: fn _path -> :ok end,
+      set_server_port_override: fn _port -> :ok end,
+      set_server_host_override: fn _host -> :ok end,
+      set_config_arg: fn config ->
+        send(parent, {:config_path, config})
+        :ok
+      end,
+      ensure_all_started: fn -> {:ok, [:symphony_elixir]} end
+    }
+
+    assert :ok = CLI.evaluate([@ack_flag, "--config", "tmp/my-config.yaml", "WORKFLOW.md"], deps)
+    assert_received {:config_path, expanded_path}
+    assert expanded_path == Path.expand("tmp/my-config.yaml")
+  end
+
+  test "accepts --host and passes it to runtime deps" do
+    parent = self()
+
+    deps = %{
+      file_regular?: fn _path -> true end,
+      set_workflow_file_path: fn _path -> :ok end,
+      set_logs_root: fn _path -> :ok end,
+      set_server_port_override: fn _port -> :ok end,
+      set_server_host_override: fn host ->
+        send(parent, {:host, host})
+        :ok
+      end,
+      set_config_arg: fn _config -> :ok end,
+      ensure_all_started: fn -> {:ok, [:symphony_elixir]} end
+    }
+
+    assert :ok = CLI.evaluate([@ack_flag, "--host", "0.0.0.0", "WORKFLOW.md"], deps)
+    assert_received {:host, "0.0.0.0"}
+  end
+
+  test "accepts --port and passes it to runtime deps" do
+    parent = self()
+
+    deps = %{
+      file_regular?: fn _path -> true end,
+      set_workflow_file_path: fn _path -> :ok end,
+      set_logs_root: fn _path -> :ok end,
+      set_server_port_override: fn port ->
+        send(parent, {:port, port})
+        :ok
+      end,
+      set_server_host_override: fn _host -> :ok end,
+      set_config_arg: fn _config -> :ok end,
+      ensure_all_started: fn -> {:ok, [:symphony_elixir]} end
+    }
+
+    assert :ok = CLI.evaluate([@ack_flag, "--port", "8080", "WORKFLOW.md"], deps)
+    assert_received {:port, 8080}
+  end
+
   test "returns ok when workflow exists and app starts" do
     deps = %{
       file_regular?: fn _path -> true end,

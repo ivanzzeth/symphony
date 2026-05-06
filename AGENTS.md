@@ -120,7 +120,8 @@ This is a monorepo. The Symphony implementation lives entirely in the `elixir/` 
 |------|---------|
 | `elixir/lib/` | Production code (orchestrator, agents, config, tracker, HTTP server) |
 | `elixir/test/` | ExUnit tests |
-| `elixir/WORKFLOW.md` | Runtime config (polling, tracker, agent, hooks, workspace) — hot reloaded |
+| `elixir/WORKFLOW.md` | Project-level workflow config (tracker, polling, agent, codex, hooks, workspace, prompt) — hot reloaded |
+| `~/.config/symphony/symphony.yaml` | Daemon-level process config (server port/host, observability) — NOT in WORKFLOW.md |
 | `elixir/log/` | Disk log files (console handler removed at startup, all output lands here) |
 | `elixir/config/` | Compile-time Elixir config |
 | `elixir/mix.exs` | Elixir project manifest |
@@ -135,6 +136,8 @@ mix deps.get                             # first time only
 mise exec -- mix build                   # build escript → bin/symphony
 mise exec -- ./bin/symphony \
   --i-understand-that-this-will-be-running-without-the-usual-guardrails \
+  [--config ~/.config/symphony/symphony.yaml] \
+  [--port 4001] [--host 0.0.0.0] \
   WORKFLOW.md                            # start orchestrator
 ```
 
@@ -199,7 +202,10 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 - Symphony orchestrator polls Linear for Todo issues and dispatches one Claude agent per issue
 - Each agent operates in an isolated workspace per issue, following the WORKFLOW.md execution contract
 - For issue execution work, the orchestrator dispatches the symphony-agent via the Agent tool
-- The WORKFLOW.md defines the execution contract (status map, guardrails, completion bar)
+- The WORKFLOW.md defines the execution contract (tracker, polling, workspace, agent, codex, hooks, and prompt template)
+- Daemon-level config (server port/host, observability) lives in `~/.config/symphony/symphony.yaml` — NOT in WORKFLOW.md
+  - `server` and `observability` keys in WORKFLOW.md are disallowed and silently stripped with a warning
+  - CLI flags `--config`, `--port`, `--host` override YAML values for single-instance multi-project management
 - Out-of-scope discoveries are filed as separate Backlog issues, never expanding current scope
 - WORKFLOW.md hash changes trigger harness reconfiguration via Harness.Manager
 
@@ -233,3 +239,4 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 | Date | Change | Target | Reason |
 |------|--------|--------|--------|
 | 2026-05-06 | Initial harness configuration | All | WORKFLOW.md hash change detected; created symphony-agent definition and AGENTS.md harness context |
+| 2026-05-06 | Updated for config split | AGENTS.md, symphony-agent.md | Process-level config (server/observability) moved from WORKFLOW.md to ~/.config/symphony/symphony.yaml; added --config/--host CLI flags; WORKFLOW.md disallows server/observability keys |

@@ -25,13 +25,18 @@ to execute a single Linear issue end-to-end in an unattended session.
 1. **Execute via WORKFLOW.md contract** — the execution flow, status map,
    and completion bar are defined in the project's WORKFLOW.md. Follow it
    exactly.
-2. **Use skills, not raw commands** — prefer skills for commit, push, pull,
+2. **Process config is separate** — daemon-level settings (server port/host,
+   observability dashboard) live in `~/.config/symphony/symphony.yaml`, not in
+   WORKFLOW.md. The `server` and `observability` keys are disallowed in WORKFLOW.md
+   and silently stripped with a warning. Use CLI `--port`, `--host`, or `--config`
+   flags to override for multi-project daemon instances.
+3. **Use skills, not raw commands** — prefer skills for commit, push, pull,
    land, and linear interactions. Skills encode project-specific conventions.
-3. **Plan before code** — establish a workpad plan, acceptance criteria, and
+4. **Plan before code** — establish a workpad plan, acceptance criteria, and
    validation strategy before implementation.
-4. **Validate before handoff** — all acceptance criteria and required
+5. **Validate before handoff** — all acceptance criteria and required
    validation must pass before moving to `In Review`.
-5. **Out-of-scope discoveries → separate Backlog issues** — do not expand
+6. **Out-of-scope discoveries → separate Backlog issues** — do not expand
    scope; create follow-up issues in Backlog with related/blockedBy links.
 
 ## Skills
