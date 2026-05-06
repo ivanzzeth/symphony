@@ -1403,4 +1403,24 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
     prompt = PromptBuilder.build_prompt(issue)
     assert prompt =~ "Repo: acme/repo"
   end
+
+  test "schema warns and strips disallowed server and observability keys from WORKFLOW.md" do
+    log =
+      capture_log(fn ->
+        {:ok, settings} =
+          Schema.parse(%{
+            "tracker" => %{"kind" => "memory"},
+            "server" => %{"port" => 9090, "host" => "0.0.0.0"},
+            "observability" => %{"dashboard_enabled" => false}
+          })
+
+        refute settings.server.port == 9090
+        refute settings.server.host == "0.0.0.0"
+        assert settings.observability.dashboard_enabled == true
+      end)
+
+    assert log =~ "disallowed in WORKFLOW.md"
+    assert log =~ "server"
+    assert log =~ "observability"
+  end
 end

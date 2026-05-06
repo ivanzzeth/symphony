@@ -92,12 +92,70 @@ defmodule SymphonyElixir.Config do
     end
   end
 
+  @spec process_config() :: SymphonyElixir.ProcessConfig.t()
+  def process_config do
+    case Process.whereis(SymphonyElixir.ProcessConfig.Store) do
+      pid when is_pid(pid) ->
+        SymphonyElixir.ProcessConfig.Store.get()
+
+      _ ->
+        {:ok, config} = SymphonyElixir.ProcessConfig.load()
+        config
+    end
+  end
+
   @spec server_port() :: non_neg_integer() | nil
   def server_port do
-    case Application.get_env(:symphony_elixir, :server_port_override) do
-      port when is_integer(port) and port >= 0 -> port
-      _ -> settings!().server.port
+    cli_override = Application.get_env(:symphony_elixir, :server_port_override)
+
+    cond do
+      is_integer(cli_override) and cli_override >= 0 -> cli_override
+      env_port() -> env_port()
+      true -> process_config().server.port
     end
+  end
+
+  @spec server_host() :: String.t()
+  def server_host do
+    cli_override = Application.get_env(:symphony_elixir, :server_host_override)
+
+    cond do
+      is_binary(cli_override) and cli_override != "" -> cli_override
+      env_host() -> env_host()
+      true -> process_config().server.host
+    end
+  end
+
+  defp env_port do
+    case System.get_env("SYMPHONY_PORT") do
+      nil -> nil
+      "" -> nil
+      val -> parse_port(val)
+    end
+  end
+
+  defp env_host do
+    case System.get_env("SYMPHONY_HOST") do
+      nil -> nil
+      "" -> nil
+      val -> val
+    end
+  end
+
+  defp parse_port(val) do
+    case Integer.parse(val) do
+      {port, ""} when port >= 0 -> port
+      _ -> nil
+    end
+  end
+
+  @spec observability() :: %{
+          dashboard_enabled: boolean(),
+          refresh_ms: pos_integer(),
+          render_interval_ms: pos_integer()
+        }
+  def observability do
+    process_config().observability
   end
 
   @spec validate!() :: :ok | {:error, term()}
