@@ -79,20 +79,39 @@ defmodule SymphonyElixir.AgentRunner do
     max_turns = Keyword.get(opts, :max_turns, Config.settings!().agent.max_turns)
     issue_state_fetcher = Keyword.get(opts, :issue_state_fetcher, &Tracker.fetch_issue_states_by_ids/1)
 
-    adapter = CodingAgent.adapter()
+    adapter = Keyword.get(opts, :coding_agent_adapter) || CodingAgent.adapter()
 
     with {:ok, session} <- adapter.start_session(workspace, worker_host: worker_host) do
       try do
-        do_run_codex_turns(session, workspace, issue, codex_update_recipient, opts, issue_state_fetcher, 1, max_turns)
+        do_run_codex_turns(
+          adapter,
+          session,
+          workspace,
+          issue,
+          codex_update_recipient,
+          opts,
+          issue_state_fetcher,
+          1,
+          max_turns
+        )
       after
         adapter.stop_session(session)
       end
     end
   end
 
-  defp do_run_codex_turns(app_session, workspace, issue, codex_update_recipient, opts, issue_state_fetcher, turn_number, max_turns) do
+  defp do_run_codex_turns(
+         adapter,
+         app_session,
+         workspace,
+         issue,
+         codex_update_recipient,
+         opts,
+         issue_state_fetcher,
+         turn_number,
+         max_turns
+       ) do
     prompt = build_turn_prompt(issue, opts, turn_number, max_turns)
-    adapter = CodingAgent.adapter()
 
     with {:ok, turn_result} <-
            adapter.run_turn(
@@ -101,16 +120,17 @@ defmodule SymphonyElixir.AgentRunner do
              issue,
              on_message: codex_message_handler(codex_update_recipient, issue)
            ) do
-      Logger.info("Completed agent run for #{issue_context(issue)} session_id=#{turn_result[:session_id]} workspace=#{workspace} turn=#{turn_number}/#{max_turns}")
+      next_app_session = merge_resume_from_turn_result(app_session, turn_result)
 
-      app_session = Map.merge(app_session, %{resume_id: turn_result.resume_id})
+      Logger.info("Completed agent run for #{issue_context(issue)} session_id=#{turn_result[:session_id]} workspace=#{workspace} turn=#{turn_number}/#{max_turns}")
 
       case continue_with_issue?(issue, issue_state_fetcher) do
         {:continue, refreshed_issue} when turn_number < max_turns ->
           Logger.info("Continuing agent run for #{issue_context(refreshed_issue)} after normal turn completion turn=#{turn_number}/#{max_turns}")
 
           do_run_codex_turns(
-            app_session,
+            adapter,
+            next_app_session,
             workspace,
             refreshed_issue,
             codex_update_recipient,
@@ -196,6 +216,14 @@ defmodule SymphonyElixir.AgentRunner do
     state_name
     |> String.trim()
     |> String.downcase()
+  end
+
+  defp merge_resume_from_turn_result(app_session, turn_session) when is_map(turn_session) do
+    if Map.has_key?(turn_session, :resume_id) do
+      Map.put(app_session, :resume_id, Map.fetch!(turn_session, :resume_id))
+    else
+      app_session
+    end
   end
 
   defp issue_context(%Issue{id: issue_id, identifier: identifier}) do
