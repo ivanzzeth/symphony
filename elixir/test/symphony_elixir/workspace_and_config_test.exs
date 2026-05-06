@@ -853,11 +853,6 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
       max_retry_backoff_ms: 0,
       max_concurrent_agents_by_state: %{"Todo" => "1", "Review" => 0, "Done" => "bad"},
       hook_timeout_ms: 0,
-      observability_enabled: "maybe",
-      observability_refresh_ms: %{bad: true},
-      observability_render_interval_ms: %{bad: true},
-      server_port: -1,
-      server_host: 123
     )
 
     assert {:error, {:invalid_workflow_config, _message}} = Config.validate!()

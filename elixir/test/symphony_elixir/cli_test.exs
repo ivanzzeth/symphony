@@ -25,6 +25,14 @@ defmodule SymphonyElixir.CLITest do
         send(parent, :port_set)
         :ok
       end,
+      set_server_host_override: fn _host ->
+        send(parent, :host_set)
+        :ok
+      end,
+      set_config_arg: fn _config ->
+        send(parent, :config_set)
+        :ok
+      end,
       ensure_all_started: fn ->
         send(parent, :started)
         {:ok, [:symphony_elixir]}
@@ -49,6 +57,8 @@ defmodule SymphonyElixir.CLITest do
       set_workflow_file_path: fn _path -> :ok end,
       set_logs_root: fn _path -> :ok end,
       set_server_port_override: fn _port -> :ok end,
+      set_server_host_override: fn _host -> :ok end,
+      set_config_arg: fn _config -> :ok end,
       ensure_all_started: fn -> {:ok, [:symphony_elixir]} end
     }
 
@@ -71,6 +81,8 @@ defmodule SymphonyElixir.CLITest do
       end,
       set_logs_root: fn _path -> :ok end,
       set_server_port_override: fn _port -> :ok end,
+      set_server_host_override: fn _host -> :ok end,
+      set_config_arg: fn _config -> :ok end,
       ensure_all_started: fn -> {:ok, [:symphony_elixir]} end
     }
 
@@ -90,6 +102,8 @@ defmodule SymphonyElixir.CLITest do
         :ok
       end,
       set_server_port_override: fn _port -> :ok end,
+      set_server_host_override: fn _host -> :ok end,
+      set_config_arg: fn _config -> :ok end,
       ensure_all_started: fn -> {:ok, [:symphony_elixir]} end
     }
 
@@ -104,6 +118,8 @@ defmodule SymphonyElixir.CLITest do
       set_workflow_file_path: fn _path -> :ok end,
       set_logs_root: fn _path -> :ok end,
       set_server_port_override: fn _port -> :ok end,
+      set_server_host_override: fn _host -> :ok end,
+      set_config_arg: fn _config -> :ok end,
       ensure_all_started: fn -> {:ok, [:symphony_elixir]} end
     }
 
@@ -117,6 +133,8 @@ defmodule SymphonyElixir.CLITest do
       set_workflow_file_path: fn _path -> :ok end,
       set_logs_root: fn _path -> :ok end,
       set_server_port_override: fn _port -> :ok end,
+      set_server_host_override: fn _host -> :ok end,
+      set_config_arg: fn _config -> :ok end,
       ensure_all_started: fn -> {:error, :boom} end
     }
 
@@ -131,6 +149,8 @@ defmodule SymphonyElixir.CLITest do
       set_workflow_file_path: fn _path -> :ok end,
       set_logs_root: fn _path -> :ok end,
       set_server_port_override: fn _port -> :ok end,
+      set_server_host_override: fn _host -> :ok end,
+      set_config_arg: fn _config -> :ok end,
       ensure_all_started: fn -> {:ok, [:symphony_elixir]} end
     }
 
