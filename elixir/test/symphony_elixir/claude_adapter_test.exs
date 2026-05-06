@@ -49,7 +49,8 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     assert result.input_tokens == 42
     assert result.output_tokens == 17
-    assert result.resume_id == "s1"
+    # Fake CLI init reports session_id "ok"; resume_id must match CLI, not adapter placeholder "s1".
+    assert result.resume_id == "ok"
     assert_received {:m, %{event: :session_started}}
     assert_received {:m, %{event: :notification}}
     assert_received {:m, %{event: :turn_completed}}
@@ -59,7 +60,8 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   test "Turn 2 — uses --resume flag" do
     %{binary: bin, trace: trace, workspace: ws, test_root: root} = setup_claude_env("OK")
 
-    session = %{session_id: "s2", workspace: ws, resume_id: "s2"}
+    # After turn 1, resume_id is the real CLI session_id from the init event ("ok" in fake_claude_script).
+    session = %{session_id: "s2", workspace: ws, resume_id: "ok"}
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
 
@@ -68,7 +70,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     assert {:ok, _} = ClaudeAdapter.run_turn(session, "Continue", issue(), on_message: on_msg)
 
     assert_received {:m, %{event: :turn_completed}}
-    assert File.read!(trace) =~ "--resume s2"
+    assert File.read!(trace) =~ "--resume ok"
   end
 
   test "returns {:ok, result} with resume_id for next turn" do
@@ -77,7 +79,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     session = %{session_id: "s-resume", workspace: ws, resume_id: nil}
     assert {:ok, result} = ClaudeAdapter.run_turn(session, "Fix bug", issue())
-    assert result.resume_id == "s-resume"
+    assert result.resume_id == "ok"
   end
 
   test "returns error on turn failure" do

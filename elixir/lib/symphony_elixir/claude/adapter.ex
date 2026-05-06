@@ -115,7 +115,8 @@ defmodule SymphonyElixir.Claude.Adapter do
 
         case handle_line(line, on_message, session, usage) do
           {:complete, result} -> result
-          {:continue, new_usage} -> receive_stream(port, on_message, session, new_usage, timeout_ms)
+          {:continue, new_usage, new_session} ->
+            receive_stream(port, on_message, new_session, new_usage, timeout_ms)
         end
 
       {^port, {:data, {:noeol, _chunk}}} ->
@@ -138,21 +139,21 @@ defmodule SymphonyElixir.Claude.Adapter do
           session_id: sid
         })
 
-        {:continue, usage}
+        {:continue, usage, %{session | session_id: sid, resume_id: sid}}
 
       {:ok, %{"type" => "assistant"} = payload} ->
         emit_message(on_message, :notification, %{
           payload: payload
         })
 
-        {:continue, usage}
+        {:continue, usage, session}
 
       {:ok, %{"type" => "user"} = payload} ->
         emit_message(on_message, :notification, %{
           payload: payload
         })
 
-        {:continue, usage}
+        {:continue, usage, session}
 
       {:ok, %{"type" => "result", "is_error" => false} = payload} ->
         final_usage = accumulate_usage(payload, usage)
@@ -167,7 +168,7 @@ defmodule SymphonyElixir.Claude.Adapter do
           %{
             input_tokens: final_usage.input_tokens,
             output_tokens: final_usage.output_tokens,
-            resume_id: session.session_id
+            resume_id: session.resume_id
           }}}
 
       {:ok, %{"type" => "result", "is_error" => true} = payload} ->
@@ -182,7 +183,7 @@ defmodule SymphonyElixir.Claude.Adapter do
           payload: payload
         })
 
-        {:continue, usage}
+        {:continue, usage, session}
 
       {:error, _reason} ->
         emit_message(on_message, :malformed, %{
@@ -190,7 +191,7 @@ defmodule SymphonyElixir.Claude.Adapter do
           raw: line
         })
 
-        {:continue, usage}
+        {:continue, usage, session}
     end
   end
 
