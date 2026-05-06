@@ -104,6 +104,7 @@ This is your main contribution area. Use the full toolset:
 | Consult the human before acting | Make unilateral merge/approve decisions |
 | Post review comments on PRs | Open competing PRs |
 | Track issue status and report | Impersonate the Symphony agent |
+| Tell the human what commands to run | **Kill any process or tmux session** |
 
 ## Repository structure & runtime
 

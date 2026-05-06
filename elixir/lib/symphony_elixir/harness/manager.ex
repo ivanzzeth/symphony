@@ -215,18 +215,13 @@ defmodule SymphonyElixir.Harness.Manager do
 
     task_ref =
       Task.async(fn ->
-        case adapter.start_session(state.project_dir, []) do
-          {:ok, session} ->
-            try do
-              result = run_harness_turns(adapter, session, prompt)
-              send(__MODULE__, {:harness_complete, result})
-            after
-              adapter.stop_session(session)
-            end
-
-          {:error, reason} ->
-            Logger.error("Failed to start harness agent session: #{inspect(reason)}")
-            send(__MODULE__, {:harness_complete, {:error, reason}})
+        try do
+          do_dispatch_harness(adapter, state, prompt)
+        rescue
+          e ->
+            stack = Exception.format(:error, e, __STACKTRACE__)
+            Logger.error("Harness agent task crashed: #{inspect(e)}\n#{stack}")
+            send(__MODULE__, {:harness_complete, {:error, e}})
         end
       end)
 
@@ -235,6 +230,22 @@ defmodule SymphonyElixir.Harness.Manager do
     persist_hash(state.harness_state_path, current_hash)
 
     %{state | last_hash: current_hash, harness_running: true}
+  end
+
+  defp do_dispatch_harness(adapter, state, prompt) do
+    case adapter.start_session(state.project_dir, []) do
+      {:ok, session} ->
+        try do
+          result = run_harness_turns(adapter, session, prompt)
+          send(__MODULE__, {:harness_complete, result})
+        after
+          adapter.stop_session(session)
+        end
+
+      {:error, reason} ->
+        Logger.error("Failed to start harness agent session: #{inspect(reason)}")
+        send(__MODULE__, {:harness_complete, {:error, reason}})
+    end
   end
 
   defp run_harness_turns(adapter, session, prompt) do
