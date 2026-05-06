@@ -49,12 +49,17 @@ defmodule SymphonyElixir.ProcessConfig do
 
   @doc """
   Load and resolve the effective process config.
+
+  ## Options
+
+    * `:skip_overrides` — when `true`, skip Application env overrides for
+      port/host (used by Store.init to keep state clean). Default: `false`.
   """
-  @spec load(String.t() | nil) :: {:ok, t()} | {:error, term()}
-  def load(cli_config_arg \\ nil) do
+  @spec load(String.t() | nil, keyword()) :: {:ok, t()} | {:error, term()}
+  def load(cli_config_arg \\ nil, opts \\ []) do
     path = config_path(cli_config_arg)
     yaml_config = load_yaml_config(path)
-    {:ok, merge_with_defaults(yaml_config)}
+    {:ok, merge_with_defaults(yaml_config, opts)}
   end
 
   @doc false
@@ -79,11 +84,11 @@ defmodule SymphonyElixir.ProcessConfig do
     end
   end
 
-  defp merge_with_defaults(yaml_config) when is_map(yaml_config) do
+  defp merge_with_defaults(yaml_config, opts) when is_map(yaml_config) do
     %__MODULE__{
       server: %{
-        port: resolve_port(yaml_config),
-        host: resolve_host(yaml_config)
+        port: resolve_port(yaml_config, opts),
+        host: resolve_host(yaml_config, opts)
       },
       observability: %{
         dashboard_enabled: resolve_dashboard_enabled(yaml_config),
@@ -93,8 +98,9 @@ defmodule SymphonyElixir.ProcessConfig do
     }
   end
 
-  defp resolve_port(yaml_config) when is_map(yaml_config) do
-    cli_port = Application.get_env(:symphony_elixir, :server_port_override)
+  defp resolve_port(yaml_config, opts) when is_map(yaml_config) do
+    skip = Keyword.get(opts, :skip_overrides)
+    cli_port = if skip, do: nil, else: Application.get_env(:symphony_elixir, :server_port_override)
 
     cond do
       is_integer(cli_port) and cli_port >= 0 -> cli_port
@@ -103,8 +109,9 @@ defmodule SymphonyElixir.ProcessConfig do
     end
   end
 
-  defp resolve_host(yaml_config) when is_map(yaml_config) do
-    cli_host = Application.get_env(:symphony_elixir, :server_host_override)
+  defp resolve_host(yaml_config, opts) when is_map(yaml_config) do
+    skip = Keyword.get(opts, :skip_overrides)
+    cli_host = if skip, do: nil, else: Application.get_env(:symphony_elixir, :server_host_override)
 
     cond do
       is_binary(cli_host) and cli_host != "" -> cli_host
