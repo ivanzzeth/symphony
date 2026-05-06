@@ -87,6 +87,7 @@ Use the Linear skill at `.codex/skills/linear/SKILL.md`:
 - `Backlog` for speculative work, follow-ups, things you notice during review
 - `Todo` for work that's ready for agent pickup right now
 - Always set a clear title, description, and acceptance criteria
+- Always set `projectId` to the Symphony project (`91036f8b-68e5-4110-8459-13e7b0298962`) — without it, Symphony cannot discover the issue
 
 ## When the human asks you to research or plan
 
@@ -172,3 +173,63 @@ tail -f elixir/log/symphony.log.1   # current log
 ```
 
 Note: `LogFile.configure/0` removes the console handler at startup, so `mix run` prints nothing to stderr/stdout beyond the dashboard. All log records are on disk.
+
+## Harness: Symphony Issue Execution
+
+**Goal:** Execute Linear issues end-to-end via the Symphony orchestrator, producing reviewed and merged PRs.
+
+**Agent Team:**
+| Agent | Role |
+|-------|------|
+| symphony-agent | Single implementation agent per issue, executing the full lifecycle from Todo to Done |
+| harness-agent | Harness meta-agent that configures and maintains .agents/ definitions and skills |
+
+**Skills:**
+| Skill | Purpose | Used By |
+|-------|---------|---------|
+| linear | Linear GraphQL API operations (state transitions, comments, issue creation) | symphony-agent |
+| commit | Create well-formed git commits from session history | symphony-agent |
+| push | Push branch, create/update PR with proper metadata | symphony-agent |
+| pull | Sync branch with origin/base, resolve merge conflicts | symphony-agent |
+| land | Squash-merge loop via gh CLI when issue reaches Merging | symphony-agent |
+| debug | Investigate stuck/failing runs, correlate logs | symphony-agent |
+| harness | Configure and maintain the agent harness (meta-skill) | harness-agent |
+
+**Execution Rules:**
+- Symphony orchestrator polls Linear for Todo issues and dispatches one Claude agent per issue
+- Each agent operates in an isolated workspace per issue, following the WORKFLOW.md execution contract
+- For issue execution work, the orchestrator dispatches the symphony-agent via the Agent tool
+- The WORKFLOW.md defines the execution contract (status map, guardrails, completion bar)
+- Out-of-scope discoveries are filed as separate Backlog issues, never expanding current scope
+- WORKFLOW.md hash changes trigger harness reconfiguration via Harness.Manager
+
+**Directory Structure:**
+```
+.agents/
+├── agents/
+│   ├── symphony-agent.md
+│   └── harness-agent.md
+├── skills/
+│   ├── commit/
+│   │   └── SKILL.md
+│   ├── debug/
+│   │   └── SKILL.md
+│   ├── harness/
+│   │   ├── SKILL.md
+│   │   └── references/
+│   ├── land/
+│   │   └── SKILL.md
+│   ├── linear/
+│   │   └── SKILL.md
+│   ├── pull/
+│   │   └── SKILL.md
+│   └── push/
+│       └── SKILL.md
+├── rules/ (empty — rules ≠ skills)
+└── worktree_init.sh
+```
+
+**Change History:**
+| Date | Change | Target | Reason |
+|------|--------|--------|--------|
+| 2026-05-06 | Initial harness configuration | All | WORKFLOW.md hash change detected; created symphony-agent definition and AGENTS.md harness context |

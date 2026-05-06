@@ -1,1 +1,0 @@
-../skills/push/SKILL.md

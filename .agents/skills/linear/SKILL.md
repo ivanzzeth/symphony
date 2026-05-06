@@ -495,12 +495,15 @@ When discovering out-of-scope improvements during execution, file a follow-up
 ### Create an issue
 
 Use `issueCreate`. The only strictly required field is `teamId` + `title`, but
-you should always set `stateId` to control whether Symphony picks it up.
+you MUST always set `projectId` so Symphony can discover the issue (Symphony
+queries by project slug). You should also set `stateId` to control whether
+Symphony picks it up.
 
 ```graphql
 mutation CreateIssue(
   $teamId: String!,
   $title: String!,
+  $projectId: String!,
   $description: String,
   $stateId: String,
   $priority: Int,
@@ -510,6 +513,7 @@ mutation CreateIssue(
   issueCreate(input: {
     teamId: $teamId,
     title: $title,
+    projectId: $projectId,
     description: $description,
     stateId: $stateId,
     priority: $priority,
@@ -522,6 +526,7 @@ mutation CreateIssue(
       identifier
       title
       url
+      project { id name }
       state { id name type }
       priority
       labels { nodes { id name } }
