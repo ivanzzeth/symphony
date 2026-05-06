@@ -853,11 +853,6 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
       max_retry_backoff_ms: 0,
       max_concurrent_agents_by_state: %{"Todo" => "1", "Review" => 0, "Done" => "bad"},
       hook_timeout_ms: 0,
-      observability_enabled: "maybe",
-      observability_refresh_ms: %{bad: true},
-      observability_render_interval_ms: %{bad: true},
-      server_port: -1,
-      server_host: 123
     )
 
     assert {:error, {:invalid_workflow_config, _message}} = Config.validate!()
@@ -1402,5 +1397,25 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
 
     prompt = PromptBuilder.build_prompt(issue)
     assert prompt =~ "Repo: acme/repo"
+  end
+
+  test "schema warns and strips disallowed server and observability keys from WORKFLOW.md" do
+    log =
+      capture_log(fn ->
+        {:ok, settings} =
+          Schema.parse(%{
+            "tracker" => %{"kind" => "memory"},
+            "server" => %{"port" => 9090, "host" => "0.0.0.0"},
+            "observability" => %{"dashboard_enabled" => false}
+          })
+
+        refute settings.server.port == 9090
+        refute settings.server.host == "0.0.0.0"
+        assert settings.observability.dashboard_enabled == true
+      end)
+
+    assert log =~ "disallowed in WORKFLOW.md"
+    assert log =~ "server"
+    assert log =~ "observability"
   end
 end

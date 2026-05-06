@@ -280,9 +280,14 @@ defmodule SymphonyElixir.Config.Schema do
     embeds_one(:server, Server, on_replace: :update, defaults_to_struct: true)
   end
 
+  @disallowed_workflow_keys ["server", "observability"]
+
   @spec parse(map()) :: {:ok, %__MODULE__{}} | {:error, {:invalid_workflow_config, String.t()}}
   def parse(config) when is_map(config) do
+    warn_disallowed_keys(config)
+
     config
+    |> strip_disallowed_keys()
     |> normalize_keys()
     |> drop_nil_values()
     |> changeset()
@@ -300,6 +305,28 @@ defmodule SymphonyElixir.Config.Schema do
       {:error, changeset} ->
         {:error, {:invalid_workflow_config, format_errors(changeset)}}
     end
+  end
+
+  defp warn_disallowed_keys(config) when is_map(config) do
+    Enum.each(@disallowed_workflow_keys, fn key ->
+      if Map.has_key?(config, key) or Map.has_key?(config, String.to_existing_atom(key)) do
+        require Logger
+
+        Logger.warning(
+          "[WORKFLOW.md] '#{key}' key is disallowed in WORKFLOW.md. Use symphony.yaml for process-level config."
+        )
+      end
+    end)
+  rescue
+    _ -> :ok
+  end
+
+  defp strip_disallowed_keys(config) when is_map(config) do
+    config
+    |> Map.drop(@disallowed_workflow_keys)
+    |> Map.drop(Enum.map(@disallowed_workflow_keys, &String.to_existing_atom/1))
+  rescue
+    _ -> config
   end
 
   @spec resolve_turn_sandbox_policy(%__MODULE__{}, Path.t() | nil) :: map()
