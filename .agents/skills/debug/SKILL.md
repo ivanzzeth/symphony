@@ -1,7 +1,7 @@
 ---
 name: debug
 description:
-  Investigate stuck runs and execution failures by tracing Symphony and Codex
+  Investigate stuck runs and execution failures by tracing Symphony and coding-agent
   logs with issue/session identifiers; use when runs stall, retry repeatedly, or
   fail unexpectedly.
 ---
@@ -11,14 +11,17 @@ description:
 ## Goals
 
 - Find why a run is stuck, retrying, or failing.
-- Correlate Linear issue identity to a Codex session quickly.
+- Correlate Linear issue identity to an agent session quickly (adapter-dependent).
 - Read the right logs in the right order to isolate root cause.
 
 ## Log Sources
 
 - Primary runtime log: `log/symphony.log`
   - Default comes from `SymphonyElixir.LogFile` (`log/symphony.log`).
-  - Includes orchestrator, agent runner, and Codex app-server lifecycle logs.
+  - Includes orchestrator, agent runner, and coding-agent adapter lifecycle
+    signals (Codex app-server emits `Codex session *` lines; Cursor/Claude
+    adapters rely more on `Starting agent run for`, `Completed agent run for`,
+    `Agent task *`, and `Issue stalled` lines—search by `issue_identifier` first).
 - Rotated runtime logs: `log/symphony.log*`
   - Check these when the relevant run is older.
 
@@ -26,7 +29,8 @@ description:
 
 - `issue_identifier`: human ticket key (example: `MT-625`)
 - `issue_id`: Linear UUID (stable internal ID)
-- `session_id`: Codex thread-turn pair (`<thread_id>-<turn_id>`)
+- `session_id`: Codex uses `<thread_id>-<turn_id>`; Cursor uses an opaque id from
+  the CLI stream (still logged on turn completion—grep `session_id=` near the ticket)
 
 `elixir/docs/logging.md` requires these fields for issue/session lifecycle logs. Use
 them as your join keys during debugging.
@@ -57,7 +61,7 @@ rg -o "session_id=[^ ;]+" log/symphony.log* | sort -u
 rg -n "session_id=<thread>-<turn>" log/symphony.log*
 
 # 5) Focus on stuck/retry signals
-rg -n "Issue stalled|scheduling retry|turn_timeout|turn_failed|Codex session failed|Codex session ended with error" log/symphony.log*
+rg -n "Issue stalled|scheduling retry|turn_timeout|turn_failed|Codex session failed|Codex session ended with error|Agent task exited|Agent task finished" log/symphony.log*
 ```
 
 ## Investigation Flow
@@ -66,12 +70,14 @@ rg -n "Issue stalled|scheduling retry|turn_timeout|turn_failed|Codex session fai
     - Search by `issue_identifier=<KEY>`.
     - If noise is high, add `issue_id=<UUID>`.
 2. Establish timeline:
-    - Identify first `Codex session started ... session_id=...`.
-    - Follow with `Codex session completed`, `ended with error`, or worker exit
-      lines.
+    - **Codex adapter:** first `Codex session started ... session_id=...`, then
+      `Codex session completed` / `ended with error` / failure lines.
+    - **Cursor (and similar) adapter:** anchor on `Starting agent run for` /
+      `Completed agent run for ... session_id=` and orchestrator `Agent task *`
+      lines for the same `issue_identifier`.
 3. Classify the problem:
     - Stall loop: `Issue stalled ... restarting with backoff`.
-    - App-server startup: `Codex session failed ...`.
+    - App-server startup (Codex): `Codex session failed ...`.
     - Turn execution failure: `turn_failed`, `turn_cancelled`, `turn_timeout`, or
       `ended with error`.
     - Worker crash: `Agent task exited ... reason=...`.
@@ -83,27 +89,33 @@ rg -n "Issue stalled|scheduling retry|turn_timeout|turn_failed|Codex session fai
       `session_id`.
     - Record probable root cause and the exact failing stage.
 
-## Reading Codex Session Logs
+## Reading agent session logs
 
-In Symphony, Codex session diagnostics are emitted into `log/symphony.log` and
-keyed by `session_id`. Read them as a lifecycle:
+In Symphony, adapter diagnostics land in `log/symphony.log` and should be keyed
+by `session_id` where the adapter emits it.
+
+**Codex app-server lifecycle:**
 
 1. `Codex session started ... session_id=...`
-2. Session stream/lifecycle events for the same `session_id`
-3. Terminal event:
-    - `Codex session completed ...`, or
-    - `Codex session ended with error ...`, or
-    - `Issue stalled ... restarting with backoff`
+2. Stream/lifecycle events for the same `session_id`
+3. Terminal: `Codex session completed ...`, `Codex session ended with error ...`,
+   or `Issue stalled ... restarting with backoff`
+
+**Cursor / short-lived CLI turns:**
+
+1. `Starting agent run for ... issue_identifier=...`
+2. `Completed agent run for ... session_id=... turn=...`
+3. On failure: `Agent run failed`, `Agent task exited`, `:turn_timeout`, or
+   `turn_failed` patterns from the adapter
 
 For one specific session investigation, keep the trace narrow:
 
-1. Capture one `session_id` for the ticket.
-2. Build a timestamped slice for only that session:
-    - `rg -n "session_id=<thread>-<turn>" log/symphony.log*`
+1. Capture one `session_id` for the ticket (from the lines above).
+2. `rg -n "session_id=<id>" log/symphony.log*` (or ticket key first if `session_id` is noisy).
 3. Mark the exact failing stage:
-    - Startup failure before stream events (`Codex session failed ...`).
-    - Turn/runtime failure after stream events (`turn_*` / `ended with error`).
-    - Stall recovery (`Issue stalled ... restarting with backoff`).
+    - Codex startup before stream events: `Codex session failed ...`.
+    - Turn/runtime failure: `turn_*` / `ended with error` / port exit / `:turn_timeout`.
+    - Stall recovery: `Issue stalled ... restarting with backoff`.
 4. Pair findings with `issue_identifier` and `issue_id` from nearby lines to
    confirm you are not mixing concurrent retries.
 

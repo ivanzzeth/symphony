@@ -28,11 +28,11 @@ hooks:
   before_remove: |
     cd elixir && mise exec -- mix workspace.before_remove
 agent:
-  kind: claude
+  kind: cursor
   max_concurrent_agents: 10
   max_turns: 20
 codex:
-  command: claude
+  command: cursor
   approval_policy: never
   thread_sandbox: workspace-write
   turn_sandbox_policy:

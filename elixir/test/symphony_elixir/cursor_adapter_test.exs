@@ -34,7 +34,7 @@ defmodule SymphonyElixir.CursorAdapterTest do
     assert CursorAdapter.stop_session(%{}) == :ok
   end
 
-  test "Turn 1 — completes successfully with --workspace flag, no --resume" do
+  test "Turn 1 — completes successfully with --workspace flag, no --resume, resumes with real session_id" do
     %{binary: bin, trace: trace, workspace: ws, test_root: root} = setup_cursor_env("OK")
 
     session = %{session_id: "cs1", workspace: ws, resume_id: nil}
@@ -47,8 +47,10 @@ defmodule SymphonyElixir.CursorAdapterTest do
 
     assert result.input_tokens == 42
     assert result.output_tokens == 17
-    assert result.resume_id == "cs1"
-    assert_received {:m, %{event: :session_started}}
+    # resume_id comes from real Cursor CLI session_id, not adapter-generated
+    assert result.resume_id == "ok"
+
+    assert_received {:m, %{event: :session_started, session_id: "ok"}}
     assert_received {:m, %{event: :notification}}
     assert_received {:m, %{event: :turn_completed}}
 
@@ -59,18 +61,24 @@ defmodule SymphonyElixir.CursorAdapterTest do
     refute args =~ "--resume"
   end
 
-  test "Turn 2 — uses --resume flag with chatId" do
+  test "Turn 2 — uses --resume flag with real session_id" do
     %{binary: bin, trace: trace, workspace: ws, test_root: root} = setup_cursor_env("OK")
+    write_cursor_config(bin, root)
 
-    session = %{session_id: "cs2", workspace: ws, resume_id: "cs2"}
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
 
-    write_cursor_config(bin, root)
+    assert {:ok, result} =
+             CursorAdapter.run_turn(
+               %{session_id: "cs2", workspace: ws, resume_id: "ok"},
+               "Continue",
+               issue(),
+               on_message: on_msg
+             )
 
-    assert {:ok, _} = CursorAdapter.run_turn(session, "Continue", issue(), on_message: on_msg)
     assert_received {:m, %{event: :turn_completed}}
-    assert File.read!(trace) =~ "--resume cs2"
+    assert result.resume_id == "ok"
+    assert File.read!(trace) =~ "--resume ok"
   end
 
   test "returns error on turn failure" do
@@ -165,8 +173,8 @@ defmodule SymphonyElixir.CursorAdapterTest do
   defp fake_cursor_script("FAIL", trace) do
     ~s(#!/bin/sh
 printf 'ARGS:%s\\n' "$*" >> "#{trace}"
-printf '%s\\n' '{"type":"system","subtype":"init","chatId":"f","tools":["bash"]}'
-printf '%s\\n' '{"type":"assistant","message":{"model":"gpt-5","usage":{"input_tokens":5,"output_tokens":3}}}'
+printf '%s\\n' '{"type":"system","subtype":"init","session_id":"f","tools":["bash"]}'
+printf '%s\\n' '{"type":"assistant","message":{"model":"gpt-5","usage":{"inputTokens":5,"outputTokens":3}}}'
 printf '%s\\n' '{"type":"result","subtype":"error_during_execution","is_error":true,"errors":["boom"]}'
 exit 0
 )
@@ -175,7 +183,7 @@ exit 0
   defp fake_cursor_script("EXIT", trace) do
     ~s(#!/bin/sh
 printf 'ARGS:%s\\n' "$*" >> "#{trace}"
-printf '%s\\n' '{"type":"system","subtype":"init","chatId":"e"}'
+printf '%s\\n' '{"type":"system","subtype":"init","session_id":"e"}'
 exit 1
 )
   end
@@ -183,9 +191,9 @@ exit 1
   defp fake_cursor_script("MALFORMED", trace) do
     ~s(#!/bin/sh
 printf 'ARGS:%s\\n' "$*" >> "#{trace}"
-printf '%s\\n' '{"type":"system","subtype":"init","chatId":"m"}'
+printf '%s\\n' '{"type":"system","subtype":"init","session_id":"m"}'
 printf '%s\\n' 'not json at all'
-printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"input_tokens":1,"output_tokens":1}}'
+printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"inputTokens":1,"outputTokens":1}}'
 exit 0
 )
   end
@@ -193,9 +201,9 @@ exit 0
   defp fake_cursor_script(_ok, trace) do
     ~s(#!/bin/sh
 printf 'ARGS:%s\\n' "$*" >> "#{trace}"
-printf '%s\\n' '{"type":"system","subtype":"init","chatId":"ok","tools":["bash","read","write"]}'
-printf '%s\\n' '{"type":"assistant","message":{"model":"gpt-5","content":[{"type":"text","text":"fixed"}],"usage":{"input_tokens":42,"output_tokens":17}}}'
-printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"done","usage":{"input_tokens":42,"output_tokens":17}}'
+printf '%s\\n' '{"type":"system","subtype":"init","session_id":"ok","tools":["bash","read","write"]}'
+printf '%s\\n' '{"type":"assistant","message":{"model":"gpt-5","content":[{"type":"text","text":"fixed"}],"usage":{"inputTokens":42,"outputTokens":17}}}'
+printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"done","usage":{"inputTokens":42,"outputTokens":17}}'
 exit 0
 )
   end

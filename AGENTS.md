@@ -194,15 +194,17 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 | harness | Configure and maintain the agent harness (meta-skill) | harness-agent |
 
 **Execution Rules:**
-- Symphony orchestrator polls Linear for Todo issues and dispatches one Claude agent per issue (polling interval: 5000ms)
+- Symphony orchestrator polls Linear for Todo issues and dispatches one Cursor-backed agent run per issue (polling interval: 5000ms)
 - Each agent operates in an isolated workspace per issue (root: `~/code/symphony-workspaces`), following the WORKFLOW.md execution contract
-- For issue execution work, the orchestrator dispatches a Claude agent directly via CLI with the WORKFLOW.md prompt template
+- For issue execution work, the orchestrator runs the Cursor CLI (`cursor` per workflow `codex.command`) with the WORKFLOW.md prompt template
 - The WORKFLOW.md defines the execution contract (tracker, polling, workspace, agent, codex, hooks, and prompt template)
-- Agent config: kind=claude, max_concurrent_agents=10, max_turns=20
-- Codex config: command=claude, approval_policy=never, thread_sandbox=workspace-write, turn_sandbox_policy=workspaceWrite
-- Tracker: kind=linear, project_slug="symphony-079b97dd6409"
+- Agent config: kind=cursor, max_concurrent_agents=10, max_turns=20
+- Runner config (YAML key remains `codex`): command=cursor, approval_policy=never, thread_sandbox=workspace-write, turn_sandbox_policy maps to workspaceWrite (see WORKFLOW for exact shape)
+- Tracker: kind=linear, project_slug="symphony-079b97dd6409"; active states include Todo through Rework; terminal states include Backlog, Done, Canceled, Duplicate
 - Base branch: develop (all PRs target origin/develop)
-- Workspace hooks: after_create (git clone + mix deps.get), before_remove (mix workspace.before_remove)
+- Workspace hooks: after_create (git clone + conditional `mise trust` + `mise exec -- mix deps.get` in `elixir/`), before_remove (`mise exec -- mix workspace.before_remove`)
+- Prompt requires Linear access (Linear MCP or `linear_graphql` tool); blocked-access protocol treats missing non-GitHub tools/auth as the primary escape hatch—GitHub is not a default blocker (try fallbacks first, document in workpad)
+- App-touching changes: follow WORKFLOW completion bar (`launch-app`, `github-pr-media` when required)
 - Daemon-level config (server port/host, observability) lives in `~/.config/symphony/symphony.yaml` — NOT in WORKFLOW.md
   - `server` and `observability` keys in WORKFLOW.md are disallowed and silently stripped with a warning
   - CLI flags `--config`, `--port`, `--host` override YAML values for single-instance multi-project management
@@ -236,20 +238,20 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 │   │   └── SKILL.md
 │   ├── push/
 │   │   └── SKILL.md
-│   └── symphony-dev/
-│       ├── SKILL.md
-│       └── references/
-│           └── orchestrator-workflow.md
+│   ├── symphony-dev/
+│   │   ├── SKILL.md
+│   │   └── references/
+│   │       └── orchestrator-workflow.md
 │   ├── elixir-planner/
-│   └── SKILL.md
+│   │   └── SKILL.md
 │   ├── elixir-developer/
-│   └── SKILL.md
+│   │   └── SKILL.md
 │   ├── elixir-tester/
-│   └── SKILL.md
+│   │   └── SKILL.md
 │   ├── elixir-builder/
-│   └── SKILL.md
-│   ├── elixir-reviewer/
-│   └── SKILL.md
+│   │   └── SKILL.md
+│   └── elixir-reviewer/
+│       └── SKILL.md
 ├── rules/ (empty — rules ≠ skills)
 └── worktree_init.sh
 ```
@@ -266,6 +268,9 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 | 2026-05-06 | Added dedicated skills for all dev agents | .agents/skills/elixir-*/ | Each agent now has a dedicated skill: elixir-planner, elixir-developer, elixir-tester, elixir-builder, elixir-reviewer |
 | 2026-05-06 | Agent defs: protocol fix, prior-output, worktree, skill refs | .agents/agents/symphony-*.md | Fixed comms protocol (sub-agent pipeline), added prior-output behavior sections, added worktree awareness, added skill reference tables |
 | 2026-05-06 | Orchestrator improvements | .agents/skills/symphony-dev/SKILL.md | Sharper description with trigger keywords, worktree isolation in Phase 2, skill-loading instructions in agent prompts, orchestrator-workflow.md reference file |
+| 2026-05-07 | Harness sync to Cursor WORKFLOW.md | AGENTS.md, .agents/skills (pull, commit, debug, land, elixir-planner), symphony-dispatch.md | WORKFLOW.md: agent.kind=cursor, codex.command=cursor, Duplicate terminal state, Linear MCP prerequisite, blocked-access/GitHub guidance, app validation gates; fixed harness directory tree; skills aligned with Cursor execution + log triage |
+| 2026-05-07 | Harness continuation (multi-turn) | pull/SKILL.md, elixir-planner/SKILL.md, symphony-dispatch.md, AGENTS.md | Explicit post-merge `mise exec -- mix test` gate after pull; planner notes Duplicate terminal state; documented Harness.Manager follow-up prompt behavior |
+| 2026-05-07 | Harness docs: WORKFLOW contract path | harness/SKILL.md, symphony-dispatch.md, AGENTS.md | Phase 0 + AGENTS template: Symphony dispatch tied to platform/heuristics, not `.agents/WORKFLOW.md`; contract canonical at `elixir/WORKFLOW.md` |
 
 ## Harness: Symphony Development
 

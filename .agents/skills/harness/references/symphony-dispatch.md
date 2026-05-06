@@ -2,15 +2,25 @@
 
 ## Overview
 
-When the harness skill is invoked by the Symphony platform (not manually by a user), additional context is available through the project's `.agents/WORKFLOW.md` contract. This document defines how harness agents should integrate with Symphony's orchestration layer.
+When the harness skill is invoked by the Symphony platform (not manually by a user), additional context comes from the **Symphony execution contract** (`WORKFLOW.md` — for this monorepo `elixir/WORKFLOW.md`, or whichever path the running `symphony` process was started with). This document defines how harness agents should integrate with Symphony's orchestration layer.
 
 ## Detection
 
-Symphony dispatch is active when:
-- `project/.agents/WORKFLOW.md` exists — this is the Symphony execution contract
-- The orchestrator detects it was spawned by a Symphony harness manager (check `_workspace/` for a `symphony_context.json` file)
+Symphony dispatch is active when the harness run is triggered by Symphony’s
+orchestrator (hash change, harness ticket, or explicit dispatch), not a casual
+local edit. The **execution contract** for this repo lives at
+`elixir/WORKFLOW.md` (or whichever path the running `symphony` process was
+started with)—**not** under `.agents/`. A copy under `.agents/WORKFLOW.md` is
+optional and not required for dispatch.
 
-If neither is present, treat this as a standalone/manual harness invocation and use default protocols.
+Heuristics:
+- Orchestrator-spawned harness work often includes `_workspace/symphony_context.json`
+  or equivalent issue metadata supplied by the caller.
+- If neither platform context nor user intent references Symphony, treat this
+  as a standalone/manual harness invocation and use default protocols.
+
+**Never modify** the loaded WORKFLOW.md file; update only `.agents/` and
+`AGENTS.md` when reconfiguring the harness.
 
 ## Symphony Context (when active)
 
@@ -33,13 +43,13 @@ When running under Symphony, these platform-level details are available:
 
 ### Phase 0 Modifications
 When Symphony dispatch is detected:
-1. Read `.agents/WORKFLOW.md` to understand the execution contract
-2. Check `_workspace/symphony_context.json` for the current issue context
+1. Read the repo’s **Symphony** `WORKFLOW.md` (for this monorepo: `elixir/WORKFLOW.md`) to understand the execution contract
+2. Check `_workspace/symphony_context.json` (when present) for the current issue context
 3. Align the harness execution plan with the WORKFLOW.md requirements — the harness serves the platform's execution contract
 
 ### Agent Scope
 - Agents defined by the harness operate within the project directory
-- Symphony provides the workspace; harness agents should not modify `.agents/WORKFLOW.md` or `.omc/` state
+- Symphony provides the workspace; harness agents must not modify the Symphony `WORKFLOW.md` execution contract or `.omc/` state
 - All intermediate artifacts go to `_workspace/` as usual
 
 ### Output Convention
@@ -52,9 +62,18 @@ When Symphony dispatch is detected:
 - Clean up sub-agents and teams before returning control to Symphony
 - The harness agent is one step in Symphony's pipeline; keep outputs structured for downstream consumption
 
+## Harness multi-turn resume
+
+`SymphonyElixir.Harness.Manager` may run several adapter turns for a single
+harness dispatch. After the first turn, follow-up prompts are worded like:
+“Continue the harness configuration. Resume from the current workspace and
+`.agents/` state.” Treat that as **continuation**, not a new harness build:
+re-read Phase 0 audit outputs, finish incomplete edits, sync `AGENTS.md` and
+`.cursor/` mirrors, and avoid duplicating work already landed in the tree.
+
 ## Non-Symphony (Standalone) Mode
 
-When no WORKFLOW.md is detected:
+When no Symphony workflow context applies (manual harness request only):
 - The harness operates fully autonomously as defined in the main SKILL.md workflow
 - AGENTS.md registration ensures the harness activates in future sessions
 - No platform constraints apply

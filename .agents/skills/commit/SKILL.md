@@ -17,7 +17,8 @@ description:
 
 ## Inputs
 
-- Codex session history for intent and rationale.
+- Coding-agent session history (Cursor / Claude / Codex, depending on deployment)
+  for intent and rationale.
 - `git status`, `git diff`, and `git diff --staged` for actual changes.
 - Repo-specific commit conventions if documented.
 
@@ -40,8 +41,10 @@ description:
    - Summary of key changes (what changed).
    - Rationale and trade-offs (why it changed).
    - Tests or validation run (or explicit note if not run).
-9. Append a `Co-authored-by` trailer using the project's configured identity.
-   For Symphony: `Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>`.
+9. Append a `Co-authored-by` trailer using the project's configured identity
+   (match the active CLI in WORKFLOW.md—for Cursor-backed runs, use the team's
+   Cursor co-author line if documented; otherwise follow repo AGENTS.md /
+   commit conventions).
 10. Wrap body lines at 72 characters.
 11. Create the commit message with a here-doc or temp file and use
     `git commit -F <file>` so newlines are literal (avoid `-m` with `\n`).
@@ -71,5 +74,5 @@ Rationale:
 Tests:
 - <command or "not run (reason)">
 
-Co-authored-by: Claude Opus 4.7 <noreply@anthropic.com>
+Co-authored-by: <identity per project convention>
 ```

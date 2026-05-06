@@ -8,6 +8,12 @@ description:
 
 # Land
 
+Symphony’s WORKFLOW may run the **Cursor** CLI while still using legacy markers
+such as `## Codex Workpad` / `## Codex Review` in issues and automation. Treat
+those headers as **stable contract strings**—do not rename them in skills; the
+merge loop below still applies to all PR/issue review traffic (human, bot, or
+Codex-branded jobs).
+
 ## Goals
 
 - Ensure the PR is conflict-free with develop.

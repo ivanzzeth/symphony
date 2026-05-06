@@ -21,8 +21,8 @@ When the harness skill triggers, first assess the current harness state and dete
 
 1. Read `project/.agents/agents/`, `project/.agents/skills/`, `project/AGENTS.md`
 2. Detect execution context:
-   - **Symphony dispatch**: If `project/.agents/WORKFLOW.md` exists, this harness is being invoked by the Symphony platform. Symphony dispatch provides additional context (current issue, project config, existing agent state). Read `references/symphony-dispatch.md` for Symphony-specific protocols.
-   - **Manual invocation**: No WORKFLOW.md present — the user is running harness directly. Use standard standalone protocols.
+   - **Symphony dispatch**: The harness run is driven by Symphony (for example `SymphonyElixir.Harness.Manager` after a `WORKFLOW.md` content-hash change, an explicit harness dispatch, or caller-supplied orchestrator context such as `_workspace/symphony_context.json`). The contract file path is **repo-specific** (Symphony monorepo: `elixir/WORKFLOW.md`). Do **not** infer dispatch from `.agents/WORKFLOW.md` alone—that copy is optional and may be absent. Read `references/symphony-dispatch.md` for Symphony-specific protocols.
+   - **Manual invocation**: User-requested harness work without the Symphony dispatch signals above. Still read the repo’s `WORKFLOW.md` when present so skills and `AGENTS.md` stay aligned. Use standard standalone protocols.
 3. Branch by current state:
    - **New build**: agent/skill directories are missing or empty → run all phases starting from Phase 1
    - **Existing extension**: harness exists and new agents/skills requested → run only the phases needed per the selection matrix below
@@ -255,7 +255,7 @@ After harness configuration is complete, register the harness context in the pro
 - For {domain}-related work requests, process via the `{orchestrator-skill-name}` skill using the agent team
 - Simple questions/confirmations may be answered directly without the agent team
 - Intermediate outputs: `_workspace/` directory
-- When invoked by Symphony: refer to `.agents/WORKFLOW.md` for the current execution contract
+- When invoked by Symphony: read the project’s `WORKFLOW.md` execution contract (Symphony monorepo: `elixir/WORKFLOW.md`)
 
 **Directory Structure:**
 ```

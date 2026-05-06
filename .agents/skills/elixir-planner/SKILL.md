@@ -16,8 +16,8 @@ Domain-specific planning guidance for the Symphony Elixir orchestrator. Use this
 | Core orchestration | `orchestrator.ex`, `agent_runner.ex`, `agent_symlinks.ex` |
 | Workflow management | `workflow.ex`, `workflow_store.ex`, `process_config/store.ex` |
 | Tracker integration | `tracker/github/adapter.ex`, `linear/adapter.ex`, `linear/client.ex` |
-| AI adapters | `claude/adapter.ex`, `cursor/adapter.ex` |
-| HTTP server | `http_server.ex`, `codex/app_server.ex` |
+| Coding-agent adapters | `claude/adapter.ex`, `cursor/adapter.ex`, `codex/app_server.ex` |
+| HTTP server | `http_server.ex` (dashboard, APIs) |
 | Dashboard | `status_dashboard.ex` (Phoenix LiveView), `cli.ex` |
 | Config | `config.ex`, `workspace.ex`, `ssh.ex` |
 | Tests | `test/symphony_elixir/` — mirrors lib structure |
@@ -25,11 +25,11 @@ Domain-specific planning guidance for the Symphony Elixir orchestrator. Use this
 ### WORKFLOW.md Boundaries
 
 The WORKFLOW.md file at `elixir/WORKFLOW.md` is the **Symphony execution contract** and must NEVER be modified. It contains:
-- Tracker config (Linear project slug, state machine)
+- Tracker config (Linear project slug, state machine; terminal states include `Duplicate` alongside Backlog/Done/Canceled)
 - Polling interval
 - Workspace settings (root, base_branch)
 - Agent config (kind, max_concurrent, max_turns)
-- Codex config (approval_policy, sandbox)
+- Runner config under YAML key `codex` (command e.g. `cursor`, approval_policy, sandbox policies)
 
 If the plan requires modifying WORKFLOW.md, flag it as BLOCKED and inform the user.
 

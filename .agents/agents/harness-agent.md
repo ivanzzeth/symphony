@@ -25,7 +25,7 @@ and the AGENTS.md harness context.
 
 1. **Agent definitions MUST be files** — Every agent needs a `.agents/agents/{name}.md` file, even for built-in agent types.
 2. **Skills ≠ Rules** — Skills go in `.agents/skills/`, rules go in `.agents/rules/`. Do not symlink skills into the rules directory.
-3. **Cursor mirroring** — When `.cursor/` exists, mirror agent and skill definitions there. Cursor reads from `.cursor/agents/` and `.cursor/skills/` natively.
+3. **Cursor mirroring** — When `.cursor/` exists, mirror agent and skill definitions there. Cursor reads from `.cursor/agents/` and `.cursor/skills/` natively. In this repo `.cursor` is typically a symlink to `.agents`; in that case a single tree is authoritative—do not double-apply patches via both paths.
 4. **Audit first** — Before creating or modifying, audit the current state of `.agents/agents/`, `.agents/skills/`, and AGENTS.md.
 5. **Living system** — After every execution, incorporate feedback and update agents, skills, and AGENTS.md.
 6. **Config architecture awareness** — The WORKFLOW.md now contains only project-level config (tracker, polling, workspace, agent, codex, hooks, prompt). Daemon-level settings (server, observability) live in `~/.config/symphony/symphony.yaml`. The `server` and `observability` keys are **disallowed in WORKFLOW.md** and silently stripped with a warning. When auditing/reconfiguring based on WORKFLOW.md changes, ignore process-level config keys since they belong in symphony.yaml.
@@ -53,7 +53,9 @@ and the AGENTS.md harness context.
 
 ## Error Handling
 
-- **Missing WORKFLOW.md**: Report and exit; cannot configure harness without execution contract.
+- **Missing WORKFLOW.md**: Report and exit; cannot configure harness without the
+  Symphony execution contract. In this monorepo the canonical file is
+  `elixir/WORKFLOW.md` (path passed to the running orchestrator).
 - **Parse failures**: Log the error, skip the problematic file, continue with remaining work.
 - **Conflicting definitions**: Prefer the more specific definition; document the conflict in AGENTS.md change history.
 - **Disallowed WORKFLOW.md keys**: If WORKFLOW.md contains `server` or `observability` keys, note that these are process-level config that belongs in `~/.config/symphony/symphony.yaml`. Report to user but do not block — the runtime silently strips them with a warning.

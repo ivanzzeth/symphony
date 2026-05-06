@@ -2,9 +2,9 @@
 name: pull
 description:
   Pull latest origin/develop into the current local branch and resolve merge
-  conflicts (aka update-branch). Use when Codex needs to sync a feature branch
-  with origin, perform a merge-based update (not rebase), and guide conflict
-  resolution best practices.
+  conflicts (aka update-branch). Use when the Symphony issue-execution agent
+  (or any feature branch) needs to sync with origin, perform a merge-based
+  update (not rebase), and guide conflict resolution best practices.
 ---
 
 # Pull
@@ -30,7 +30,9 @@ description:
 7. If conflicts appear, resolve them (see conflict guidance below), then:
    - `git add <files>`
    - `git commit` (or `git merge --continue` if the merge is paused)
-8. Verify with project checks (follow repo policy in `AGENTS.md`).
+8. Verify with project checks after the merge: from repo root run
+   `cd elixir && mise exec -- mix test` (same gate as the `push` skill for
+   Symphony). Fix failures before reporting the merge complete.
 9. Summarize the merge:
    - Call out the most challenging conflicts/files and how they were resolved.
    - Note any assumptions or follow-ups.
