@@ -3,7 +3,7 @@ defmodule SymphonyElixir.CursorAdapterTest do
 
   alias SymphonyElixir.Cursor.Adapter, as: CursorAdapter
 
-  import SymphonyElixir.TestSupport, only: [write_workflow_file!: 2]
+  import SymphonyElixir.TestSupport, only: [write_workflow_file!: 2, restore_env: 2]
   alias SymphonyElixir.Workflow
 
   setup do
@@ -128,6 +128,63 @@ defmodule SymphonyElixir.CursorAdapterTest do
 
     assert_received {:m, %{event: :turn_completed}}
     assert_received {:m, %{event: :malformed}}
+  end
+
+  test "remote SSH uses SSH.start_port for worker_host with Cursor CLI in remote command" do
+    test_root = Path.join(System.tmp_dir!(), "symphony-elixir-cursor-ssh-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(test_root)
+
+    prev_path = System.get_env("PATH")
+    prev_ssh = System.get_env("SYMP_TEST_SSH_TRACE")
+
+    on_exit(fn ->
+      restore_env("PATH", prev_path)
+      restore_env("SYMP_TEST_SSH_TRACE", prev_ssh)
+      File.rm_rf(test_root)
+    end)
+
+    ssh_trace = Path.join(test_root, "ssh.trace")
+    fake_ssh = Path.join(test_root, "ssh")
+    fake_cursor = Path.join(test_root, "cursor")
+    System.put_env("SYMP_TEST_SSH_TRACE", ssh_trace)
+    System.put_env("PATH", test_root <> ":" <> (prev_path || ""))
+
+    File.write!(fake_ssh, """
+    #!/bin/sh
+    printf 'ARGS:%s\\n' "$*" >> "#{ssh_trace}"
+    printf '%s\\n' '{"type":"system","subtype":"init","session_id":"ssh-c"}'
+    printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"inputTokens":1,"outputTokens":1}}'
+    exit 0
+    """)
+
+    File.chmod!(fake_ssh, 0o755)
+
+    File.write!(fake_cursor, fake_cursor_script("OK", Path.join(test_root, "cursor.trace")))
+    File.chmod!(fake_cursor, 0o755)
+
+    remote = "/remote/workspace/issue-1"
+    write_cursor_config("cursor", "/remote/workspaces")
+
+    assert {:ok, _} =
+             CursorAdapter.run_turn(
+               %{session_id: "ssh", workspace: remote, resume_id: nil},
+               "Fix bug",
+               issue(),
+               worker_host: "worker-01:2200"
+             )
+
+    trace = File.read!(ssh_trace)
+    assert trace =~ "-T -p 2200 worker-01 bash -lc"
+    assert trace =~ "cd "
+    assert trace =~ remote
+    assert trace =~ "cursor"
+    assert trace =~ "agent"
+    assert trace =~ "--print"
+    assert trace =~ "--output-format"
+    assert trace =~ "stream-json"
+    assert trace =~ "--force"
+    assert trace =~ "--trust"
+    assert trace =~ "--workspace"
   end
 
   # --- helpers ---
