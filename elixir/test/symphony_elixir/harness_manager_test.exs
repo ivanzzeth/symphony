@@ -185,8 +185,11 @@ defmodule SymphonyElixir.HarnessManagerTest do
       path = Path.join(test_root, "WORKFLOW.md")
       File.write!(path, @test_workflow_content)
 
-      # First check establishes baseline
+      # First check establishes baseline (spawns task that fails — no real adapter)
       assert GenServer.call(pid, :check) in [:dispatched, :unchanged]
+
+      # Reset harness_running — the spawned task will crash, but state is set before task runs
+      :sys.replace_state(pid, fn state -> %{state | harness_running: false} end)
 
       # Second check should see no change
       assert GenServer.call(pid, :check) == :unchanged
@@ -197,10 +200,75 @@ defmodule SymphonyElixir.HarnessManagerTest do
       File.write!(path, @test_workflow_content)
       GenServer.call(pid, :check)
 
+      # Reset harness_running after dispatch spawns failing task
+      :sys.replace_state(pid, fn state -> %{state | harness_running: false} end)
+
       # Modify the file
       File.write!(path, @modified_workflow_content)
 
       assert GenServer.call(pid, :check) == :dispatched
+    end
+
+    test "returns :harness_busy when harness is already running", %{pid: pid, test_root: test_root} do
+      path = Path.join(test_root, "WORKFLOW.md")
+      File.write!(path, @test_workflow_content)
+
+      # Put the GenServer in harness_running state
+      :sys.replace_state(pid, fn state -> %{state | harness_running: true} end)
+
+      assert GenServer.call(pid, :check) == :harness_busy
+    end
+  end
+
+  describe "harness completion sync" do
+    test "syncs last_hash to current WORKFLOW.md on harness_complete",
+         %{pid: pid, test_root: test_root, harness_state_path: harness_state_path} do
+      path = Path.join(test_root, "WORKFLOW.md")
+      File.write!(path, @test_workflow_content)
+
+      # Set harness_running=true with stale last_hash
+      :sys.replace_state(pid, fn state ->
+        %{state | harness_running: true, last_hash: "stale-hash"}
+      end)
+
+      # Send harness_complete
+      send(pid, {:harness_complete, :ok})
+
+      # Wait for handle_info to process
+      Process.sleep(50)
+
+      # Verify state: harness_running is false, last_hash is current
+      final_state = :sys.get_state(pid)
+      refute final_state.harness_running
+
+      expected_hash = compute_hash_for_test(path)
+      assert final_state.last_hash == expected_hash
+
+      # Verify state file was updated
+      assert load_last_hash_for_test(harness_state_path) == expected_hash
+    end
+
+    test "syncs last_hash on DOWN (process termination)",
+         %{pid: pid, test_root: test_root, harness_state_path: harness_state_path} do
+      path = Path.join(test_root, "WORKFLOW.md")
+      File.write!(path, @test_workflow_content)
+
+      # Set harness_running=true with stale last_hash
+      :sys.replace_state(pid, fn state ->
+        %{state | harness_running: true, last_hash: "stale-hash"}
+      end)
+
+      # Send DOWN (simulating task process crash)
+      send(pid, {:DOWN, make_ref(), :process, nil, :killed})
+
+      Process.sleep(50)
+
+      final_state = :sys.get_state(pid)
+      refute final_state.harness_running
+
+      expected_hash = compute_hash_for_test(path)
+      assert final_state.last_hash == expected_hash
+      assert load_last_hash_for_test(harness_state_path) == expected_hash
     end
   end
 
@@ -211,7 +279,8 @@ defmodule SymphonyElixir.HarnessManagerTest do
       hash = compute_hash_for_test(path)
 
       prompt = build_harness_prompt_for_test(nil, hash)
-      assert prompt == "setup a harness for the project according to WORKFLOW.md"
+      assert prompt =~ "/harness"
+      assert prompt =~ "build a new agent harness"
     end
 
     test "update prompt when last_hash is set and file changed", %{test_root: test_root} do
@@ -223,17 +292,19 @@ defmodule SymphonyElixir.HarnessManagerTest do
       hash2 = compute_hash_for_test(path)
 
       prompt = build_harness_prompt_for_test(hash1, hash2)
-      assert prompt == "update an existing harness for the project according to the updated WORKFLOW.md"
+      assert prompt =~ "/harness"
+      assert prompt =~ "reconfigure"
     end
 
     test "deletion prompt when current_hash is empty and last_hash was set" do
       prompt = build_harness_prompt_for_test("some-hash", "")
-      assert prompt == "WORKFLOW.md has been deleted. Clean up harness configuration accordingly."
+      assert prompt =~ "/harness"
+      assert prompt =~ "deleted"
     end
 
     test "empty prompt when both hashes are empty/nil" do
       prompt = build_harness_prompt_for_test(nil, "")
-      assert prompt == "WORKFLOW.md is empty or does not exist. No harness configuration is needed."
+      assert prompt =~ "does not exist"
     end
   end
 
@@ -282,19 +353,26 @@ defmodule SymphonyElixir.HarnessManagerTest do
     File.write!(path, Jason.encode!(state, pretty: true))
   end
 
-  defp build_harness_prompt_for_test(nil, "") do
-    "WORKFLOW.md is empty or does not exist. No harness configuration is needed."
-  end
+  @harness_setup_prompt """
+  Use the /harness skill to build a new agent harness for this project.
 
-  defp build_harness_prompt_for_test(nil, _current_hash) do
-    "setup a harness for the project according to WORKFLOW.md"
-  end
+  Read WORKFLOW.md to understand the project's execution contract, then follow the full harness skill workflow (Phase 0-6) to analyze the domain, design the team architecture, generate agent definitions and skills, and register the harness context in AGENTS.md.
+  """
 
-  defp build_harness_prompt_for_test(_last_hash, "") do
-    "WORKFLOW.md has been deleted. Clean up harness configuration accordingly."
-  end
+  @harness_update_prompt """
+  Use the /harness skill to reconfigure the agent harness for this project.
 
-  defp build_harness_prompt_for_test(_last_hash, _current_hash) do
-    "update an existing harness for the project according to the updated WORKFLOW.md"
-  end
+  WORKFLOW.md has been updated. Read WORKFLOW.md to understand the changes, then follow the harness skill workflow — audit current .agents/ state (Phase 0), then determine which phases are needed to bring the harness in sync with the updated WORKFLOW.md.
+  """
+
+  @harness_deletion_prompt """
+  WORKFLOW.md has been deleted. Use the /harness skill to clean up the agent harness configuration accordingly.
+  """
+
+  @harness_empty_prompt "WORKFLOW.md is empty or does not exist. No harness configuration is needed."
+
+  defp build_harness_prompt_for_test(nil, ""), do: @harness_empty_prompt
+  defp build_harness_prompt_for_test(nil, _current_hash), do: @harness_setup_prompt
+  defp build_harness_prompt_for_test(_last_hash, ""), do: @harness_deletion_prompt
+  defp build_harness_prompt_for_test(_last_hash, _current_hash), do: @harness_update_prompt
 end

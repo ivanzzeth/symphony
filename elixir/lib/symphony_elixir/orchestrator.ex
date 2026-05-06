@@ -67,7 +67,7 @@ defmodule SymphonyElixir.Orchestrator do
 
         run_terminal_workspace_cleanup()
         provision_workflow_states_async(config)
-        SymphonyElixir.AgentSymlinks.manage_project_root(File.cwd!())
+        SymphonyElixir.AgentSymlinks.manage_project_root(git_toplevel())
         Workspace.reconcile_all_symlinks()
         state = schedule_tick(state, 0)
 
@@ -1118,6 +1118,13 @@ defmodule SymphonyElixir.Orchestrator do
 
   defp issue_context(%Issue{id: issue_id, identifier: identifier}) do
     "issue_id=#{issue_id} issue_identifier=#{identifier}"
+  end
+
+  defp git_toplevel do
+    case System.cmd("git", ["rev-parse", "--show-toplevel"], stderr_to_stdout: true) do
+      {toplevel, 0} -> String.trim(toplevel)
+      _ -> File.cwd!()
+    end
   end
 
   defp available_slots(%State{} = state) do

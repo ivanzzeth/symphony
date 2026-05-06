@@ -67,11 +67,29 @@ defmodule SymphonyElixir.Harness.Manager do
     GenServer.call(__MODULE__, :check)
   end
 
+  @doc false
+  @spec git_toplevel(Path.t()) :: Path.t()
+  def git_toplevel(start_dir \\ File.cwd!()) do
+    case System.cmd("git", ["-C", start_dir, "rev-parse", "--show-toplevel"],
+           stderr_to_stdout: true) do
+      {toplevel, 0} -> String.trim(toplevel)
+      _ -> start_dir
+    end
+  end
+
   @impl true
   def init(opts) do
-    project_dir = Keyword.get(opts, :project_dir, File.cwd!())
+    project_dir =
+      Keyword.get(opts, :project_dir, File.cwd!())
+      |> git_toplevel()
 
-    workflow_file_path = Keyword.get(opts, :workflow_file_path, Path.join(project_dir, "WORKFLOW.md"))
+    workflow_file_path =
+      Keyword.get(opts, :workflow_file_path) ||
+        if Application.get_env(:symphony_elixir, :workflow_file_path) do
+          Workflow.workflow_file_path()
+        else
+          Path.join(project_dir, "WORKFLOW.md")
+        end
 
     harness_state_path = harness_state_path(project_dir)
 
@@ -95,6 +113,10 @@ defmodule SymphonyElixir.Harness.Manager do
     {:reply, state.harness_running, state}
   end
 
+  def handle_call(:check, _from, %{harness_running: true} = state) do
+    {:reply, :harness_busy, state}
+  end
+
   def handle_call(:check, _from, state) do
     {reply, state} = do_check(state)
     {:reply, reply, state}
@@ -114,12 +136,12 @@ defmodule SymphonyElixir.Harness.Manager do
 
   def handle_info({:harness_complete, _result}, state) do
     Logger.info("Harness agent session completed")
-    {:noreply, %{state | harness_running: false}}
+    {:noreply, sync_last_hash(%{state | harness_running: false})}
   end
 
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
     Logger.info("Harness agent process terminated")
-    {:noreply, %{state | harness_running: false}}
+    {:noreply, sync_last_hash(%{state | harness_running: false})}
   end
 
   def handle_info({ref, _result}, state) when is_reference(ref) do
@@ -185,6 +207,8 @@ defmodule SymphonyElixir.Harness.Manager do
     File.write!(path, Jason.encode!(state, pretty: true))
   end
 
+  @harness_max_turns 3
+
   defp dispatch_harness_agent(state, current_hash) do
     adapter = CodingAgent.adapter()
     prompt = build_harness_prompt(state.last_hash, current_hash)
@@ -194,7 +218,7 @@ defmodule SymphonyElixir.Harness.Manager do
         case adapter.start_session(state.project_dir, []) do
           {:ok, session} ->
             try do
-              result = adapter.run_turn(session, prompt, @harness_issue, [])
+              result = run_harness_turns(adapter, session, prompt)
               send(__MODULE__, {:harness_complete, result})
             after
               adapter.stop_session(session)
@@ -213,20 +237,68 @@ defmodule SymphonyElixir.Harness.Manager do
     %{state | last_hash: current_hash, harness_running: true}
   end
 
-  defp build_harness_prompt(nil, "") do
-    "WORKFLOW.md is empty or does not exist. No harness configuration is needed."
+  defp run_harness_turns(adapter, session, prompt) do
+    do_run_harness_turns(adapter, session, prompt, 1, @harness_max_turns)
   end
 
-  defp build_harness_prompt(nil, _current_hash) do
-    "setup a harness for the project according to WORKFLOW.md"
+  defp do_run_harness_turns(_adapter, session, _prompt, turn_number, max_turns)
+       when turn_number > max_turns do
+    Logger.info("Harness agent reached max_turns=#{max_turns}")
+    {:ok, session}
   end
 
-  defp build_harness_prompt(_last_hash, "") do
-    "WORKFLOW.md has been deleted. Clean up harness configuration accordingly."
+  defp do_run_harness_turns(adapter, session, prompt, turn_number, max_turns) do
+    turn_prompt = if turn_number == 1, do: prompt, else: "Continue the harness configuration. Resume from the current workspace and .agents/ state."
+
+    case adapter.run_turn(session, turn_prompt, @harness_issue, []) do
+      {:ok, turn_result} ->
+        Logger.info("Harness agent turn #{turn_number}/#{max_turns} completed")
+
+        updated_session = Map.merge(session, %{resume_id: turn_result.resume_id})
+
+        # Short sleep between turns to avoid rate limiting
+        :timer.sleep(2_000)
+
+        do_run_harness_turns(adapter, updated_session, prompt, turn_number + 1, max_turns)
+
+      {:error, reason} ->
+        Logger.error("Harness agent turn #{turn_number}/#{max_turns} failed: #{inspect(reason)}")
+        {:error, reason}
+    end
   end
 
-  defp build_harness_prompt(_last_hash, _current_hash) do
-    "update an existing harness for the project according to the updated WORKFLOW.md"
+  @harness_setup_prompt """
+  Use the /harness skill to build a new agent harness for this project.
+
+  Read WORKFLOW.md to understand the project's execution contract, then follow the full harness skill workflow (Phase 0-6) to analyze the domain, design the team architecture, generate agent definitions and skills, and register the harness context in AGENTS.md.
+
+  IMPORTANT: Do NOT modify WORKFLOW.md under any circumstances. This file is the Symphony execution contract and must remain unchanged. Only create or update files under .agents/ and AGENTS.md.
+  """
+
+  @harness_update_prompt """
+  Use the /harness skill to reconfigure the agent harness for this project.
+
+  WORKFLOW.md has been updated. Read WORKFLOW.md to understand the changes, then follow the harness skill workflow — audit current .agents/ state (Phase 0), then determine which phases are needed to bring the harness in sync with the updated WORKFLOW.md.
+
+  IMPORTANT: Do NOT modify WORKFLOW.md under any circumstances. This file is the Symphony execution contract and must remain unchanged. Only create or update files under .agents/ and AGENTS.md.
+  """
+
+  @harness_deletion_prompt """
+  WORKFLOW.md has been deleted. Use the /harness skill to clean up the agent harness configuration accordingly. Do NOT recreate WORKFLOW.md.
+  """
+
+  @harness_empty_prompt "WORKFLOW.md is empty or does not exist. No harness configuration is needed."
+
+  defp build_harness_prompt(nil, ""), do: @harness_empty_prompt
+  defp build_harness_prompt(nil, _current_hash), do: @harness_setup_prompt
+  defp build_harness_prompt(_last_hash, ""), do: @harness_deletion_prompt
+  defp build_harness_prompt(_last_hash, _current_hash), do: @harness_update_prompt
+
+  defp sync_last_hash(state) do
+    workflow_path = Map.get(state, :workflow_file_path) || Workflow.workflow_file_path()
+    current_hash = compute_hash(workflow_path)
+    persist_hash(state.harness_state_path, current_hash)
+    %{state | last_hash: current_hash}
   end
 
   defp harness_state_path(project_dir) do

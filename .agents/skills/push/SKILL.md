@@ -26,12 +26,12 @@ description:
 ## Steps
 
 1. Identify current branch and confirm remote state.
-2. Run local validation (`make -C elixir all`) before pushing.
+2. Run local validation (`cd elixir && mise exec -- mix test`) before pushing.
 3. Push branch to `origin` with upstream tracking if needed, using whatever
    remote URL is already configured.
 4. If push is not clean/rejected:
    - If the failure is a non-fast-forward or sync problem, run the `pull`
-     skill to merge `origin/main`, resolve conflicts, and rerun validation.
+     skill to merge `origin/develop`, resolve conflicts, and rerun validation.
    - Push again; use `--force-with-lease` only when history was rewritten.
    - If the failure is due to auth, permissions, or workflow restrictions on
      the configured remote, stop and surface the exact error instead of
@@ -62,7 +62,7 @@ description:
 branch=$(git branch --show-current)
 
 # Minimal validation gate
-make -C elixir all
+cd elixir && mise exec -- mix test
 
 # Initial push: respect the current origin remote.
 git push -u origin HEAD
@@ -101,7 +101,7 @@ fi
 
 tmp_pr_body=$(mktemp)
 gh pr view --json body -q .body > "$tmp_pr_body"
-(cd elixir && mix pr_body.check --file "$tmp_pr_body")
+(cd elixir && mise exec -- mix pr_body.check --file "$tmp_pr_body")
 rm -f "$tmp_pr_body"
 
 # Show PR URL for the reply

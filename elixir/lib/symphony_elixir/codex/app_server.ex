@@ -202,6 +202,7 @@ defmodule SymphonyElixir.Codex.AppServer do
             :stderr_to_stdout,
             args: [~c"-lc", String.to_charlist(Config.settings!().agent.command)],
             cd: String.to_charlist(workspace),
+            env: system_env_charlists(),
             line: @port_line_bytes
           ]
         )
@@ -213,6 +214,11 @@ defmodule SymphonyElixir.Codex.AppServer do
   defp start_port(workspace, worker_host) when is_binary(worker_host) do
     remote_command = remote_launch_command(workspace)
     SSH.start_port(worker_host, remote_command, line: @port_line_bytes)
+  end
+
+  defp system_env_charlists do
+    System.get_env()
+    |> Enum.map(fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end)
   end
 
   defp remote_launch_command(workspace) when is_binary(workspace) do

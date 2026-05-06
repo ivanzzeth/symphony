@@ -1,8 +1,3 @@
----
-name: symphony-assistant
-description: "Symphony human assistant. ALWAYS active — defines the assistant's identity and workflow rules for this project."
----
-
 # Symphony Assistant
 
 You are the human collaborator's assistant, working within a Symphony project.
@@ -83,7 +78,7 @@ Reject cycle:
 
 ## When the human asks you to create issues
 
-Use the Linear skill at `.codex/skills/linear/SKILL.md`:
+Use the Linear skill at `.agents/skills/linear/SKILL.md`:
 - `Backlog` for speculative work, follow-ups, things you notice during review
 - `Todo` for work that's ready for agent pickup right now
 - Always set a clear title, description, and acceptance criteria
@@ -184,25 +179,29 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 **Agent Team:**
 | Agent | Role |
 |-------|------|
-| symphony-agent | Single implementation agent per issue, executing the full lifecycle from Todo to Done |
 | harness-agent | Harness meta-agent that configures and maintains .agents/ definitions and skills |
 
 **Skills:**
 | Skill | Purpose | Used By |
 |-------|---------|---------|
-| linear | Linear GraphQL API operations (state transitions, comments, issue creation) | symphony-agent |
-| commit | Create well-formed git commits from session history | symphony-agent |
-| push | Push branch, create/update PR with proper metadata | symphony-agent |
-| pull | Sync branch with origin/base, resolve merge conflicts | symphony-agent |
-| land | Squash-merge loop via gh CLI when issue reaches Merging | symphony-agent |
-| debug | Investigate stuck/failing runs, correlate logs | symphony-agent |
+| linear | Linear GraphQL API operations (state transitions, comments, issue creation) | orchestrator agent |
+| commit | Create well-formed git commits from session history | orchestrator agent |
+| push | Push branch, create/update PR with proper metadata | orchestrator agent |
+| pull | Sync branch with origin/base, resolve merge conflicts | orchestrator agent |
+| land | Squash-merge loop via gh CLI when issue reaches Merging | orchestrator agent |
+| debug | Investigate stuck/failing runs, correlate logs | orchestrator agent |
 | harness | Configure and maintain the agent harness (meta-skill) | harness-agent |
 
 **Execution Rules:**
-- Symphony orchestrator polls Linear for Todo issues and dispatches one Claude agent per issue
-- Each agent operates in an isolated workspace per issue, following the WORKFLOW.md execution contract
-- For issue execution work, the orchestrator dispatches the symphony-agent via the Agent tool
+- Symphony orchestrator polls Linear for Todo issues and dispatches one Claude agent per issue (polling interval: 5000ms)
+- Each agent operates in an isolated workspace per issue (root: `~/code/symphony-workspaces`), following the WORKFLOW.md execution contract
+- For issue execution work, the orchestrator dispatches a Claude agent directly via CLI with the WORKFLOW.md prompt template
 - The WORKFLOW.md defines the execution contract (tracker, polling, workspace, agent, codex, hooks, and prompt template)
+- Agent config: kind=claude, max_concurrent_agents=10, max_turns=20
+- Codex config: command=claude, approval_policy=never, thread_sandbox=workspace-write, turn_sandbox_policy=workspaceWrite
+- Tracker: kind=linear, project_slug="symphony-079b97dd6409"
+- Base branch: develop (all PRs target origin/develop)
+- Workspace hooks: after_create (git clone + mix deps.get), before_remove (mix workspace.before_remove)
 - Daemon-level config (server port/host, observability) lives in `~/.config/symphony/symphony.yaml` — NOT in WORKFLOW.md
   - `server` and `observability` keys in WORKFLOW.md are disallowed and silently stripped with a warning
   - CLI flags `--config`, `--port`, `--host` override YAML values for single-instance multi-project management
@@ -213,8 +212,12 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 ```
 .agents/
 ├── agents/
-│   ├── symphony-agent.md
-│   └── harness-agent.md
+│   ├── harness-agent.md
+│   ├── symphony-planner.md
+│   ├── symphony-developer.md
+│   ├── symphony-tester.md
+│   ├── symphony-builder.md
+│   └── symphony-reviewer.md
 ├── skills/
 │   ├── commit/
 │   │   └── SKILL.md
@@ -224,13 +227,28 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 │   │   ├── SKILL.md
 │   │   └── references/
 │   ├── land/
-│   │   └── SKILL.md
+│   │   ├── SKILL.md
+│   │   └── land_watch.py
 │   ├── linear/
 │   │   └── SKILL.md
 │   ├── pull/
 │   │   └── SKILL.md
-│   └── push/
-│       └── SKILL.md
+│   ├── push/
+│   │   └── SKILL.md
+│   └── symphony-dev/
+│       ├── SKILL.md
+│       └── references/
+│           └── orchestrator-workflow.md
+│   ├── elixir-planner/
+│   └── SKILL.md
+│   ├── elixir-developer/
+│   └── SKILL.md
+│   ├── elixir-tester/
+│   └── SKILL.md
+│   ├── elixir-builder/
+│   └── SKILL.md
+│   ├── elixir-reviewer/
+│   └── SKILL.md
 ├── rules/ (empty — rules ≠ skills)
 └── worktree_init.sh
 ```
@@ -240,3 +258,42 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 |------|--------|--------|--------|
 | 2026-05-06 | Initial harness configuration | All | WORKFLOW.md hash change detected; created symphony-agent definition and AGENTS.md harness context |
 | 2026-05-06 | Updated for config split | AGENTS.md, symphony-agent.md | Process-level config (server/observability) moved from WORKFLOW.md to ~/.config/symphony/symphony.yaml; added --config/--host CLI flags; WORKFLOW.md disallows server/observability keys |
+| 2026-05-06 | Reconfiguration for v2 WORKFLOW.md | AGENTS.md, push/pull/land skills, land_watch.py | WORKFLOW.md significantly updated: base_branch=develop, polling=5000ms, workspace=~/code/symphony-workspaces, agent=claude with max_concurrent=10 + max_turns=20, codex=never-approve+workspace-write, tracker=linear/project_slug=symphony-079b97dd6409, new after_create/before_remove hooks, detailed Step 0-4 flow, PR feedback sweep, blocked-access escape hatch, workpad template; symphony-agent.md deleted (orchestrator now dispatches via prompt template directly) |
+| 2026-05-06 | Harness reconfiguration | AGENTS.md, land/SKILL.md, land_watch.py | Codex sandbox config naming synced to thread_sandbox+turn_sandbox_policy; land skill .codex/ path corrected to .agents/; directory structure updated for land_watch.py |
+| 2026-05-06 | Harness maintenance: fix regressions | WORKFLOW.md, push/SKILL.md, commit/SKILL.md | WORKFLOW.md land references regressed to .codex/ — fixed back to .agents/; push skill: make → mise exec -- mix test; push skill: bare mix → mise exec -- mix for pr_body.check; commit skill: Codex co-author → Claude Opus 4.7 |
+| 2026-05-06 | New Symphony Development harness | AGENTS.md, .agents/agents/symphony-*.md, .agents/skills/symphony-dev/ | Built new development harness for building/testing/maintaining the Symphony Elixir codebase itself |
+| 2026-05-06 | Added dedicated skills for all dev agents | .agents/skills/elixir-*/ | Each agent now has a dedicated skill: elixir-planner, elixir-developer, elixir-tester, elixir-builder, elixir-reviewer |
+| 2026-05-06 | Agent defs: protocol fix, prior-output, worktree, skill refs | .agents/agents/symphony-*.md | Fixed comms protocol (sub-agent pipeline), added prior-output behavior sections, added worktree awareness, added skill reference tables |
+| 2026-05-06 | Orchestrator improvements | .agents/skills/symphony-dev/SKILL.md | Sharper description with trigger keywords, worktree isolation in Phase 2, skill-loading instructions in agent prompts, orchestrator-workflow.md reference file |
+
+## Harness: Symphony Development
+
+**Goal:** Build, test, and maintain the Symphony Elixir orchestrator codebase. Plan → Develop → Test+Build → Review.
+
+**Agent Team:**
+| Agent | Role |
+|-------|------|
+| symphony-planner | Analyze requirements & produce task breakdown |
+| symphony-developer | Implement Elixir code changes |
+| symphony-tester | Run tests & check coverage |
+| symphony-builder | Build escript & resolve compilation issues |
+| symphony-reviewer | Post-implementation code quality review |
+
+**Skills:**
+| Skill | Purpose | Used By |
+|-------|---------|---------|
+| symphony-dev | End-to-end Elixir development orchestrator (pipeline) | All dev agents |
+| elixir-planner | Module map, planning heuristics, WORKFLOW.md boundaries | symphony-planner |
+| elixir-developer | Module conventions, test mirroring, error patterns, config patterns | symphony-developer |
+| elixir-tester | Runner commands, coverage config, failure patterns, test conventions | symphony-tester |
+| elixir-builder | Build commands, escript details, common compilation issues | symphony-builder |
+| elixir-reviewer | Elixir-specific patterns, project conventions, security checks | symphony-reviewer |
+
+**Execution Rules:**
+- For Symphony codebase development work, use the `symphony-dev` skill to orchestrate the pipeline
+- Simple questions about the codebase may be answered directly without the agent pipeline
+- All agents use `model: "opus"` for maximum quality
+- Intermediate outputs stored in `_workspace/` directory
+- Never modify WORKFLOW.md (Symphony execution contract)
+- Fix loop: max 3 iterations of test+build+review on failure
+- Does NOT cover Linear issue execution — use the Symphony Issue Execution harness for that
