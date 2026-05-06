@@ -978,10 +978,13 @@ defmodule SymphonyElixir.Orchestrator do
 
   defp failure_retry_delay(attempt) do
     max_delay_power = min(attempt - 1, 10)
-    max_retry_backoff_ms = case Config.settings() do
-      {:ok, config} -> config.agent.max_retry_backoff_ms
-      {:error, _} -> @failure_retry_base_ms * 10
-    end
+
+    max_retry_backoff_ms =
+      case Config.settings() do
+        {:ok, config} -> config.agent.max_retry_backoff_ms
+        {:error, _} -> @failure_retry_base_ms * 10
+      end
+
     min(@failure_retry_base_ms * (1 <<< max_delay_power), max_retry_backoff_ms)
   end
 
@@ -1018,10 +1021,11 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   defp select_worker_host(%State{} = state, preferred_worker_host) do
-    ssh_hosts = case Config.settings() do
-      {:ok, config} -> config.worker.ssh_hosts
-      {:error, _} -> []
-    end
+    ssh_hosts =
+      case Config.settings() do
+        {:ok, config} -> config.worker.ssh_hosts
+        {:error, _} -> []
+      end
 
     case ssh_hosts do
       [] ->
@@ -1117,10 +1121,11 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   defp available_slots(%State{} = state) do
-    max_concurrent = case Config.settings() do
-      {:ok, config} -> state.max_concurrent_agents || config.agent.max_concurrent_agents
-      {:error, _} -> state.max_concurrent_agents || 0
-    end
+    max_concurrent =
+      case Config.settings() do
+        {:ok, config} -> state.max_concurrent_agents || config.agent.max_concurrent_agents
+        {:error, _} -> state.max_concurrent_agents || 0
+      end
 
     max(max_concurrent - map_size(state.running), 0)
   end
@@ -1362,9 +1367,7 @@ defmodule SymphonyElixir.Orchestrator do
         }
 
       {:error, reason} ->
-        Logger.warning(
-          "Skipping runtime config refresh; failed to load settings: #{inspect(reason)}"
-        )
+        Logger.warning("Skipping runtime config refresh; failed to load settings: #{inspect(reason)}")
 
         state
     end
@@ -1406,8 +1409,7 @@ defmodule SymphonyElixir.Orchestrator do
     output_tokens = Map.get(codex_totals, :output_tokens, 0) + token_delta.output_tokens
     total_tokens = Map.get(codex_totals, :total_tokens, 0) + token_delta.total_tokens
 
-    seconds_running =
-      Map.get(codex_totals, :seconds_running, 0) + Map.get(token_delta, :seconds_running, 0)
+    seconds_running = Map.get(codex_totals, :seconds_running, 0) + Map.get(token_delta, :seconds_running, 0)
 
     %{
       input_tokens: max(0, input_tokens),

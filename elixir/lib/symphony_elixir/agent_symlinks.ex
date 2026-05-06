@@ -69,18 +69,22 @@ defmodule SymphonyElixir.AgentSymlinks do
       end)
       |> Enum.join("\n")
 
-    full_script = [
-      "set -eu",
-      SSH.remote_shell_assign("workspace", workspace),
-      script
-    ]
-    |> Enum.join("\n")
+    full_script =
+      [
+        "set -eu",
+        SSH.remote_shell_assign("workspace", workspace),
+        script
+      ]
+      |> Enum.join("\n")
 
     case SSH.run(worker_host, full_script, stderr_to_stdout: true) do
-      {:ok, {_output, 0}} -> :ok
+      {:ok, {_output, 0}} ->
+        :ok
+
       {:ok, {output, status}} ->
         Logger.warning("Remote symlink management failed for #{workspace} on #{worker_host} status=#{status}: #{IO.iodata_to_binary(output)}")
         :ok
+
       {:error, reason} ->
         Logger.warning("Remote symlink management failed for #{workspace} on #{worker_host}: #{inspect(reason)}")
         :ok

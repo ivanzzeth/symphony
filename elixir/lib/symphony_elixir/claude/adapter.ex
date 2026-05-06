@@ -28,8 +28,7 @@ defmodule SymphonyElixir.Claude.Adapter do
     cli_args = build_cli_args(session, prompt)
 
     with {:ok, port} <- open_claude_port(session.workspace, cli_args, worker_host) do
-      result =
-        receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms)
+      result = receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms)
 
       close_port(port)
       result
@@ -53,6 +52,7 @@ defmodule SymphonyElixir.Claude.Adapter do
 
   defp build_cli_args(session, prompt) do
     command = Config.settings!().agent.command
+
     base =
       command
       |> String.split(~r/\s+/, trim: true)

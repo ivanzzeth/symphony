@@ -7,8 +7,7 @@ defmodule SymphonyElixir.CursorAdapterTest do
   alias SymphonyElixir.Workflow
 
   setup do
-    workflow_root =
-      Path.join(System.tmp_dir!(), "symphony-elixir-cursor-adapter-#{System.unique_integer([:positive])}")
+    workflow_root = Path.join(System.tmp_dir!(), "symphony-elixir-cursor-adapter-#{System.unique_integer([:positive])}")
 
     File.mkdir_p!(workflow_root)
     workflow_file = Path.join(workflow_root, "WORKFLOW.md")

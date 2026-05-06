@@ -71,8 +71,7 @@ defmodule SymphonyElixir.Harness.Manager do
   def init(opts) do
     project_dir = Keyword.get(opts, :project_dir, File.cwd!())
 
-    workflow_file_path =
-      Keyword.get(opts, :workflow_file_path, Path.join(project_dir, "WORKFLOW.md"))
+    workflow_file_path = Keyword.get(opts, :workflow_file_path, Path.join(project_dir, "WORKFLOW.md"))
 
     harness_state_path = harness_state_path(project_dir)
 
@@ -132,10 +131,7 @@ defmodule SymphonyElixir.Harness.Manager do
     current_hash = compute_hash(workflow_path)
 
     if current_hash != state.last_hash do
-      _ =
-        Logger.info(
-          "WORKFLOW.md hash changed last=#{inspect(state.last_hash)} current=#{inspect(current_hash)}; dispatching harness agent"
-        )
+      _ = Logger.info("WORKFLOW.md hash changed last=#{inspect(state.last_hash)} current=#{inspect(current_hash)}; dispatching harness agent")
 
       state = dispatch_harness_agent(state, current_hash)
       {:dispatched, state}

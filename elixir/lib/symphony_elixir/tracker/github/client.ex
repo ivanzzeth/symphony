@@ -90,11 +90,16 @@ defmodule SymphonyElixir.Tracker.GitHub.Client do
 
   defp list_issues(repo, state) do
     args = [
-      "issue", "list",
-      "--repo", repo,
-      "--state", state,
-      "--json", "number,title,body,state,labels,url,createdAt,updatedAt,id",
-      "--limit", Integer.to_string(@issue_page_size)
+      "issue",
+      "list",
+      "--repo",
+      repo,
+      "--state",
+      state,
+      "--json",
+      "number,title,body,state,labels,url,createdAt,updatedAt,id",
+      "--limit",
+      Integer.to_string(@issue_page_size)
     ]
 
     case System.cmd("gh", args, stderr_to_stdout: true) do

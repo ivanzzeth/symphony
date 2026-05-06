@@ -312,9 +312,7 @@ defmodule SymphonyElixir.Config.Schema do
       if Map.has_key?(config, key) or Map.has_key?(config, String.to_existing_atom(key)) do
         require Logger
 
-        Logger.warning(
-          "[WORKFLOW.md] '#{key}' key is disallowed in WORKFLOW.md. Use symphony.yaml for process-level config."
-        )
+        Logger.warning("[WORKFLOW.md] '#{key}' key is disallowed in WORKFLOW.md. Use symphony.yaml for process-level config.")
       end
     end)
   rescue
