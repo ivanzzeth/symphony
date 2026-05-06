@@ -972,23 +972,7 @@ defmodule SymphonyElixir.OrchestratorStatusTest do
     refute rendered =~ "Timestamp:"
   end
 
-  test "status dashboard renders linear project link in header" do
-    snapshot_data =
-      {:ok,
-       %{
-         running: [],
-         retrying: [],
-         codex_totals: %{input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0},
-         rate_limits: nil
-       }}
-
-    rendered = StatusDashboard.format_snapshot_content_for_test(snapshot_data, 0.0)
-
-    assert rendered =~ "https://linear.app/project/project/issues"
-    refute rendered =~ "Dashboard:"
-  end
-
-  test "status dashboard renders dashboard url on its own line when server port is configured" do
+  test "status dashboard renders linear project link and dashboard url in header" do
     previous_port_override = Application.get_env(:symphony_elixir, :server_port_override)
 
     on_exit(fn ->
