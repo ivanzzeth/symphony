@@ -115,6 +115,9 @@ defmodule SymphonyElixir.SpecsCheckTest do
   end
 
   describe "CodingAgent contract — Claude adapter" do
+    # Fake CLI + Port stream-json can exceed the default 60s ExUnit timeout under CI load.
+    @describetag timeout: 120_000
+
     setup do
       workflow_root =
         Path.join(
@@ -176,6 +179,8 @@ defmodule SymphonyElixir.SpecsCheckTest do
   end
 
   describe "CodingAgent contract — Cursor adapter" do
+    @describetag timeout: 120_000
+
     setup do
       workflow_root =
         Path.join(
@@ -272,7 +277,7 @@ defmodule SymphonyElixir.SpecsCheckTest do
     write_workflow_file!(Workflow.workflow_file_path(),
       agent_kind: "claude",
       workspace_root: workspace_root,
-      agent_command: binary
+      agent_command: line_buffered_cli(binary)
     )
   end
 
@@ -280,8 +285,18 @@ defmodule SymphonyElixir.SpecsCheckTest do
     write_workflow_file!(Workflow.workflow_file_path(),
       agent_kind: "cursor",
       workspace_root: workspace_root,
-      agent_command: binary
+      agent_command: line_buffered_cli(binary)
     )
+  end
+
+  # Fake CLIs run without a TTY; stdout can be fully buffered so the Port never
+  # sees newlines until ExUnit's default 60s test timeout. `stdbuf` forces
+  # line-buffered stdout/stderr when coreutils is available.
+  defp line_buffered_cli(binary) do
+    case System.find_executable("stdbuf") do
+      nil -> binary
+      stdbuf -> "#{stdbuf} -oL -eL #{binary}"
+    end
   end
 
   defp setup_claude_ok_env do
