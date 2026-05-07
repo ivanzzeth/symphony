@@ -200,7 +200,7 @@ defmodule SymphonyElixir.Codex.AppServer do
             :binary,
             :exit_status,
             :stderr_to_stdout,
-            args: [~c"-lc", String.to_charlist(Config.settings!().agent.command)],
+            args: [~c"-lc", String.to_charlist("exec #{Config.settings!().agent.command}")],
             cd: String.to_charlist(workspace),
             env: system_env_charlists(),
             line: @port_line_bytes
@@ -337,7 +337,7 @@ defmodule SymphonyElixir.Codex.AppServer do
     receive_loop(
       port,
       on_message,
-      Config.settings!().codex.stream_timeout_ms,
+      Config.settings!().agent.stream_timeout_ms,
       "",
       tool_executor,
       auto_approve_requests
@@ -927,7 +927,7 @@ defmodule SymphonyElixir.Codex.AppServer do
   end
 
   defp await_response(port, request_id) do
-    with_timeout_response(port, request_id, Config.settings!().codex.read_timeout_ms, "")
+    with_timeout_response(port, request_id, Config.settings!().agent.read_timeout_ms, "")
   end
 
   defp with_timeout_response(port, request_id, timeout_ms, pending_line) do

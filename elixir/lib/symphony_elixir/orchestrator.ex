@@ -79,6 +79,28 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   @impl true
+  def terminate(_reason, %State{running: running}) when running == %{} do
+    :ok
+  end
+
+  @impl true
+  def terminate(reason, %State{running: running}) do
+    Logger.info("Orchestrator terminating reason=#{inspect(reason)} cleaning_up=#{map_size(running)} agent(s)")
+
+    Enum.each(running, fn {_issue_id, %{pid: pid, identifier: identifier} = entry} ->
+      Logger.info("Terminating agent on shutdown issue_id=#{identifier}")
+
+      cleanup_issue_workspace(identifier, Map.get(entry, :worker_host))
+
+      if is_pid(pid) do
+        Process.exit(pid, :kill)
+      end
+    end)
+
+    :ok
+  end
+
+  @impl true
   def handle_info({:tick, tick_token}, %{tick_token: tick_token} = state)
       when is_reference(tick_token) do
     state = refresh_runtime_config(state)
@@ -455,7 +477,7 @@ defmodule SymphonyElixir.Orchestrator do
 
   defp reconcile_stalled_running_issues(%State{} = state) do
     case Config.settings() do
-      {:ok, config} -> do_reconcile_stalled(state, config.codex.stall_timeout_ms)
+      {:ok, config} -> do_reconcile_stalled(state, config.agent.stall_timeout_ms)
       {:error, _reason} -> state
     end
   end

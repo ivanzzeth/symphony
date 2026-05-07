@@ -211,7 +211,7 @@ defmodule SymphonyElixir.Harness.Manager do
 
   defp dispatch_harness_agent(state, current_hash) do
     adapter = CodingAgent.adapter()
-    prompt = build_harness_prompt(state.last_hash, current_hash)
+    prompt = build_harness_prompt(state.last_hash, current_hash, state.workflow_file_path)
 
     task_ref =
       Task.async(fn ->
@@ -281,29 +281,35 @@ defmodule SymphonyElixir.Harness.Manager do
   @harness_setup_prompt """
   Use the /harness skill to build a new agent harness for this project.
 
-  Read WORKFLOW.md to understand the project's execution contract, then follow the full harness skill workflow (Phase 0-6) to analyze the domain, design the team architecture, generate agent definitions and skills, and register the harness context in AGENTS.md.
+  The workflow file is located at: __WORKFLOW_PATH__
 
-  IMPORTANT: Do NOT modify WORKFLOW.md under any circumstances. This file is the Symphony execution contract and must remain unchanged. Only create or update files under .agents/ and AGENTS.md.
+  Read that file to understand the project's execution contract, then follow the full harness skill workflow (Phase 0-6) to analyze the domain, design the team architecture, generate agent definitions and skills, and register the harness context in AGENTS.md.
+
+  IMPORTANT: Do NOT modify the workflow file under any circumstances. This file is the Symphony execution contract and must remain unchanged. Only create or update files under .agents/ and AGENTS.md.
   """
 
   @harness_update_prompt """
   Use the /harness skill to reconfigure the agent harness for this project.
 
-  WORKFLOW.md has been updated. Read WORKFLOW.md to understand the changes, then follow the harness skill workflow — audit current .agents/ state (Phase 0), then determine which phases are needed to bring the harness in sync with the updated WORKFLOW.md.
+  The workflow file is located at: __WORKFLOW_PATH__
 
-  IMPORTANT: Do NOT modify WORKFLOW.md under any circumstances. This file is the Symphony execution contract and must remain unchanged. Only create or update files under .agents/ and AGENTS.md.
+  That file has been updated. Read it to understand the changes, then follow the harness skill workflow — audit current .agents/ state (Phase 0), then determine which phases are needed to bring the harness in sync with the updated workflow file.
+
+  IMPORTANT: Do NOT modify the workflow file under any circumstances. This file is the Symphony execution contract and must remain unchanged. Only create or update files under .agents/ and AGENTS.md.
   """
 
   @harness_deletion_prompt """
-  WORKFLOW.md has been deleted. Use the /harness skill to clean up the agent harness configuration accordingly. Do NOT recreate WORKFLOW.md.
+  The workflow file at __WORKFLOW_PATH__ has been deleted. Use the /harness skill to clean up the agent harness configuration accordingly. Do NOT recreate the workflow file.
   """
 
-  @harness_empty_prompt "WORKFLOW.md is empty or does not exist. No harness configuration is needed."
+  @harness_empty_prompt "The workflow file at __WORKFLOW_PATH__ is empty or does not exist. No harness configuration is needed."
 
-  defp build_harness_prompt(nil, ""), do: @harness_empty_prompt
-  defp build_harness_prompt(nil, _current_hash), do: @harness_setup_prompt
-  defp build_harness_prompt(_last_hash, ""), do: @harness_deletion_prompt
-  defp build_harness_prompt(_last_hash, _current_hash), do: @harness_update_prompt
+  defp build_harness_prompt(nil, "", path), do: inject_path(@harness_empty_prompt, path)
+  defp build_harness_prompt(nil, _current_hash, path), do: inject_path(@harness_setup_prompt, path)
+  defp build_harness_prompt(_last_hash, "", path), do: inject_path(@harness_deletion_prompt, path)
+  defp build_harness_prompt(_last_hash, _current_hash, path), do: inject_path(@harness_update_prompt, path)
+
+  defp inject_path(prompt, path), do: String.replace(prompt, "__WORKFLOW_PATH__", path)
 
   defp sync_last_hash(state) do
     workflow_path = Map.get(state, :workflow_file_path) || Workflow.workflow_file_path()

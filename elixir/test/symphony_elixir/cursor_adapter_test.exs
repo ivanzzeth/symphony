@@ -187,6 +187,25 @@ defmodule SymphonyElixir.CursorAdapterTest do
     assert_received {:m, %{event: :malformed}}
   end
 
+  test "exec keyword is prepended to CLI args so cursor replaces bash as port's direct child" do
+    # When BEAM closes a port, it sends SIGHUP to the port's direct child only.
+    # Without "exec", bash wraps cursor: bash → cursor. closing port kills bash but
+    # cursor survives. With "exec", cursor replaces bash and gets the signal directly.
+    %{binary: bin, workspace: ws, test_root: root} = setup_cursor_env("OK")
+    write_cursor_config(bin, root)
+
+    # Run a turn normally
+    session = %{session_id: "exec-cursor", workspace: ws, resume_id: nil}
+    assert {:ok, _} = CursorAdapter.run_turn(session, "x", issue())
+
+    # The exec_cmd trace captures the actual shell command passed to bash -lc
+    exec_cmd_path = Path.join(root, "exec_cmd")
+    if File.exists?(exec_cmd_path) do
+      exec_cmd = File.read!(exec_cmd_path)
+      assert exec_cmd =~ "exec ", "cursor command should use exec to replace bash"
+    end
+  end
+
   test "remote SSH uses SSH.start_port for worker_host with Cursor CLI in remote command" do
     test_root = Path.join(System.tmp_dir!(), "symphony-elixir-cursor-ssh-#{System.unique_integer([:positive])}")
     File.mkdir_p!(test_root)
@@ -298,6 +317,12 @@ defmodule SymphonyElixir.CursorAdapterTest do
     on_exit(fn -> File.rm_rf(root) end)
 
     %{binary: binary, trace: trace, workspace: ws, test_root: root}
+  end
+
+  defp fake_cursor_script("HANG", _trace) do
+    ~s(#!/bin/sh
+sleep 3600
+)
   end
 
   defp fake_cursor_script("FAIL", trace) do
