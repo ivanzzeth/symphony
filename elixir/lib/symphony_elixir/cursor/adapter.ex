@@ -45,16 +45,16 @@ defmodule SymphonyElixir.Cursor.Adapter do
   end
 
   defp build_cli_args(session, prompt) do
-    command = Config.settings!().agent.command
-    parts = String.split(command, ~r/\s+/, trim: true)
-
-    command_binary = List.first(parts)
-    extra_flags = Enum.slice(parts, 1..-1//1)
+    # Split the full agent.command (e.g. "stdbuf -oL -eL /path/cursor") so the
+    # "agent" subcommand comes after the real CLI binary, not after a stdbuf prefix.
+    command_parts =
+      Config.settings!().agent.command
+      |> String.split(~r/\s+/, trim: true)
 
     base =
-      [command_binary, "agent"] ++
-        extra_flags ++
+      command_parts ++
         [
+          "agent",
           "--print",
           "--output-format",
           "stream-json",

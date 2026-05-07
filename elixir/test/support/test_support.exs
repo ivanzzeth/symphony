@@ -153,17 +153,19 @@ defmodule SymphonyElixir.TestSupport do
     codex_thread_sandbox = Keyword.get(config, :codex_thread_sandbox)
     codex_turn_sandbox_policy = Keyword.get(config, :codex_turn_sandbox_policy)
 
+    # Overrides may set only legacy `codex_*_timeout_ms` keys; merged defaults still carry
+    # `agent_*` values, so prefer explicit override keys before falling back to merged config.
     agent_turn_timeout_ms =
-      Keyword.get(config, :agent_turn_timeout_ms) || Keyword.get(config, :codex_turn_timeout_ms)
+      resolve_timeout_override(overrides, config, :agent_turn_timeout_ms, :codex_turn_timeout_ms)
 
     agent_stream_timeout_ms =
-      Keyword.get(config, :agent_stream_timeout_ms) || Keyword.get(config, :codex_stream_timeout_ms)
+      resolve_timeout_override(overrides, config, :agent_stream_timeout_ms, :codex_stream_timeout_ms)
 
     agent_read_timeout_ms =
-      Keyword.get(config, :agent_read_timeout_ms) || Keyword.get(config, :codex_read_timeout_ms)
+      resolve_timeout_override(overrides, config, :agent_read_timeout_ms, :codex_read_timeout_ms)
 
     agent_stall_timeout_ms =
-      Keyword.get(config, :agent_stall_timeout_ms) || Keyword.get(config, :codex_stall_timeout_ms)
+      resolve_timeout_override(overrides, config, :agent_stall_timeout_ms, :codex_stall_timeout_ms)
     hook_after_create = Keyword.get(config, :hook_after_create)
     hook_before_run = Keyword.get(config, :hook_before_run)
     hook_after_run = Keyword.get(config, :hook_after_run)
@@ -288,5 +290,18 @@ defmodule SymphonyElixir.TestSupport do
 
   defp agent_command_yaml(agent_command, _codex_command) do
     "  command: #{yaml_value(agent_command)}"
+  end
+
+  defp resolve_timeout_override(overrides, config, agent_key, codex_key) do
+    cond do
+      match?({:ok, _}, Keyword.fetch(overrides, agent_key)) ->
+        Keyword.fetch!(overrides, agent_key)
+
+      match?({:ok, _}, Keyword.fetch(overrides, codex_key)) ->
+        Keyword.fetch!(overrides, codex_key)
+
+      true ->
+        Keyword.get(config, agent_key) || Keyword.get(config, codex_key)
+    end
   end
 end
