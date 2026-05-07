@@ -333,6 +333,10 @@ defmodule SymphonyElixir.Config.Schema do
   end
 
   defp warn_disallowed_keys(config) when is_map(config) do
+    if Application.get_env(:symphony_elixir, :symphony_test_schema_warn_disallowed_raise) == true do
+      raise ArgumentError, "simulated warn_disallowed_keys failure"
+    end
+
     Enum.each(disallowed_workflow_keys(), fn key ->
       if Map.has_key?(config, key) or Map.has_key?(config, String.to_existing_atom(key)) do
         Logger.warning("[WORKFLOW.md] '#{key}' key is disallowed in WORKFLOW.md. Use symphony.yaml for process-level config.")
@@ -348,6 +352,10 @@ defmodule SymphonyElixir.Config.Schema do
   end
 
   defp strip_disallowed_keys(config) when is_map(config) do
+    if Application.get_env(:symphony_elixir, :symphony_test_schema_strip_disallowed_raise) == true do
+      raise ArgumentError, "simulated strip_disallowed_keys failure"
+    end
+
     config
     |> Map.drop(disallowed_workflow_keys())
     |> Map.drop(Enum.map(disallowed_workflow_keys(), &String.to_existing_atom/1))
