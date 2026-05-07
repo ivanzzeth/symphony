@@ -7,7 +7,17 @@ defmodule SymphonyElixir.StatusDashboardSnapshotTest do
 
   setup do
     # Deterministic dashboard URL in snapshots (fixtures expect this port).
+    previous_port_override = Application.get_env(:symphony_elixir, :server_port_override)
     Application.put_env(:symphony_elixir, :server_port_override, 58_903)
+
+    on_exit(fn ->
+      if is_nil(previous_port_override) do
+        Application.delete_env(:symphony_elixir, :server_port_override)
+      else
+        Application.put_env(:symphony_elixir, :server_port_override, previous_port_override)
+      end
+    end)
+
     :ok
   end
 
