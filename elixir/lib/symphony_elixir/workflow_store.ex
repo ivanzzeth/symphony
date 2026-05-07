@@ -107,7 +107,9 @@ defmodule SymphonyElixir.WorkflowStore do
   defp maybe_notify_workflow_changed(stamp, stamp), do: :ok
 
   defp maybe_notify_workflow_changed(_old_stamp, _new_stamp) do
-    _ = StatusDashboard.notify_update()
+    # Avoid synchronous notify during WorkflowStore callbacks so PubSub/config
+    # paths cannot re-enter this GenServer (e.g. force_reload timeouts under test).
+    _ = spawn(fn -> StatusDashboard.notify_update() end)
     :ok
   end
 
