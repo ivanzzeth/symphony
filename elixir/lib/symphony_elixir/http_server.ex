@@ -52,9 +52,7 @@ defmodule SymphonyElixir.HttpServer do
 
   @spec bound_port(term()) :: non_neg_integer() | nil
   def bound_port(_server \\ __MODULE__) do
-    if Application.get_env(:symphony_elixir, :http_server_bound_port_force_raise, false) do
-      raise RuntimeError, "symphony test: force bound_port rescue path"
-    end
+    maybe_force_bound_port_test_failure!()
 
     case Bandit.PhoenixAdapter.server_info(Endpoint, :http) do
       {:ok, {_ip, port}} when is_integer(port) -> port
@@ -62,18 +60,20 @@ defmodule SymphonyElixir.HttpServer do
     end
   rescue
     error ->
-      Logger.warning(
-        "HttpServer.bound_port/1: failed, returning nil: #{Exception.format(:error, error, __STACKTRACE__)}"
-      )
-
+      Logger.warning("HttpServer.bound_port failed: #{inspect(error)}")
       nil
   catch
-    :exit, reason ->
-      Logger.warning(
-        "HttpServer.bound_port/1: failed (exit), returning nil: #{inspect(reason)}"
-      )
-
+    :exit, error ->
+      Logger.warning("HttpServer.bound_port failed: #{inspect(error)}")
       nil
+  end
+
+  defp maybe_force_bound_port_test_failure! do
+    case Application.get_env(:symphony_elixir, :http_server_bound_port_test_force) do
+      :raise -> raise ArgumentError, "simulated HttpServer.bound_port failure"
+      :exit -> exit(:simulated_http_server_bound_port_exit)
+      _ -> :ok
+    end
   end
 
   defp parse_host({_, _, _, _} = ip), do: {:ok, ip}
