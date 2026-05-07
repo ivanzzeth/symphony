@@ -191,6 +191,10 @@ defmodule SymphonyElixir.StatusDashboard do
   defp schedule_tick(_refresh_ms, false), do: :ok
 
   defp maybe_render(state) do
+    if Application.get_env(:symphony_elixir, :status_dashboard_maybe_render_force_raise, false) do
+      raise RuntimeError, "symphony test: force maybe_render rescue path"
+    end
+
     now_ms = System.monotonic_time(:millisecond)
     {snapshot_data, token_samples} = snapshot_with_samples(state.token_samples, now_ms)
     state = Map.put(state, :token_samples, token_samples)
@@ -482,6 +486,10 @@ defmodule SymphonyElixir.StatusDashboard do
   end
 
   defp render_to_terminal(content) do
+    if Application.get_env(:symphony_elixir, :status_dashboard_render_terminal_force_raise, false) do
+      raise ArgumentError, "symphony test: force render_to_terminal rescue path"
+    end
+
     IO.write([
       IO.ANSI.home(),
       IO.ANSI.clear(),

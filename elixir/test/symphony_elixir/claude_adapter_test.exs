@@ -285,11 +285,17 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   end
 
   defp write_claude_config_stall(binary, workspace_root, opts) do
+    timeout_opts =
+      case Keyword.get(opts, :codex_stream_timeout_ms) do
+        ms when is_integer(ms) -> [agent_stream_timeout_ms: ms]
+        _ -> []
+      end
+
     write_workflow_file!(
       Workflow.workflow_file_path(),
       Keyword.merge(
         [agent_kind: "claude", workspace_root: workspace_root, agent_command: binary],
-        Keyword.take(opts, [:codex_stream_timeout_ms])
+        timeout_opts
       )
     )
 
