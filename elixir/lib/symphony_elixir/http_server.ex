@@ -69,6 +69,10 @@ defmodule SymphonyElixir.HttpServer do
   end
 
   defp maybe_force_bound_port_test_failure! do
+    if Application.get_env(:symphony_elixir, :http_server_bound_port_force_raise, false) do
+      raise RuntimeError, "symphony test: force bound_port rescue path"
+    end
+
     case Application.get_env(:symphony_elixir, :http_server_bound_port_test_force) do
       :raise -> raise ArgumentError, "simulated HttpServer.bound_port failure"
       :exit -> exit(:simulated_http_server_bound_port_exit)
