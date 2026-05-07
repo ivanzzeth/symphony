@@ -6,7 +6,7 @@ defmodule SymphonyElixir.StatusDashboard do
   use GenServer
   require Logger
 
-  alias SymphonyElixir.{CodingAgent, Config, HttpServer}
+  alias SymphonyElixir.{CodingAgent, Config, HttpServer, TestEnv}
   alias SymphonyElixir.Orchestrator
   alias SymphonyElixirWeb.ObservabilityPubSub
 
@@ -190,10 +190,16 @@ defmodule SymphonyElixir.StatusDashboard do
   defp schedule_tick(refresh_ms, true), do: Process.send_after(self(), :tick, refresh_ms)
   defp schedule_tick(_refresh_ms, false), do: :ok
 
-  defp maybe_render(state) do
+  defp maybe_render_simulate_failure! do
     if Application.get_env(:symphony_elixir, :status_dashboard_maybe_render_force_raise, false) do
       raise RuntimeError, "symphony test: force maybe_render rescue path"
     end
+
+    :ok
+  end
+
+  defp maybe_render(state) do
+    maybe_render_simulate_failure!()
 
     now_ms = System.monotonic_time(:millisecond)
     {snapshot_data, token_samples} = snapshot_with_samples(state.token_samples, now_ms)
@@ -486,16 +492,26 @@ defmodule SymphonyElixir.StatusDashboard do
   end
 
   defp render_to_terminal(content) do
-    if Application.get_env(:symphony_elixir, :status_dashboard_render_terminal_force_raise, false) do
-      raise ArgumentError, "symphony test: force render_to_terminal rescue path"
-    end
+    case TestEnv.active?() && Application.get_env(:symphony_elixir, :status_dashboard_render_to_terminal_stub) do
+      fun when is_function(fun, 1) ->
+        fun.(content)
 
-    IO.write([
-      IO.ANSI.home(),
-      IO.ANSI.clear(),
-      normalize_status_lines(content),
-      "\n"
-    ])
+      _ ->
+        IO.write([
+          IO.ANSI.home(),
+          IO.ANSI.clear(),
+          normalize_status_lines(content),
+          "\n"
+        ])
+    end
+  end
+
+  defp maybe_render_simulate_failure! do
+    case TestEnv.active?() && Application.get_env(:symphony_elixir, :status_dashboard_maybe_render_raise_exception) do
+      false -> :ok
+      nil -> :ok
+      mod when is_atom(mod) -> raise mod, "simulated status dashboard render failure"
+    end
   end
 
   defp update_token_samples(samples, now_ms, total_tokens) do
@@ -1981,16 +1997,14 @@ defmodule SymphonyElixir.StatusDashboard do
   defp dashboard_enabled? do
     if Code.ensure_loaded?(Mix) and function_exported?(Mix, :env, 0) do
       try do
-        if Application.get_env(:symphony_elixir, :status_dashboard_mix_env_raise, false) do
+        if TestEnv.active?() && Application.get_env(:symphony_elixir, :status_dashboard_mix_env_raise, false) do
           raise ArgumentError, "symphony test: forced Mix.env path failure"
         end
 
         Mix.env() != :test
       rescue
         exception ->
-          Logger.warning(
-            "StatusDashboard.dashboard_enabled?: Mix.env check failed, defaulting to enabled: #{Exception.format(:error, exception, __STACKTRACE__)}"
-          )
+          Logger.warning("StatusDashboard.dashboard_enabled?: Mix.env check failed, defaulting to enabled: #{Exception.format(:error, exception, __STACKTRACE__)}")
 
           true
       end
@@ -2001,6 +2015,14 @@ defmodule SymphonyElixir.StatusDashboard do
 
   @doc false
   def dashboard_enabled_for_test, do: dashboard_enabled?()
+
+  @doc false
+  def maybe_render_for_test(%__MODULE__{} = state), do: maybe_render(state)
+
+  @doc false
+  def render_content_for_test(%__MODULE__{} = state, content, now_ms)
+      when is_binary(content) and is_integer(now_ms),
+      do: render_content(state, content, now_ms)
 
   defp keyword_override(opts, key) do
     if Keyword.has_key?(opts, key), do: Keyword.fetch!(opts, key), else: nil

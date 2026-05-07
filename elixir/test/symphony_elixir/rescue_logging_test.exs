@@ -1,144 +1,186 @@
 defmodule SymphonyElixir.RescueLoggingTest do
-  use ExUnit.Case, async: false
+  @moduledoc """
+  Exercises rescue paths that emit `Logger.warning`, using `ExUnit.CaptureLog`.
 
-  import ExUnit.CaptureLog
-  import SymphonyElixir.TestSupport, only: [write_workflow_file!: 2, stop_default_http_server: 0]
+  Covers `HttpServer`, `Config.Schema`, `StatusDashboard`, and `Workspace` per WEB-72.
+  """
 
+  use SymphonyElixir.TestSupport, async: false
+
+  alias SymphonyElixir.Config.Schema
   alias SymphonyElixir.HttpServer
   alias SymphonyElixir.StatusDashboard
-  alias SymphonyElixir.Config.Schema
-  alias SymphonyElixir.Workspace
-  alias SymphonyElixir.Workflow
-  alias SymphonyElixir.WorkflowStore
 
-  test "HttpServer.bound_port/1 logs warning when forced to raise" do
+  defp with_symphony_app_env(key, value, fun) do
     env = Application.get_all_env(:symphony_elixir)
-    had_key? = Keyword.has_key?(env, :http_server_bound_port_force_raise)
-    prev = Keyword.get(env, :http_server_bound_port_force_raise)
+    had_key? = Keyword.has_key?(env, key)
+    prev = Keyword.get(env, key)
 
     try do
-      Application.put_env(:symphony_elixir, :http_server_bound_port_force_raise, true)
-
-      log =
-        capture_log([level: :warning], fn ->
-          assert HttpServer.bound_port() == nil
-        end)
-
-      assert log =~ "HttpServer.bound_port/1"
+      Application.put_env(:symphony_elixir, key, value)
+      fun.()
     after
       if had_key? do
-        Application.put_env(:symphony_elixir, :http_server_bound_port_force_raise, prev)
+        Application.put_env(:symphony_elixir, key, prev)
       else
-        Application.delete_env(:symphony_elixir, :http_server_bound_port_force_raise)
+        Application.delete_env(:symphony_elixir, key)
       end
     end
+  end
+
+  defp capture_warning_log(fun), do: capture_log([level: :warning], fun)
+
+  test "HttpServer.bound_port/1 logs warning when phoenix server_info raises" do
+    with_symphony_app_env(
+      :http_server_phoenix_http_server_info_stub,
+      fn -> raise RuntimeError, "symphony test: bound_port server_info failure" end,
+      fn ->
+        log =
+          capture_warning_log(fn ->
+            assert HttpServer.bound_port() == nil
+          end)
+
+        refute log == ""
+        assert log =~ "HttpServer.bound_port/1"
+      end
+    )
   end
 
   test "StatusDashboard.dashboard_enabled? logs warning when Mix.env path is forced to fail" do
-    env = Application.get_all_env(:symphony_elixir)
-    had_key? = Keyword.has_key?(env, :status_dashboard_mix_env_raise)
-    prev = Keyword.get(env, :status_dashboard_mix_env_raise)
-
-    try do
-      Application.put_env(:symphony_elixir, :status_dashboard_mix_env_raise, true)
-
+    with_symphony_app_env(:status_dashboard_mix_env_raise, true, fn ->
       log =
-        capture_log([level: :warning], fn ->
+        capture_warning_log(fn ->
           assert StatusDashboard.dashboard_enabled_for_test() == true
         end)
 
+      refute log == ""
       assert log =~ "StatusDashboard.dashboard_enabled?"
-    after
-      if had_key? do
-        Application.put_env(:symphony_elixir, :status_dashboard_mix_env_raise, prev)
-      else
-        Application.delete_env(:symphony_elixir, :status_dashboard_mix_env_raise)
-      end
-    end
-  end
-
-  test "Config.Schema parse logs warnings when disallowed-key helpers hit invalid atom keys" do
-    env = Application.get_all_env(:symphony_elixir)
-    had_extra? = Keyword.has_key?(env, :extra_disallowed_workflow_keys_for_test)
-    prev_extra = Keyword.get(env, :extra_disallowed_workflow_keys_for_test)
-
-    bad_key = "nonexistent_atom_key_#{System.unique_integer([:positive])}"
-    Application.put_env(:symphony_elixir, :extra_disallowed_workflow_keys_for_test, [bad_key])
-
-    on_exit(fn ->
-      if had_extra? do
-        Application.put_env(:symphony_elixir, :extra_disallowed_workflow_keys_for_test, prev_extra)
-      else
-        Application.delete_env(:symphony_elixir, :extra_disallowed_workflow_keys_for_test)
-      end
     end)
-
-    root = Path.join(System.tmp_dir!(), "symphony-schema-rescue-#{System.unique_integer([:positive])}")
-
-    log =
-      capture_log([level: :warning], fn ->
-        assert {:ok, _settings} =
-                 Schema.parse(%{
-                   "tracker" => %{"kind" => "memory"},
-                   "polling" => %{"interval_ms" => 30_000},
-                   "workspace" => %{"root" => root, "base_branch" => "main"},
-                   "worker" => %{},
-                   "agent" => %{"kind" => "codex", "command" => "codex app-server"},
-                   "codex" => %{"command" => "codex app-server"},
-                   "hooks" => %{}
-                 })
-      end)
-
-    assert log =~ "Config.Schema.warn_disallowed_keys"
-    assert log =~ "Config.Schema.strip_disallowed_keys"
   end
 
-  test "Workspace hook path logs warning when hook command template fails to parse" do
-    workflow_root =
-      Path.join(
-        System.tmp_dir!(),
-        "symphony-rescue-hook-#{System.unique_integer([:positive])}"
+  test "StatusDashboard.render_offline_status/0 logs warning when terminal render raises" do
+    with_symphony_app_env(
+      :status_dashboard_render_to_terminal_stub,
+      fn _content -> raise ArgumentError, "symphony test: offline render failure" end,
+      fn ->
+        log =
+          capture_warning_log(fn ->
+            assert StatusDashboard.render_offline_status() == :ok
+          end)
+
+        refute log == ""
+        assert log =~ "Failed rendering offline status"
+      end
+    )
+  end
+
+  test "StatusDashboard maybe_render logs warning when render pipeline raises ArgumentError" do
+    name = :"status_dash_maybe_render_#{System.unique_integer([:positive])}"
+
+    {:ok, pid} =
+      StatusDashboard.start_link(
+        name: name,
+        enabled: true,
+        refresh_ms: 99_999,
+        render_interval_ms: 99_999,
+        render_fun: fn _ -> :ok end
       )
 
-    File.mkdir_p!(workflow_root)
-    workflow_file = Path.join(workflow_root, "WORKFLOW.md")
-
-    prev_path = Application.get_env(:symphony_elixir, :workflow_file_path)
-
-    write_workflow_file!(workflow_file, hook_before_run: "{% if issue.identifier %}")
-    Workflow.set_workflow_file_path(workflow_file)
-
-    if Process.whereis(WorkflowStore) do
-      WorkflowStore.force_reload()
-    end
-
-    stop_default_http_server()
-
-    workspace = Path.join(workflow_root, "ws")
-    File.mkdir_p!(workspace)
-
     on_exit(fn ->
-      case prev_path do
-        nil -> Application.delete_env(:symphony_elixir, :workflow_file_path)
-        path -> Application.put_env(:symphony_elixir, :workflow_file_path, path)
-      end
-
-      if Process.whereis(WorkflowStore) do
-        try do
-          WorkflowStore.force_reload()
-        catch
-          :exit, _ -> :ok
-        end
-      end
-
-      File.rm_rf(workflow_root)
+      if Process.alive?(pid), do: GenServer.stop(name, :normal, 5_000)
     end)
 
+    with_symphony_app_env(:status_dashboard_maybe_render_raise_exception, ArgumentError, fn ->
+      log =
+        capture_warning_log(fn ->
+          send(name, :tick)
+          _ = :sys.get_state(name, 5_000)
+        end)
+
+      refute log == ""
+      assert log =~ "Failed rendering status dashboard"
+    end)
+  end
+
+  test "StatusDashboard render_content logs warning when render_fun raises" do
+    state = %StatusDashboard{
+      refresh_ms: 99_999,
+      enabled: true,
+      render_interval_ms: 16,
+      refresh_ms_override: nil,
+      enabled_override: nil,
+      render_interval_ms_override: nil,
+      render_fun: fn _ -> raise ArgumentError, "symphony test: render_fun failure" end,
+      token_samples: [],
+      last_tps_second: nil,
+      last_tps_value: nil,
+      last_rendered_content: nil,
+      last_rendered_at_ms: nil,
+      pending_content: nil,
+      flush_timer_ref: nil,
+      last_snapshot_fingerprint: nil
+    }
+
     log =
-      capture_log([level: :warning], fn ->
-        assert :ok = Workspace.run_before_run_hook(workspace, %{issue_id: 1, issue_identifier: "X-1"}, nil)
+      capture_warning_log(fn ->
+        _ = StatusDashboard.render_content_for_test(state, "content", 0)
       end)
 
-    assert log =~ "Workspace.render_hook_command"
+    refute log == ""
+    assert log =~ "Failed rendering terminal dashboard frame"
+  end
+
+  test "Config.Schema logs warning when disallowed-workflow key list references a non-existing atom" do
+    bad_key = "symphony_bad_disallowed_key_#{System.unique_integer([:positive])}"
+
+    with_symphony_app_env(:extra_disallowed_workflow_keys_for_test, [bad_key], fn ->
+      root = Path.join(System.tmp_dir!(), "symphony-schema-rescue-#{System.unique_integer([:positive])}")
+
+      log =
+        capture_warning_log(fn ->
+          assert {:ok, _} =
+                   Schema.parse(%{
+                     "tracker" => %{"kind" => "memory"},
+                     "polling" => %{"interval_ms" => 30_000},
+                     "workspace" => %{"root" => root, "base_branch" => "main"},
+                     "worker" => %{},
+                     "agent" => %{"kind" => "codex", "command" => "codex app-server"},
+                     "codex" => %{"command" => "codex app-server"},
+                     "hooks" => %{}
+                   })
+        end)
+
+      refute log == ""
+      assert log =~ "Config.Schema.warn_disallowed_keys"
+      assert log =~ "Config.Schema.strip_disallowed_keys"
+    end)
+  end
+
+  test "Workspace logs warning when hook command template hits render_hook_command rescue" do
+    root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-elixir-rescue-hook-#{System.unique_integer([:positive])}"
+      )
+
+    issue_id = "MT-BAD-HOOK-RESCUE-#{System.unique_integer([:positive])}"
+
+    try do
+      write_workflow_file!(Workflow.workflow_file_path(),
+        workspace_root: root,
+        hook_after_create: "{{ unclosed"
+      )
+
+      log =
+        capture_warning_log(fn ->
+          assert {:error, {:workspace_hook_failed, "after_create", _, _}} =
+                   Workspace.create_for_issue(issue_id)
+        end)
+
+      refute log == ""
+      assert log =~ "Workspace.render_hook_command"
+    after
+      File.rm_rf(root)
+    end
   end
 end
