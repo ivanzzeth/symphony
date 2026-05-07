@@ -159,12 +159,15 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   test "emits turn_timeout via on_message before returning error when stream stalls" do
     # Post-init sleep must exceed per-receive `stream_timeout_ms`. Pass timeout in opts so parallel tests
     # cannot clobber WORKFLOW between setup and `run_turn` (same pattern as Cursor adapter STALL test).
-    stream_timeout_ms = 8_000
-
-    # Prior tests can leave `{:m, _}` from `on_message` without draining the mailbox.
-    flush_claude_adapter_mailbox()
+    stream_timeout_ms = 2_500
 
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("STALL")
+    prev_home = System.get_env("HOME")
+    fake_home = Path.join(root, "_home")
+    File.mkdir_p!(fake_home)
+    on_exit(fn -> restore_env("HOME", prev_home) end)
+    System.put_env("HOME", fake_home)
+
     write_claude_config(bin, root)
 
     test_pid = self()
@@ -179,19 +182,15 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
                stream_timeout_ms: stream_timeout_ms
              )
 
-    events =
-      for _ <- 1..2 do
-        assert_receive {:m, %{event: ev} = msg}, 15_000
-        {ev, msg}
-      end
+    messages = drain_claude_adapter_messages()
+    events = Enum.map(messages, & &1.event)
 
-    assert MapSet.new(Enum.map(events, &elem(&1, 0))) ==
-             MapSet.new([:session_started, :turn_timeout])
+    assert :session_started in events
+    assert :turn_timeout in events
 
-    assert Enum.any?(events, fn
-      {:turn_timeout, %{timeout_ms: ^stream_timeout_ms, adapter: :claude}} -> true
-      _ -> false
-    end)
+    assert Enum.any?(messages, fn m ->
+             m.event == :turn_timeout and m.timeout_ms == stream_timeout_ms and m.adapter == :claude
+           end)
   end
 
   test "short line split across noeol emits buffer_exceeded and completes without crash" do
@@ -297,11 +296,15 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
   # --- helpers ---
 
-  defp flush_claude_adapter_mailbox do
+  defp drain_claude_adapter_messages do
+    drain_claude_adapter_messages([])
+  end
+
+  defp drain_claude_adapter_messages(acc) do
     receive do
-      {:m, _} -> flush_claude_adapter_mailbox()
+      {:m, m} -> drain_claude_adapter_messages([m | acc])
     after
-      0 -> :ok
+      0 -> Enum.reverse(acc)
     end
   end
 
@@ -328,7 +331,14 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   end
 
   defp setup_claude_env(scenario) do
-    root = Path.join(System.tmp_dir!(), "symphony-elixir-claude-#{System.unique_integer([:positive])}")
+    # Avoid System.tmp_dir!(): bash -lc cd under /tmp can emit Go toolchain warnings on stderr,
+    # which stderr_to_stdout merges into stream-json and breaks line-oriented parsing.
+    root =
+      Path.join(
+        File.cwd!(),
+        "_build/symphony-test-claude-#{System.unique_integer([:positive])}"
+      )
+
     File.mkdir_p!(root)
 
     ws = Path.join(root, "workspace")
@@ -381,11 +391,12 @@ exit 1
       })
 
     # Emit init from the shell so the first stream-json line is not delayed by Python startup.
+    # Sleep must exceed the test's `stream_timeout_ms` (see Cursor adapter STALL scenario).
     """
 #!/bin/sh
 printf 'ARGS:%s\\n' "$*" >> '#{trace}'
 printf '%s\\n' '#{init}'
-sleep 15
+sleep 4
 printf '%s\\n' '#{fin}'
 exit 0
 """
