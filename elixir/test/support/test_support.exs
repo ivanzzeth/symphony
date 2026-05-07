@@ -157,7 +157,17 @@ defmodule SymphonyElixir.TestSupport do
       Keyword.get(config, :agent_turn_timeout_ms) || Keyword.get(config, :codex_turn_timeout_ms)
 
     agent_stream_timeout_ms =
-      Keyword.get(config, :agent_stream_timeout_ms) || Keyword.get(config, :codex_stream_timeout_ms)
+      cond do
+        Keyword.has_key?(overrides, :agent_stream_timeout_ms) ->
+          Keyword.fetch!(overrides, :agent_stream_timeout_ms)
+
+        Keyword.has_key?(overrides, :codex_stream_timeout_ms) ->
+          Keyword.fetch!(overrides, :codex_stream_timeout_ms)
+
+        true ->
+          Keyword.get(config, :agent_stream_timeout_ms) ||
+            Keyword.get(config, :codex_stream_timeout_ms)
+      end
 
     agent_read_timeout_ms =
       Keyword.get(config, :agent_read_timeout_ms) || Keyword.get(config, :codex_read_timeout_ms)

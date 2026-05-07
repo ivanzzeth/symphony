@@ -156,9 +156,9 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
       raise "python3 is required for the stall adapter test (unbuffered stdout)"
     end
 
-    # `python3 -u` cold start + first JSON line can be slow on shared runners; keep stream timeout generous
-    # for the first line, but below the fake script's post-init sleep so we still stall-timeout before result.
-    stream_timeout_ms = 10_000
+    # After the init line, the fake script sleeps before emitting the result; stream_timeout_ms must be
+    # shorter than that sleep so the adapter hits :turn_timeout, but long enough for slow python cold start.
+    stream_timeout_ms = 2_000
 
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("STALL")
     write_claude_config_stall(bin, root, agent_stream_timeout_ms: stream_timeout_ms)
@@ -174,8 +174,23 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
                on_message: on_msg
              )
 
-    assert_received {:m, %{event: :session_started}}
-    assert_received {:m, %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :claude}}
+    events =
+      for _ <- 1..2 do
+        assert_receive {:m, %{event: ev} = msg}, 10_000
+        {ev, msg}
+      end
+
+    assert MapSet.new(Enum.map(events, &elem(&1, 0))) ==
+             MapSet.new([:session_started, :turn_timeout])
+
+    assert Enum.any?(events, fn
+           {:turn_timeout,
+            {:m, %{timeout_ms: ^stream_timeout_ms, adapter: :claude}}} ->
+             true
+
+           _ ->
+             false
+         end)
   end
 
   test "short line split across noeol emits buffer_exceeded and completes without crash" do
@@ -376,7 +391,7 @@ python3 -u <<'PY'
 import sys, time
 sys.stdout.write(#{inspect(init)} + "\\n")
 sys.stdout.flush()
-time.sleep(3)
+time.sleep(5)
 sys.stdout.write(#{inspect(fin)} + "\\n")
 sys.stdout.flush()
 PY
