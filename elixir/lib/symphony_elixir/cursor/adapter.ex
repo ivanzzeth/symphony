@@ -46,20 +46,23 @@ defmodule SymphonyElixir.Cursor.Adapter do
 
   defp build_cli_args(session, prompt) do
     command = Config.settings!().agent.command
+    parts = String.split(command, ~r/\s+/, trim: true)
+
+    command_binary = List.first(parts)
+    extra_flags = Enum.slice(parts, 1..-1//1)
 
     base =
-      command
-      |> String.split(~r/\s+/, trim: true)
-      |> Kernel.++([
-        "agent",
-        "--print",
-        "--output-format",
-        "stream-json",
-        "--force",
-        "--trust",
-        "--workspace",
-        session.workspace
-      ])
+      [command_binary, "agent"] ++
+        extra_flags ++
+        [
+          "--print",
+          "--output-format",
+          "stream-json",
+          "--force",
+          "--trust",
+          "--workspace",
+          session.workspace
+        ]
 
     session_arg =
       if session.resume_id do
