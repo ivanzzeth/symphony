@@ -52,23 +52,28 @@ defmodule SymphonyElixir.HttpServer do
 
   @spec bound_port(term()) :: non_neg_integer() | nil
   def bound_port(_server \\ __MODULE__) do
+    # Test-only env keys; see `http_server_test.exs` (not used in production).
+    if Application.get_env(:symphony_elixir, :http_server_bound_port_force_raise, false) do
+      raise RuntimeError, "symphony test: force bound_port rescue path"
+    end
+
+    case Application.get_env(:symphony_elixir, :http_server_bound_port_test_mode) do
+      :raise -> raise RuntimeError, "HttpServer.bound_port test mode (raise)"
+      {:exit, reason} -> exit(reason)
+      _ -> :ok
+    end
+
     case phoenix_http_server_info() do
       {:ok, {_ip, port}} when is_integer(port) -> port
       _ -> nil
     end
   rescue
     error ->
-      Logger.warning(
-        "HttpServer.bound_port/1: failed, returning nil: #{Exception.format(:error, error, __STACKTRACE__)}"
-      )
-
+      Logger.warning("HttpServer.bound_port failed: #{inspect(error)}")
       nil
   catch
-    :exit, reason ->
-      Logger.warning(
-        "HttpServer.bound_port/1: failed (exit), returning nil: #{inspect(reason)}"
-      )
-
+    :exit, error ->
+      Logger.warning("HttpServer.bound_port failed: #{inspect(error)}")
       nil
   end
 
