@@ -19,12 +19,37 @@ defmodule SymphonyElixir.RescueLoggingTest do
           assert HttpServer.bound_port() == nil
         end)
 
-      assert log =~ "HttpServer.bound_port/1"
+      assert log =~ "HttpServer.bound_port failed:"
+      assert log =~ "symphony test: force bound_port rescue path"
     after
       if had_key? do
         Application.put_env(:symphony_elixir, :http_server_bound_port_force_raise, prev)
       else
         Application.delete_env(:symphony_elixir, :http_server_bound_port_force_raise)
+      end
+    end
+  end
+
+  test "HttpServer.bound_port/1 logs when forced to exit" do
+    env = Application.get_all_env(:symphony_elixir)
+    had_key? = Keyword.has_key?(env, :http_server_bound_port_force_exit)
+    prev = Keyword.get(env, :http_server_bound_port_force_exit)
+
+    try do
+      Application.put_env(:symphony_elixir, :http_server_bound_port_force_exit, true)
+
+      log =
+        capture_log(fn ->
+          assert HttpServer.bound_port() == nil
+        end)
+
+      assert log =~ "HttpServer.bound_port failed:"
+      assert log =~ ":symphony_test_force_bound_port_exit"
+    after
+      if had_key? do
+        Application.put_env(:symphony_elixir, :http_server_bound_port_force_exit, prev)
+      else
+        Application.delete_env(:symphony_elixir, :http_server_bound_port_force_exit)
       end
     end
   end
