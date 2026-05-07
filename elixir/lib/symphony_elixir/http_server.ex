@@ -3,6 +3,8 @@ defmodule SymphonyElixir.HttpServer do
   Compatibility facade that starts the Phoenix observability endpoint when enabled.
   """
 
+  require Logger
+
   alias SymphonyElixir.{Config, Orchestrator}
   alias SymphonyElixirWeb.Endpoint
 
@@ -50,14 +52,28 @@ defmodule SymphonyElixir.HttpServer do
 
   @spec bound_port(term()) :: non_neg_integer() | nil
   def bound_port(_server \\ __MODULE__) do
+    if Application.get_env(:symphony_elixir, :http_server_bound_port_force_raise, false) do
+      raise RuntimeError, "symphony test: force bound_port rescue path"
+    end
+
     case Bandit.PhoenixAdapter.server_info(Endpoint, :http) do
       {:ok, {_ip, port}} when is_integer(port) -> port
       _ -> nil
     end
   rescue
-    _error -> nil
+    error ->
+      Logger.warning(
+        "HttpServer.bound_port/1: failed, returning nil: #{Exception.format(:error, error, __STACKTRACE__)}"
+      )
+
+      nil
   catch
-    :exit, _reason -> nil
+    :exit, reason ->
+      Logger.warning(
+        "HttpServer.bound_port/1: failed (exit), returning nil: #{inspect(reason)}"
+      )
+
+      nil
   end
 
   defp parse_host({_, _, _, _} = ip), do: {:ok, ip}
