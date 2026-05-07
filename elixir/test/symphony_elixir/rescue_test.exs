@@ -81,4 +81,16 @@ defmodule SymphonyElixir.RescueTest do
     assert Rescue.close_port_if_open(port) == :ok
     refute Port.info(port)
   end
+
+  test "rescue_map/2 returns try_fun result on success" do
+    assert Rescue.rescue_map(fn -> 42 end, fn _, _ -> :bad end) == 42
+  end
+
+  test "rescue_map/2 invokes rescue_fun on error" do
+    assert_raise RuntimeError, "wrapped", fn ->
+      Rescue.rescue_map(fn -> raise "inner" end, fn _e, st ->
+        reraise %RuntimeError{message: "wrapped"}, st
+      end)
+    end
+  end
 end

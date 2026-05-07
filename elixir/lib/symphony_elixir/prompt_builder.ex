@@ -3,7 +3,7 @@ defmodule SymphonyElixir.PromptBuilder do
   Builds agent prompts from Linear issue data.
   """
 
-  alias SymphonyElixir.{Config, Workflow}
+  alias SymphonyElixir.{Config, Rescue, Workflow}
 
   @render_opts [strict_variables: true, strict_filters: true]
 
@@ -44,13 +44,15 @@ defmodule SymphonyElixir.PromptBuilder do
   end
 
   defp parse_template!(prompt) when is_binary(prompt) do
-    Solid.parse!(prompt)
-  rescue
-    error ->
-      reraise %RuntimeError{
-                message: "template_parse_error: #{Exception.message(error)} template=#{inspect(prompt)}"
-              },
-              __STACKTRACE__
+    Rescue.rescue_map(
+      fn -> Solid.parse!(prompt) end,
+      fn error, stacktrace ->
+        reraise %RuntimeError{
+                  message: "template_parse_error: #{Exception.message(error)} template=#{inspect(prompt)}"
+                },
+                stacktrace
+      end
+    )
   end
 
   defp to_solid_map(map) when is_map(map) do
