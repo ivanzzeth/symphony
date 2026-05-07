@@ -51,7 +51,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     write_claude_config(bin, root)
 
-    assert {:ok, result} = ClaudeAdapter.run_turn(session, "Fix bug", issue(), on_message: on_msg)
+    assert {:ok, result} = ClaudeAdapter.run_turn(session, "Fix bug", fixture_issue(), on_message: on_msg)
 
     assert result.input_tokens == 99
     assert result.output_tokens == 11
@@ -71,7 +71,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     write_claude_config(bin, root)
 
-    assert {:ok, result} = ClaudeAdapter.run_turn(session, "Fix bug", issue(), on_message: on_msg)
+    assert {:ok, result} = ClaudeAdapter.run_turn(session, "Fix bug", fixture_issue(), on_message: on_msg)
 
     assert result.input_tokens == 42
     assert result.output_tokens == 17
@@ -92,7 +92,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     write_claude_config(bin, root)
 
-    assert {:ok, result} = ClaudeAdapter.run_turn(session, "Continue", issue(), on_message: on_msg)
+    assert {:ok, result} = ClaudeAdapter.run_turn(session, "Continue", fixture_issue(), on_message: on_msg)
 
     assert result.resume_id == "ok"
     assert_received {:m, %{event: :turn_completed}}
@@ -104,11 +104,11 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     write_claude_config(bin, root)
 
     session1 = %{session_id: "adapter-placeholder", workspace: ws, resume_id: nil}
-    assert {:ok, after_turn1} = ClaudeAdapter.run_turn(session1, "First", issue())
+    assert {:ok, after_turn1} = ClaudeAdapter.run_turn(session1, "First", fixture_issue())
     assert after_turn1.resume_id == "ok"
 
     session2 = %{session1 | resume_id: after_turn1.resume_id}
-    assert {:ok, _} = ClaudeAdapter.run_turn(session2, "Second", issue())
+    assert {:ok, _} = ClaudeAdapter.run_turn(session2, "Second", fixture_issue())
 
     trace_text = File.read!(trace)
     assert trace_text =~ "--session-id adapter-placeholder"
@@ -120,7 +120,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     write_claude_config(bin, root)
 
     session = %{session_id: "s-resume", workspace: ws, resume_id: nil}
-    assert {:ok, result} = ClaudeAdapter.run_turn(session, "Fix bug", issue())
+    assert {:ok, result} = ClaudeAdapter.run_turn(session, "Fix bug", fixture_issue())
     assert result.resume_id == "ok"
   end
 
@@ -135,7 +135,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
              ClaudeAdapter.run_turn(
                %{session_id: "sf", workspace: ws, resume_id: nil},
                "x",
-               issue(),
+               fixture_issue(),
                on_message: on_msg
              )
 
@@ -150,7 +150,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
              ClaudeAdapter.run_turn(
                %{session_id: "sx", workspace: ws, resume_id: nil},
                "x",
-               issue()
+               fixture_issue()
              )
   end
 
@@ -169,7 +169,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
              ClaudeAdapter.run_turn(
                %{session_id: "st", workspace: ws, resume_id: nil},
                "x",
-               issue(),
+               fixture_issue(),
                on_message: on_msg
              )
 
@@ -199,7 +199,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
                  ClaudeAdapter.run_turn(
                    %{session_id: "no", workspace: ws, resume_id: nil},
                    "x",
-                   issue(),
+                   fixture_issue(),
                    on_message: on_msg
                  )
       end)
@@ -221,7 +221,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
              ClaudeAdapter.run_turn(
                %{session_id: "sm", workspace: ws, resume_id: nil},
                "x",
-               issue(),
+               fixture_issue(),
                on_message: on_msg
              )
 
@@ -268,7 +268,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
              ClaudeAdapter.run_turn(
                %{session_id: "ssh", workspace: remote, resume_id: nil},
                "Fix bug",
-               issue(),
+               fixture_issue(),
                worker_host: "worker-01:2200"
              )
 
@@ -280,7 +280,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
   # --- helpers ---
 
-  defp issue do
+  defp fixture_issue do
     %{
       id: "issue-1",
       identifier: "MT-1",
