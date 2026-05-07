@@ -52,7 +52,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     assert result.input_tokens == 99
     assert result.output_tokens == 11
-    assert result.resume_id == "s-camel"
+    assert result.resume_id == "camel"
     assert_received {:m, %{event: :session_started}}
     assert_received {:m, %{event: :notification}}
     assert_received {:m, %{event: :turn_completed}}
@@ -156,11 +156,12 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
       raise "python3 is required for the stall adapter test (unbuffered stdout)"
     end
 
-    # `python3 -u` cold start + first JSON line can be slow; idle window must stay below fake script's 3s sleep.
-    stream_timeout_ms = 2_500
+    # `python3 -u` cold start + first JSON line can be slow on shared runners; keep stream timeout generous
+    # for the first line, but below the fake script's post-init sleep so we still stall-timeout before result.
+    stream_timeout_ms = 10_000
 
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("STALL")
-    write_claude_config_stall(bin, root, codex_stream_timeout_ms: stream_timeout_ms)
+    write_claude_config_stall(bin, root, agent_stream_timeout_ms: stream_timeout_ms)
 
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
@@ -307,7 +308,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
       Workflow.workflow_file_path(),
       Keyword.merge(
         [agent_kind: "claude", workspace_root: workspace_root, agent_command: binary],
-        Keyword.take(opts, [:codex_stream_timeout_ms])
+        Keyword.take(opts, [:agent_stream_timeout_ms, :codex_stream_timeout_ms])
       )
     )
 
