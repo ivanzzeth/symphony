@@ -54,6 +54,7 @@ defmodule SymphonyElixir.Config.SchemaRescueLoggingTest do
       end)
 
     assert log =~ "Config.Schema.warn_disallowed_keys"
+    assert log =~ "ArgumentError"
   end
 
   test "strip_disallowed_keys rescue logs warning with error reason" do
@@ -74,5 +75,6 @@ defmodule SymphonyElixir.Config.SchemaRescueLoggingTest do
       end)
 
     assert log =~ "Config.Schema.strip_disallowed_keys"
+    assert log =~ "ArgumentError"
   end
 end
