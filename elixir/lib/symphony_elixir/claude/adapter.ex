@@ -157,6 +157,16 @@ defmodule SymphonyElixir.Claude.Adapter do
   end
 
   defp handle_line(line, on_message, session, usage) do
+    line = String.trim(line)
+
+    if line == "" do
+      {:continue, usage, session}
+    else
+      handle_line_json(line, on_message, session, usage)
+    end
+  end
+
+  defp handle_line_json(line, on_message, session, usage) do
     case Jason.decode(line) do
       {:ok, %{"type" => "system", "subtype" => "init"} = payload} ->
         sid =

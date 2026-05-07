@@ -160,9 +160,22 @@ defmodule SymphonyElixir.Cursor.Adapter do
   end
 
   defp handle_line(line, on_message, session, usage) do
+    line = String.trim(line)
+
+    if line == "" do
+      {:continue, usage, session}
+    else
+      handle_line_json(line, on_message, session, usage)
+    end
+  end
+
+  defp handle_line_json(line, on_message, session, usage) do
     case Jason.decode(line) do
       {:ok, %{"type" => "system", "subtype" => "init"} = payload} ->
-        sid = Map.get(payload, "session_id", session.session_id)
+        sid =
+          Map.get(payload, "session_id") ||
+            Map.get(payload, "sessionId") ||
+            session.session_id
 
         emit_message(on_message, :session_started, %{
           session_id: sid

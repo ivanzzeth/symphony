@@ -139,8 +139,15 @@ defmodule SymphonyElixir.CursorAdapterTest do
                stream_timeout_ms: stream_timeout_ms
              )
 
-    assert_received {:m, %{event: :session_started}}
-    assert_received {:m, %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :cursor}}
+    messages = drain_adapter_messages()
+    events = Enum.map(messages, & &1.event)
+
+    assert :session_started in events
+    assert :turn_timeout in events
+
+    assert Enum.any?(messages, fn m ->
+             m.event == :turn_timeout and m.timeout_ms == stream_timeout_ms and m.adapter == :cursor
+           end)
   end
 
   test "short line split across noeol emits buffer_exceeded, logs warning, and completes without crash" do
@@ -272,6 +279,18 @@ defmodule SymphonyElixir.CursorAdapterTest do
   end
 
   # --- helpers ---
+
+  defp drain_adapter_messages do
+    drain_adapter_messages([])
+  end
+
+  defp drain_adapter_messages(acc) do
+    receive do
+      {:m, m} -> drain_adapter_messages([m | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
 
   defp issue do
     %SymphonyElixir.Linear.Issue{
