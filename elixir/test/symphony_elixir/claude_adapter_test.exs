@@ -185,7 +185,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
       end)
 
     assert log =~ "port line buffer"
-    assert_received {:m, %{event: :buffer_exceeded, adapter: :claude, fragment_bytes: 64}}
+    assert_received {:m, %{event: :buffer_exceeded, adapter: :claude, chunk_bytes: 64}}
     assert_received {:m, %{event: :malformed}}
     assert_received {:m, %{event: :turn_completed}}
   end

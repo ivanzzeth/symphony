@@ -134,7 +134,7 @@ defmodule SymphonyElixir.Cursor.Adapter do
 
         emit_message(on_message, :buffer_exceeded, %{
           adapter: :cursor,
-          fragment_bytes: n,
+          chunk_bytes: n,
           pending_bytes: plen,
           port_line_bytes: buf
         })

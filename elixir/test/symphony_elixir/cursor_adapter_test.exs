@@ -114,10 +114,6 @@ defmodule SymphonyElixir.CursorAdapterTest do
   end
 
   test "emits turn_timeout via on_message before returning error when stream stalls" do
-    unless System.find_executable("python3") do
-      raise "python3 is required for the stall adapter test (unbuffered stdout)"
-    end
-
     %{binary: bin, workspace: ws, test_root: root} = setup_cursor_env("STALL")
     write_cursor_config_stall(bin, root, codex_stream_timeout_ms: 120)
 
@@ -163,7 +159,7 @@ defmodule SymphonyElixir.CursorAdapterTest do
       end)
 
     assert log =~ "port line buffer"
-    assert_received {:m, %{event: :buffer_exceeded, adapter: :cursor, fragment_bytes: 64}}
+    assert_received {:m, %{event: :buffer_exceeded, adapter: :cursor, chunk_bytes: 64}}
     assert_received {:m, %{event: :malformed}}
     assert_received {:m, %{event: :turn_completed}}
   end
