@@ -8,23 +8,23 @@ defmodule SymphonyElixir.RescueLoggingTest do
 
   test "HttpServer.bound_port/1 logs when forced to raise" do
     env = Application.get_all_env(:symphony_elixir)
-    had_key? = Keyword.has_key?(env, :http_server_bound_port_force_raise)
-    prev = Keyword.get(env, :http_server_bound_port_force_raise)
+    had_key? = Keyword.has_key?(env, :http_server_bound_port_test_force)
+    prev = Keyword.get(env, :http_server_bound_port_test_force)
 
     try do
-      Application.put_env(:symphony_elixir, :http_server_bound_port_force_raise, true)
+      Application.put_env(:symphony_elixir, :http_server_bound_port_test_force, :raise)
 
       log =
         capture_log(fn ->
           assert HttpServer.bound_port() == nil
         end)
 
-      assert log =~ "HttpServer.bound_port/1"
+      assert log =~ "HttpServer.bound_port failed:"
     after
       if had_key? do
-        Application.put_env(:symphony_elixir, :http_server_bound_port_force_raise, prev)
+        Application.put_env(:symphony_elixir, :http_server_bound_port_test_force, prev)
       else
-        Application.delete_env(:symphony_elixir, :http_server_bound_port_force_raise)
+        Application.delete_env(:symphony_elixir, :http_server_bound_port_test_force)
       end
     end
   end
