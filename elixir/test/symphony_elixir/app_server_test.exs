@@ -300,7 +300,8 @@ defmodule SymphonyElixir.AppServerTest do
 
       write_workflow_file!(Workflow.workflow_file_path(),
         workspace_root: workspace_root,
-        agent_command: "#{codex_binary} app-server"
+        agent_command: "#{codex_binary} app-server",
+        codex_approval_policy: "on-request"
       )
 
       issue = %Issue{
