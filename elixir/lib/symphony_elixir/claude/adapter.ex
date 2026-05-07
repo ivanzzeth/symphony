@@ -23,15 +23,16 @@ defmodule SymphonyElixir.Claude.Adapter do
   def run_turn(session, prompt, _issue, opts \\ []) do
     on_message = Keyword.get(opts, :on_message, &default_on_message/1)
     worker_host = Keyword.get(opts, :worker_host)
-    timeout_ms = Config.settings!().codex.stream_timeout_ms
+    timeout_ms = Config.settings!().agent.stream_timeout_ms
 
     cli_args = build_cli_args(session, prompt)
 
     with {:ok, port} <- open_claude_port(session.workspace, cli_args, worker_host) do
-      result = receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms)
-
-      close_port(port)
-      result
+      try do
+        receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms)
+      after
+        close_port(port)
+      end
     end
   end
 
@@ -77,6 +78,7 @@ defmodule SymphonyElixir.Claude.Adapter do
 
     (base ++ session_arg ++ ["--", escaped_prompt])
     |> Enum.join(" ")
+    |> then(&"exec #{&1}")
   end
 
   defp open_claude_port(workspace, cli_args, nil) do
@@ -198,13 +200,22 @@ defmodule SymphonyElixir.Claude.Adapter do
     message = Map.get(payload, "message", %{})
     usage = Map.get(message, "usage") || Map.get(payload, "usage") || %{}
 
-    input = (usage["input_tokens"] || usage[:input_tokens]) |> int_or(0)
-    output = (usage["output_tokens"] || usage[:output_tokens]) |> int_or(0)
+    input = resolve_token_count(usage, ["inputTokens", "input_tokens"])
+    output = resolve_token_count(usage, ["outputTokens", "output_tokens"])
 
     %{
       input_tokens: current_usage.input_tokens + input,
       output_tokens: current_usage.output_tokens + output
     }
+  end
+
+  defp resolve_token_count(usage, keys) do
+    Enum.find_value(keys, 0, fn key ->
+      case Map.get(usage, key) do
+        nil -> nil
+        val -> int_or(val, 0)
+      end
+    end)
   end
 
   defp int_or(nil, default), do: default

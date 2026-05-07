@@ -2,6 +2,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   use ExUnit.Case, async: false
 
   alias SymphonyElixir.Claude.Adapter, as: ClaudeAdapter
+  alias SymphonyElixir.Config
 
   import SymphonyElixir.TestSupport, only: [write_workflow_file!: 2, restore_env: 2]
   alias SymphonyElixir.Workflow
@@ -35,6 +36,26 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   end
 
   # --- run_turn tests ---
+
+  test "Turn 1 — parses camelCase usage keys on result payload (real CLI shape)" do
+    %{binary: bin, trace: trace, workspace: ws, test_root: root} = setup_claude_env("CAMEL")
+
+    session = %{session_id: "s-camel", workspace: ws, resume_id: nil}
+    test_pid = self()
+    on_msg = fn m -> send(test_pid, {:m, m}) end
+
+    write_claude_config(bin, root)
+
+    assert {:ok, result} = ClaudeAdapter.run_turn(session, "Fix bug", issue(), on_message: on_msg)
+
+    assert result.input_tokens == 99
+    assert result.output_tokens == 11
+    assert result.resume_id == "s-camel"
+    assert_received {:m, %{event: :session_started}}
+    assert_received {:m, %{event: :notification}}
+    assert_received {:m, %{event: :turn_completed}}
+    assert File.read!(trace) =~ "--session-id s-camel"
+  end
 
   test "Turn 1 — completes successfully and emits session_started, notification, turn_completed" do
     %{binary: bin, trace: trace, workspace: ws, test_root: root} = setup_claude_env("OK")
@@ -198,6 +219,9 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
       workspace_root: workspace_root,
       agent_command: binary
     )
+
+    assert Config.settings!().agent.command == binary,
+           "expected WORKFLOW agent.command to point at the fake CLI; got #{inspect(Config.settings!().agent.command)}"
   end
 
   defp setup_claude_env(scenario) do
@@ -242,6 +266,16 @@ printf 'ARGS:%s\\n' "$*" >> "#{trace}"
 printf '%s\\n' '{"type":"system","subtype":"init","session_id":"m"}'
 printf '%s\\n' 'not json at all'
 printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"input_tokens":1,"output_tokens":1}}'
+exit 0
+)
+  end
+
+  defp fake_claude_script("CAMEL", trace) do
+    ~s(#!/bin/sh
+printf 'ARGS:%s\\n' "$*" >> "#{trace}"
+printf '%s\\n' '{"type":"system","subtype":"init","session_id":"camel","tools":["bash"]}'
+printf '%s\\n' '{"type":"assistant","message":{"model":"sonnet","content":[{"type":"text","text":"ok"}],"usage":{"inputTokens":99,"outputTokens":11}}}'
+printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"done","usage":{"inputTokens":99,"outputTokens":11}}'
 exit 0
 )
   end

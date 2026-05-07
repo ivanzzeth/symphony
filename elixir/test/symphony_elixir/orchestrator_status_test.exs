@@ -900,7 +900,7 @@ defmodule SymphonyElixir.OrchestratorStatusTest do
   test "orchestrator restarts stalled workers with retry backoff" do
     write_workflow_file!(Workflow.workflow_file_path(),
       tracker_api_token: nil,
-      codex_stall_timeout_ms: 1_000
+      agent_stall_timeout_ms: 1_000
     )
 
     issue_id = "issue-stall"
@@ -1540,6 +1540,131 @@ defmodule SymphonyElixir.OrchestratorStatusTest do
              "agent message streaming: writing workpad reconciliation update"
 
     assert StatusDashboard.humanize_codex_message(fallback_reasoning) == "reasoning update"
+  end
+
+  test "orchestrator terminate/2 cleans up all running agents" do
+    orchestrator_name = Module.concat(__MODULE__, :CleanupOrchestrator)
+    {:ok, pid} = Orchestrator.start_link(name: orchestrator_name)
+
+    on_exit(fn ->
+      if Process.alive?(pid) do
+        Process.exit(pid, :normal)
+      end
+    end)
+
+    # Create a worker process that tracks if it was killed
+    worker_pid =
+      spawn(fn ->
+        receive do
+          :die -> :ok
+        end
+      end)
+
+    initial_state = :sys.get_state(pid)
+    process_ref = make_ref()
+    started_at = DateTime.utc_now()
+
+    running_entry = %{
+      pid: worker_pid,
+      ref: process_ref,
+      identifier: "MT-CLEANUP",
+      issue: %Issue{id: "issue-cleanup", identifier: "MT-CLEANUP", state: "In Progress"},
+      session_id: nil,
+      worker_host: nil,
+      workspace_path: nil,
+      turn_count: 0,
+      retry_attempt: 0,
+      started_at: started_at,
+      codex_input_tokens: 0,
+      codex_output_tokens: 0,
+      codex_total_tokens: 0,
+      codex_last_reported_input_tokens: 0,
+      codex_last_reported_output_tokens: 0,
+      codex_last_reported_total_tokens: 0,
+      last_codex_message: nil,
+      last_codex_timestamp: nil,
+      last_codex_event: nil,
+      codex_app_server_pid: nil
+    }
+
+    :sys.replace_state(pid, fn _ ->
+      initial_state
+      |> Map.put(:running, %{"issue-cleanup" => running_entry})
+      |> Map.put(:claimed, MapSet.put(initial_state.claimed, "issue-cleanup"))
+    end)
+
+    assert Process.alive?(worker_pid)
+
+    # Trap exit so GenServer.stop(:shutdown) doesn't crash the linked test process
+    Process.flag(:trap_exit, true)
+    GenServer.stop(pid, :shutdown)
+
+    # Worker should no longer be alive (terminate/2 killed it via Process.exit)
+    Process.sleep(50)
+    refute Process.alive?(worker_pid)
+  end
+
+  test "orchestrator trap_exit prevents agent task exit from crashing the orchestrator" do
+    orchestrator_name = Module.concat(__MODULE__, :TrapExitOrchestrator)
+    {:ok, pid} = Orchestrator.start_link(name: orchestrator_name)
+
+    on_exit(fn ->
+      if Process.alive?(pid) do
+        Process.exit(pid, :normal)
+      end
+    end)
+
+    # Spawn a worker and inject it into running state
+    dying_pid = spawn(fn -> receive do :go -> Process.exit(self(), :kill) end end)
+
+    initial_state = :sys.get_state(pid)
+    started_at = DateTime.utc_now()
+    process_ref = make_ref()
+
+    running_entry = %{
+      pid: dying_pid,
+      ref: process_ref,
+      identifier: "MT-TRAP",
+      issue: %Issue{id: "issue-trap", identifier: "MT-TRAP", state: "In Progress"},
+      session_id: nil,
+      worker_host: nil,
+      workspace_path: nil,
+      turn_count: 0,
+      retry_attempt: 0,
+      started_at: started_at,
+      codex_input_tokens: 0,
+      codex_output_tokens: 0,
+      codex_total_tokens: 0,
+      codex_last_reported_input_tokens: 0,
+      codex_last_reported_output_tokens: 0,
+      codex_last_reported_total_tokens: 0,
+      last_codex_message: nil,
+      last_codex_timestamp: nil,
+      last_codex_event: nil,
+      codex_app_server_pid: nil
+    }
+
+    :sys.replace_state(pid, fn _ ->
+      initial_state
+      |> Map.put(:running, %{"issue-trap" => running_entry})
+      |> Map.put(:claimed, MapSet.put(initial_state.claimed, "issue-trap"))
+    end)
+
+    # Send :go to the dieing pid, causing it to exit :kill
+    send(dying_pid, :go)
+
+    # Wait for process to die, then simulate DOWN to orchestrator
+    Process.sleep(50)
+    send(pid, {:DOWN, process_ref, :process, dying_pid, :kill})
+
+    # Wait for the DOWN message to be processed
+    Process.sleep(200)
+
+    # Orchestrator should still be alive and the issue should be cleaned from running
+    assert Process.alive?(pid)
+
+    final_state = :sys.get_state(pid)
+    refute Map.has_key?(final_state.running, "issue-trap")
   end
 
   test "application stop renders offline status" do

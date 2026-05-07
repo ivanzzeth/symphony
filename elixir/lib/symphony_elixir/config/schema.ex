@@ -1,5 +1,13 @@
 defmodule SymphonyElixir.Config.Schema do
-  @moduledoc false
+  @moduledoc """
+  Workflow config schema.
+
+  Adapter-generic timeouts (`turn_timeout_ms`, `stream_timeout_ms`,
+  `read_timeout_ms`, `stall_timeout_ms`) live on the `agent` embed. For backward
+  compatibility, the same keys may still appear under `codex` in older
+  `WORKFLOW.md` files; they are merged into `agent` before validation (with
+  `agent` winning when both are set).
+  """
 
   use Ecto.Schema
 
@@ -136,6 +144,10 @@ defmodule SymphonyElixir.Config.Schema do
       field(:max_concurrent_agents_by_state, :map, default: %{})
       field(:kind, :string, default: "codex")
       field(:command, :string)
+      field(:turn_timeout_ms, :integer, default: 3_600_000)
+      field(:stream_timeout_ms, :integer, default: 120_000)
+      field(:read_timeout_ms, :integer, default: 5_000)
+      field(:stall_timeout_ms, :integer, default: 300_000)
     end
 
     @spec changeset(%__MODULE__{}, map()) :: Ecto.Changeset.t()
@@ -143,13 +155,28 @@ defmodule SymphonyElixir.Config.Schema do
       schema
       |> cast(
         attrs,
-        [:max_concurrent_agents, :max_turns, :max_retry_backoff_ms, :max_concurrent_agents_by_state, :kind, :command],
+        [
+          :max_concurrent_agents,
+          :max_turns,
+          :max_retry_backoff_ms,
+          :max_concurrent_agents_by_state,
+          :kind,
+          :command,
+          :turn_timeout_ms,
+          :stream_timeout_ms,
+          :read_timeout_ms,
+          :stall_timeout_ms
+        ],
         empty_values: []
       )
       |> validate_inclusion(:kind, ["codex", "claude", "cursor"])
       |> validate_number(:max_concurrent_agents, greater_than: 0)
       |> validate_number(:max_turns, greater_than: 0)
       |> validate_number(:max_retry_backoff_ms, greater_than: 0)
+      |> validate_number(:turn_timeout_ms, greater_than: 0)
+      |> validate_number(:stream_timeout_ms, greater_than: 0)
+      |> validate_number(:read_timeout_ms, greater_than: 0)
+      |> validate_number(:stall_timeout_ms, greater_than_or_equal_to: 0)
       |> update_change(:max_concurrent_agents_by_state, &Schema.normalize_state_limits/1)
       |> Schema.validate_state_limits(:max_concurrent_agents_by_state)
     end
@@ -176,10 +203,6 @@ defmodule SymphonyElixir.Config.Schema do
 
       field(:thread_sandbox, :string, default: "workspace-write")
       field(:turn_sandbox_policy, :map)
-      field(:turn_timeout_ms, :integer, default: 3_600_000)
-      field(:stream_timeout_ms, :integer, default: 120_000)
-      field(:read_timeout_ms, :integer, default: 5_000)
-      field(:stall_timeout_ms, :integer, default: 300_000)
     end
 
     @spec changeset(%__MODULE__{}, map()) :: Ecto.Changeset.t()
@@ -191,18 +214,10 @@ defmodule SymphonyElixir.Config.Schema do
           :command,
           :approval_policy,
           :thread_sandbox,
-          :turn_sandbox_policy,
-          :turn_timeout_ms,
-          :stream_timeout_ms,
-          :read_timeout_ms,
-          :stall_timeout_ms
+          :turn_sandbox_policy
         ],
         empty_values: []
       )
-      |> validate_number(:turn_timeout_ms, greater_than: 0)
-      |> validate_number(:stream_timeout_ms, greater_than: 0)
-      |> validate_number(:read_timeout_ms, greater_than: 0)
-      |> validate_number(:stall_timeout_ms, greater_than_or_equal_to: 0)
     end
   end
 
@@ -282,6 +297,8 @@ defmodule SymphonyElixir.Config.Schema do
 
   @disallowed_workflow_keys ["server", "observability"]
 
+  @legacy_codex_timeout_keys ~w(turn_timeout_ms stream_timeout_ms read_timeout_ms stall_timeout_ms)
+
   @spec parse(map()) :: {:ok, %__MODULE__{}} | {:error, {:invalid_workflow_config, String.t()}}
   def parse(config) when is_map(config) do
     warn_disallowed_keys(config)
@@ -289,6 +306,7 @@ defmodule SymphonyElixir.Config.Schema do
     config
     |> strip_disallowed_keys()
     |> normalize_keys()
+    |> merge_legacy_codex_timeouts_into_agent()
     |> drop_nil_values()
     |> changeset()
     |> apply_action(:validate)
@@ -444,6 +462,45 @@ defmodule SymphonyElixir.Config.Schema do
 
   defp normalize_key(value) when is_atom(value), do: Atom.to_string(value)
   defp normalize_key(value), do: to_string(value)
+
+  # Copies timeout keys from `codex` into `agent` when absent on `agent` (after
+  # normalize_keys/1), then removes them from `codex` so only Codex-specific keys remain.
+  defp merge_legacy_codex_timeouts_into_agent(config) when is_map(config) do
+    codex = Map.get(config, "codex")
+    agent = Map.get(config, "agent")
+    codex = if is_map(codex), do: codex, else: %{}
+    agent = if is_map(agent), do: agent, else: %{}
+
+    legacy_in_codex? =
+      Enum.any?(@legacy_codex_timeout_keys, &Map.has_key?(codex, &1))
+
+    if legacy_in_codex? do
+      require Logger
+
+      Logger.warning(
+        "[WORKFLOW.md] Timeout settings under codex.* (turn_timeout_ms, stream_timeout_ms, read_timeout_ms, stall_timeout_ms) are deprecated; use agent.* instead. Values are still honored for this load. See elixir/README.md."
+      )
+    end
+
+    {agent_merged, codex_trimmed} =
+      Enum.reduce(@legacy_codex_timeout_keys, {agent, codex}, fn key, {a, c} ->
+        a2 =
+          if Map.has_key?(a, key) do
+            a
+          else
+            case Map.fetch(c, key) do
+              {:ok, val} -> Map.put(a, key, val)
+              :error -> a
+            end
+          end
+
+        {a2, Map.delete(c, key)}
+      end)
+
+    config
+    |> Map.put("agent", agent_merged)
+    |> Map.put("codex", codex_trimmed)
+  end
 
   defp drop_nil_values(value) when is_map(value) do
     Enum.reduce(value, %{}, fn {key, nested}, acc ->

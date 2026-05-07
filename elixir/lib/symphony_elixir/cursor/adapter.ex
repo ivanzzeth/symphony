@@ -22,15 +22,16 @@ defmodule SymphonyElixir.Cursor.Adapter do
   def run_turn(session, prompt, _issue, opts \\ []) do
     on_message = Keyword.get(opts, :on_message, &default_on_message/1)
     worker_host = Keyword.get(opts, :worker_host)
-    timeout_ms = Config.settings!().codex.stream_timeout_ms
+    timeout_ms = Config.settings!().agent.stream_timeout_ms
 
     cli_args = build_cli_args(session, prompt)
 
     with {:ok, port} <- open_cursor_port(session.workspace, cli_args, worker_host) do
-      result = receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms)
-
-      close_port(port)
-      result
+      try do
+        receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms)
+      after
+        close_port(port)
+      end
     end
   end
 
@@ -71,6 +72,7 @@ defmodule SymphonyElixir.Cursor.Adapter do
 
     (base ++ session_arg ++ ["--", escaped_prompt])
     |> Enum.join(" ")
+    |> then(&"exec #{&1}")
   end
 
   defp open_cursor_port(workspace, cli_args, nil) do

@@ -39,7 +39,8 @@ defmodule SymphonyElixir.HarnessManagerTest do
     harness_state_path = Path.join(symphony_dir, "harness-state.json")
 
     # Start a Harness Manager scoped to the test directory
-    {:ok, pid} = GenServer.start_link(Manager, [project_dir: test_root], name: nil)
+    workflow_file = Path.join(test_root, "WORKFLOW.md")
+    {:ok, pid} = GenServer.start_link(Manager, [project_dir: test_root, workflow_file_path: workflow_file], name: nil)
 
     on_exit(fn ->
       if Process.alive?(pid), do: GenServer.stop(pid)
@@ -278,9 +279,10 @@ defmodule SymphonyElixir.HarnessManagerTest do
       File.write!(path, @test_workflow_content)
       hash = compute_hash_for_test(path)
 
-      prompt = build_harness_prompt_for_test(nil, hash)
+      prompt = build_harness_prompt_for_test(nil, hash, path)
       assert prompt =~ "/harness"
       assert prompt =~ "build a new agent harness"
+      assert prompt =~ path
     end
 
     test "update prompt when last_hash is set and file changed", %{test_root: test_root} do
@@ -291,20 +293,25 @@ defmodule SymphonyElixir.HarnessManagerTest do
       File.write!(path, @modified_workflow_content)
       hash2 = compute_hash_for_test(path)
 
-      prompt = build_harness_prompt_for_test(hash1, hash2)
+      prompt = build_harness_prompt_for_test(hash1, hash2, path)
       assert prompt =~ "/harness"
       assert prompt =~ "reconfigure"
+      assert prompt =~ path
     end
 
-    test "deletion prompt when current_hash is empty and last_hash was set" do
-      prompt = build_harness_prompt_for_test("some-hash", "")
+    test "deletion prompt when current_hash is empty and last_hash was set", %{test_root: test_root} do
+      path = Path.join(test_root, "WORKFLOW.md")
+      prompt = build_harness_prompt_for_test("some-hash", "", path)
       assert prompt =~ "/harness"
       assert prompt =~ "deleted"
+      assert prompt =~ path
     end
 
-    test "empty prompt when both hashes are empty/nil" do
-      prompt = build_harness_prompt_for_test(nil, "")
+    test "empty prompt when both hashes are empty/nil", %{test_root: test_root} do
+      path = Path.join(test_root, "WORKFLOW.md")
+      prompt = build_harness_prompt_for_test(nil, "", path)
       assert prompt =~ "does not exist"
+      assert prompt =~ path
     end
   end
 
@@ -356,23 +363,27 @@ defmodule SymphonyElixir.HarnessManagerTest do
   @harness_setup_prompt """
   Use the /harness skill to build a new agent harness for this project.
 
-  Read WORKFLOW.md to understand the project's execution contract, then follow the full harness skill workflow (Phase 0-6) to analyze the domain, design the team architecture, generate agent definitions and skills, and register the harness context in AGENTS.md.
+  The workflow file is located at: __WORKFLOW_PATH__
+
+  Read that file to understand the project's execution contract, then follow the full harness skill workflow (Phase 0-6) to analyze the domain, design the team architecture, generate agent definitions and skills, and register the harness context in AGENTS.md.
   """
 
   @harness_update_prompt """
   Use the /harness skill to reconfigure the agent harness for this project.
 
-  WORKFLOW.md has been updated. Read WORKFLOW.md to understand the changes, then follow the harness skill workflow — audit current .agents/ state (Phase 0), then determine which phases are needed to bring the harness in sync with the updated WORKFLOW.md.
+  The workflow file is located at: __WORKFLOW_PATH__
+
+  That file has been updated. Read it to understand the changes, then follow the harness skill workflow — audit current .agents/ state (Phase 0), then determine which phases are needed to bring the harness in sync with the updated workflow file.
   """
 
   @harness_deletion_prompt """
-  WORKFLOW.md has been deleted. Use the /harness skill to clean up the agent harness configuration accordingly.
+  The workflow file at __WORKFLOW_PATH__ has been deleted. Use the /harness skill to clean up the agent harness configuration accordingly.
   """
 
-  @harness_empty_prompt "WORKFLOW.md is empty or does not exist. No harness configuration is needed."
+  @harness_empty_prompt "The workflow file at __WORKFLOW_PATH__ is empty or does not exist. No harness configuration is needed."
 
-  defp build_harness_prompt_for_test(nil, ""), do: @harness_empty_prompt
-  defp build_harness_prompt_for_test(nil, _current_hash), do: @harness_setup_prompt
-  defp build_harness_prompt_for_test(_last_hash, ""), do: @harness_deletion_prompt
-  defp build_harness_prompt_for_test(_last_hash, _current_hash), do: @harness_update_prompt
+  defp build_harness_prompt_for_test(nil, "", path), do: String.replace(@harness_empty_prompt, "__WORKFLOW_PATH__", path)
+  defp build_harness_prompt_for_test(nil, _current_hash, path), do: String.replace(@harness_setup_prompt, "__WORKFLOW_PATH__", path)
+  defp build_harness_prompt_for_test(_last_hash, "", path), do: String.replace(@harness_deletion_prompt, "__WORKFLOW_PATH__", path)
+  defp build_harness_prompt_for_test(_last_hash, _current_hash, path), do: String.replace(@harness_update_prompt, "__WORKFLOW_PATH__", path)
 end
