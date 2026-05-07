@@ -23,7 +23,12 @@ defmodule SymphonyElixir.Claude.Adapter do
   def run_turn(session, prompt, _issue, opts \\ []) do
     on_message = Keyword.get(opts, :on_message, &default_on_message/1)
     worker_host = Keyword.get(opts, :worker_host)
-    timeout_ms = Config.settings!().agent.stream_timeout_ms
+
+    timeout_ms =
+      case Keyword.get(opts, :stream_timeout_ms) do
+        ms when is_integer(ms) and ms > 0 -> ms
+        _ -> Config.settings!().agent.stream_timeout_ms
+      end
 
     cli_args = build_cli_args(session, prompt)
 
@@ -155,7 +160,10 @@ defmodule SymphonyElixir.Claude.Adapter do
   defp handle_line(line, on_message, session, usage) do
     case Jason.decode(line) do
       {:ok, %{"type" => "system", "subtype" => "init"} = payload} ->
-        sid = Map.get(payload, "session_id", session.session_id)
+        sid =
+          Map.get(payload, "session_id") ||
+            Map.get(payload, "sessionId") ||
+            session.session_id
 
         emit_message(on_message, :session_started, %{
           session_id: sid
