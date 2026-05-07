@@ -42,7 +42,14 @@ defmodule SymphonyElixir.CodingAgent do
 
   @doc """
   Run a single turn with the given prompt.
-  Returns the turn result and emits events via on_message callback.
+  Returns the turn result and emits events via the `on_message` callback.
+
+  ## Options
+
+    * `:on_message` — callback invoked for stream events (tests and telemetry).
+    * `:worker_host` — optional SSH target when the agent runs on a remote worker.
+    * `:stream_timeout_ms` — optional per-receive idle timeout (defaults to configured
+      `agent.stream_timeout_ms`; tests may set this to avoid cross-test workflow races).
   """
   @callback run_turn(session(), prompt :: String.t(), issue :: map(), opts :: keyword()) ::
               {:ok, map()} | {:error, term()}

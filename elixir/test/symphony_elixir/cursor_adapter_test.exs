@@ -114,11 +114,12 @@ defmodule SymphonyElixir.CursorAdapterTest do
   end
 
   test "emits turn_timeout via on_message before returning error when stream stalls" do
-    # Allow slow Port/bash startup before first stream-json line; idle window is still < fake script's 3s sleep.
-    stream_timeout_ms = 2_500
+    # Post-init sleep must exceed per-receive `stream_timeout_ms`. Pass timeout in opts so parallel tests
+    # cannot clobber WORKFLOW between setup and `run_turn`.
+    stream_timeout_ms = 8_000
 
     %{binary: bin, workspace: ws, test_root: root} = setup_cursor_env("STALL")
-    write_cursor_config_stall(bin, root, codex_stream_timeout_ms: stream_timeout_ms)
+    write_cursor_config(bin, root)
 
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
@@ -128,11 +129,27 @@ defmodule SymphonyElixir.CursorAdapterTest do
                %{session_id: "st", workspace: ws, resume_id: nil},
                "x",
                issue(),
-               on_message: on_msg
+               on_message: on_msg,
+               stream_timeout_ms: stream_timeout_ms
              )
 
-    assert_received {:m, %{event: :session_started}}
-    assert_received {:m, %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :cursor}}
+    events =
+      for _ <- 1..2 do
+        assert_receive {:m, %{event: ev} = msg}, 15_000
+        {ev, msg}
+      end
+
+    assert MapSet.new(Enum.map(events, &elem(&1, 0))) ==
+             MapSet.new([:session_started, :turn_timeout])
+
+    assert Enum.any?(events, fn
+           {:turn_timeout,
+            {:m, %{timeout_ms: ^stream_timeout_ms, adapter: :cursor}}} ->
+             true
+
+           _ ->
+             false
+         end)
   end
 
   test "short line split across noeol emits buffer_exceeded, logs warning, and completes without crash" do
@@ -291,16 +308,6 @@ defmodule SymphonyElixir.CursorAdapterTest do
     )
   end
 
-  defp write_cursor_config_stall(binary, workspace_root, opts) do
-    write_workflow_file!(
-      Workflow.workflow_file_path(),
-      Keyword.merge(
-        [agent_kind: "cursor", workspace_root: workspace_root, agent_command: binary],
-        Keyword.take(opts, [:codex_stream_timeout_ms])
-      )
-    )
-  end
-
   defp setup_cursor_env(scenario) do
     root = Path.join(System.tmp_dir!(), "symphony-elixir-cursor-#{System.unique_integer([:positive])}")
     File.mkdir_p!(root)
@@ -347,7 +354,7 @@ exit 1
     ~s(#!/bin/sh
 printf 'ARGS:%s\\n' "$*" >> "#{trace}"
 printf '%s\\n' '{"type":"system","subtype":"init","session_id":"st"}'
-sleep 3
+sleep 12
 printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"late","usage":{"inputTokens":1,"outputTokens":1}}'
 exit 0
 )
