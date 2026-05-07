@@ -200,13 +200,22 @@ defmodule SymphonyElixir.Claude.Adapter do
     message = Map.get(payload, "message", %{})
     usage = Map.get(message, "usage") || Map.get(payload, "usage") || %{}
 
-    input = (usage["input_tokens"] || usage[:input_tokens]) |> int_or(0)
-    output = (usage["output_tokens"] || usage[:output_tokens]) |> int_or(0)
+    input = resolve_token_count(usage, ["inputTokens", "input_tokens"])
+    output = resolve_token_count(usage, ["outputTokens", "output_tokens"])
 
     %{
       input_tokens: current_usage.input_tokens + input,
       output_tokens: current_usage.output_tokens + output
     }
+  end
+
+  defp resolve_token_count(usage, keys) do
+    Enum.find_value(keys, 0, fn key ->
+      case Map.get(usage, key) do
+        nil -> nil
+        val -> int_or(val, 0)
+      end
+    end)
   end
 
   defp int_or(nil, default), do: default
