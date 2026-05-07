@@ -1,34 +1,35 @@
 defmodule SymphonyElixir.HttpServerBoundPortTest do
-  use ExUnit.Case, async: false
+  use SymphonyElixir.TestSupport
+
   import ExUnit.CaptureLog
 
   alias SymphonyElixir.HttpServer
 
-  setup do
-    SymphonyElixir.TestSupport.stop_default_http_server()
-    :ok
-  end
-
-  test "bound_port logs warning on :raise test force" do
-    log =
-      capture_log(fn ->
-        with_app_env(:symphony_elixir, :http_server_bound_port_test_force, :raise, fn ->
-          assert HttpServer.bound_port() == nil
+  describe "bound_port/1" do
+    test "logs and returns nil when server_info raises (simulated)" do
+      log =
+        capture_log(fn ->
+          with_app_env(:symphony_elixir, :http_server_bound_port_test_force, :raise, fn ->
+            assert HttpServer.bound_port() == nil
+          end)
         end)
-      end)
 
-    assert log =~ "HttpServer.bound_port failed:"
-  end
+      assert log =~ "HttpServer.bound_port failed:"
+      assert log =~ "ArgumentError"
+      assert log =~ "simulated HttpServer.bound_port failure"
+    end
 
-  test "bound_port logs warning on :exit test force" do
-    log =
-      capture_log(fn ->
-        with_app_env(:symphony_elixir, :http_server_bound_port_test_force, :exit, fn ->
-          assert HttpServer.bound_port() == nil
+    test "logs and returns nil when server_info exits (simulated)" do
+      log =
+        capture_log(fn ->
+          with_app_env(:symphony_elixir, :http_server_bound_port_test_force, :exit, fn ->
+            assert HttpServer.bound_port() == nil
+          end)
         end)
-      end)
 
-    assert log =~ "HttpServer.bound_port failed:"
+      assert log =~ "HttpServer.bound_port failed:"
+      assert log =~ ":simulated_http_server_bound_port_exit"
+    end
   end
 
   defp with_app_env(app, key, value, fun) do
