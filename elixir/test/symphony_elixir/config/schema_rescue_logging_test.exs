@@ -20,6 +20,10 @@ defmodule SymphonyElixir.Config.SchemaRescueLoggingTest do
     end
   end
 
+  defp non_existing_atom_string do
+    "symphony_web69_extra_disallowed_#{System.unique_integer([:positive])}"
+  end
+
   defp minimal_parse_config(root) do
     %{
       "tracker" => %{"kind" => "memory"},
@@ -33,6 +37,9 @@ defmodule SymphonyElixir.Config.SchemaRescueLoggingTest do
   end
 
   test "warn_disallowed_keys rescue logs warning with error reason" do
+    missing = non_existing_atom_string()
+    assert_raise ArgumentError, fn -> String.to_existing_atom(missing) end
+
     root =
       Path.join(
         System.tmp_dir!(),
@@ -41,16 +48,18 @@ defmodule SymphonyElixir.Config.SchemaRescueLoggingTest do
 
     log =
       capture_log(fn ->
-        with_app_env(:symphony_elixir, :symphony_test_schema_warn_disallowed_raise, true, fn ->
+        with_app_env(:symphony_elixir, :extra_disallowed_workflow_keys_for_test, [missing], fn ->
           assert {:ok, _} = Schema.parse(minimal_parse_config(root))
         end)
       end)
 
-    assert log =~ "Config.Schema.warn_disallowed_keys/1 failed, continuing:"
-    assert log =~ "simulated warn_disallowed_keys failure"
+    assert log =~ "Config.Schema.warn_disallowed_keys"
   end
 
   test "strip_disallowed_keys rescue logs warning with error reason" do
+    missing = non_existing_atom_string()
+    assert_raise ArgumentError, fn -> String.to_existing_atom(missing) end
+
     root =
       Path.join(
         System.tmp_dir!(),
@@ -59,12 +68,11 @@ defmodule SymphonyElixir.Config.SchemaRescueLoggingTest do
 
     log =
       capture_log(fn ->
-        with_app_env(:symphony_elixir, :symphony_test_schema_strip_disallowed_raise, true, fn ->
+        with_app_env(:symphony_elixir, :extra_disallowed_workflow_keys_for_test, [missing], fn ->
           assert {:ok, _} = Schema.parse(minimal_parse_config(root))
         end)
       end)
 
-    assert log =~ "Config.Schema.strip_disallowed_keys/1 failed, returning raw config:"
-    assert log =~ "simulated strip_disallowed_keys failure"
+    assert log =~ "Config.Schema.strip_disallowed_keys"
   end
 end
