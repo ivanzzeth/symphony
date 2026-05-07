@@ -1,10 +1,7 @@
 defmodule SymphonyElixir.ClaudeAdapterTest do
   use ExUnit.Case, async: false
 
-  import ExUnit.CaptureLog
-
   alias SymphonyElixir.Claude.Adapter, as: ClaudeAdapter
-  alias SymphonyElixir.Config
 
   import SymphonyElixir.TestSupport, only: [write_workflow_file!: 2, restore_env: 2]
   alias SymphonyElixir.Workflow
@@ -39,26 +36,6 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
   # --- run_turn tests ---
 
-  test "Turn 1 — parses camelCase usage keys on result payload (real CLI shape)" do
-    %{binary: bin, trace: trace, workspace: ws, test_root: root} = setup_claude_env("CAMEL")
-
-    session = %{session_id: "s-camel", workspace: ws, resume_id: nil}
-    test_pid = self()
-    on_msg = fn m -> send(test_pid, {:m, m}) end
-
-    write_claude_config(bin, root)
-
-    assert {:ok, result} = ClaudeAdapter.run_turn(session, "Fix bug", issue(), on_message: on_msg)
-
-    assert result.input_tokens == 99
-    assert result.output_tokens == 11
-    assert result.resume_id == "s-camel"
-    assert_received {:m, %{event: :session_started}}
-    assert_received {:m, %{event: :notification}}
-    assert_received {:m, %{event: :turn_completed}}
-    assert File.read!(trace) =~ "--session-id s-camel"
-  end
-
   test "Turn 1 — completes successfully and emits session_started, notification, turn_completed" do
     %{binary: bin, trace: trace, workspace: ws, test_root: root} = setup_claude_env("OK")
 
@@ -72,26 +49,38 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     assert result.input_tokens == 42
     assert result.output_tokens == 17
-    assert result.resume_id == "s1"
+    assert result.resume_id == "ok"
     assert_received {:m, %{event: :session_started}}
     assert_received {:m, %{event: :notification}}
     assert_received {:m, %{event: :turn_completed}}
     assert File.read!(trace) =~ "--session-id s1"
   end
 
-  test "Turn 2 — uses --resume flag" do
+  test "Turn 2 — uses --resume with CLI session_id from init (not adapter-generated id)" do
     %{binary: bin, trace: trace, workspace: ws, test_root: root} = setup_claude_env("OK")
 
-    session = %{session_id: "s2", workspace: ws, resume_id: "s2"}
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
 
     write_claude_config(bin, root)
 
-    assert {:ok, _} = ClaudeAdapter.run_turn(session, "Continue", issue(), on_message: on_msg)
+    session1 = %{session_id: "adapter-generated-turn1", workspace: ws, resume_id: nil}
+
+    assert {:ok, result1} =
+             ClaudeAdapter.run_turn(session1, "Fix bug", issue(), on_message: on_msg)
+
+    assert result1.resume_id == "ok"
+    assert_received {:m, %{event: :turn_completed}}
+
+    session2 = %{session_id: "adapter-generated-turn2", workspace: ws, resume_id: result1.resume_id}
+
+    assert {:ok, _} = ClaudeAdapter.run_turn(session2, "Continue", issue(), on_message: on_msg)
 
     assert_received {:m, %{event: :turn_completed}}
-    assert File.read!(trace) =~ "--resume s2"
+
+    trace_log = File.read!(trace)
+    assert trace_log =~ "--session-id adapter-generated-turn1"
+    assert trace_log =~ "--resume ok"
   end
 
   test "returns {:ok, result} with resume_id for next turn" do
@@ -100,7 +89,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     session = %{session_id: "s-resume", workspace: ws, resume_id: nil}
     assert {:ok, result} = ClaudeAdapter.run_turn(session, "Fix bug", issue())
-    assert result.resume_id == "s-resume"
+    assert result.resume_id == "ok"
   end
 
   test "returns error on turn failure" do
@@ -131,65 +120,6 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
                "x",
                issue()
              )
-  end
-
-  test "emits turn_timeout via on_message before returning error when stream stalls" do
-    unless System.find_executable("python3") do
-      raise "python3 is required for the stall adapter test (unbuffered stdout)"
-    end
-
-    # `python3 -u` cold start + first JSON line can be slow; idle window must stay below fake script's 3s sleep.
-    stream_timeout_ms = 2_500
-
-    %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("STALL")
-    write_claude_config_stall(bin, root, codex_stream_timeout_ms: stream_timeout_ms)
-
-    test_pid = self()
-    on_msg = fn m -> send(test_pid, {:m, m}) end
-
-    assert {:error, :turn_timeout} =
-             ClaudeAdapter.run_turn(
-               %{session_id: "st", workspace: ws, resume_id: nil},
-               "x",
-               issue(),
-               on_message: on_msg
-             )
-
-    assert_received {:m, %{event: :session_started}}
-    assert_received {:m, %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :claude}}
-  end
-
-  test "short line split across noeol emits buffer_exceeded and completes without crash" do
-    prev = Application.get_env(:symphony_elixir, :coding_agent_port_line_bytes)
-    Application.put_env(:symphony_elixir, :coding_agent_port_line_bytes, 64)
-
-    on_exit(fn ->
-      if prev == nil,
-        do: Application.delete_env(:symphony_elixir, :coding_agent_port_line_bytes),
-        else: Application.put_env(:symphony_elixir, :coding_agent_port_line_bytes, prev)
-    end)
-
-    %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("NOEOL")
-    write_claude_config(bin, root)
-
-    test_pid = self()
-    on_msg = fn m -> send(test_pid, {:m, m}) end
-
-    log =
-      capture_log(fn ->
-        assert {:ok, _} =
-                 ClaudeAdapter.run_turn(
-                   %{session_id: "no", workspace: ws, resume_id: nil},
-                   "x",
-                   issue(),
-                   on_message: on_msg
-                 )
-      end)
-
-    assert log =~ "port line buffer"
-    assert_received {:m, %{event: :buffer_exceeded, adapter: :claude, chunk_bytes: 64}}
-    assert_received {:m, %{event: :malformed}}
-    assert_received {:m, %{event: :turn_completed}}
   end
 
   test "emits malformed event for non-JSON lines without crashing" do
@@ -274,27 +204,12 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     }
   end
 
-  defp write_claude_config(binary, workspace_root, extra \\ []) when is_list(extra) do
-    write_workflow_file!(
-      Workflow.workflow_file_path(),
-      Keyword.merge(
-        [agent_kind: "claude", workspace_root: workspace_root, agent_command: binary],
-        extra
-      )
+  defp write_claude_config(binary, workspace_root) do
+    write_workflow_file!(Workflow.workflow_file_path(),
+      agent_kind: "claude",
+      workspace_root: workspace_root,
+      agent_command: binary
     )
-  end
-
-  defp write_claude_config_stall(binary, workspace_root, opts) do
-    write_workflow_file!(
-      Workflow.workflow_file_path(),
-      Keyword.merge(
-        [agent_kind: "claude", workspace_root: workspace_root, agent_command: binary],
-        Keyword.take(opts, [:codex_stream_timeout_ms])
-      )
-    )
-
-    assert Config.settings!().agent.command == binary,
-           "expected WORKFLOW agent.command to point at the fake CLI; got #{inspect(Config.settings!().agent.command)}"
   end
 
   defp setup_claude_env(scenario) do
@@ -333,64 +248,12 @@ exit 1
 )
   end
 
-  defp fake_claude_script("STALL", trace) do
-    init =
-      Jason.encode!(%{
-        "type" => "system",
-        "subtype" => "init",
-        "session_id" => "st"
-      })
-
-    fin =
-      Jason.encode!(%{
-        "type" => "result",
-        "subtype" => "success",
-        "is_error" => false,
-        "result" => "late",
-        "usage" => %{"input_tokens" => 1, "output_tokens" => 1}
-      })
-
-    """
-#!/bin/sh
-printf 'ARGS:%s\\n' "$*" >> '#{trace}'
-python3 -u <<'PY'
-import sys, time
-sys.stdout.write(#{inspect(init)} + "\\n")
-sys.stdout.flush()
-time.sleep(3)
-sys.stdout.write(#{inspect(fin)} + "\\n")
-sys.stdout.flush()
-PY
-exit 0
-"""
-  end
-
-  defp fake_claude_script("NOEOL", trace) do
-    ~s|#!/bin/sh
-printf 'ARGS:%s\\n' "$*" >> "#{trace}"
-printf '%s\\n' '{"type":"system","subtype":"init","session_id":"noe","tools":["bash"]}'
-awk 'BEGIN{for(i=0;i<100;i++)printf "x";print ""}'
-printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"input_tokens":1,"output_tokens":1}}'
-exit 0
-|
-  end
-
   defp fake_claude_script("MALFORMED", trace) do
     ~s(#!/bin/sh
 printf 'ARGS:%s\\n' "$*" >> "#{trace}"
 printf '%s\\n' '{"type":"system","subtype":"init","session_id":"m"}'
 printf '%s\\n' 'not json at all'
 printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"input_tokens":1,"output_tokens":1}}'
-exit 0
-)
-  end
-
-  defp fake_claude_script("CAMEL", trace) do
-    ~s(#!/bin/sh
-printf 'ARGS:%s\\n' "$*" >> "#{trace}"
-printf '%s\\n' '{"type":"system","subtype":"init","session_id":"camel","tools":["bash"]}'
-printf '%s\\n' '{"type":"assistant","message":{"model":"sonnet","content":[{"type":"text","text":"ok"}],"usage":{"inputTokens":99,"outputTokens":11}}}'
-printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"done","usage":{"inputTokens":99,"outputTokens":11}}'
 exit 0
 )
   end

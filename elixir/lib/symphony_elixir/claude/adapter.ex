@@ -11,7 +11,7 @@ defmodule SymphonyElixir.Claude.Adapter do
   require Logger
   alias SymphonyElixir.{Config, SSH}
 
-  @default_port_line_bytes 1_048_576
+  @port_line_bytes 1_048_576
 
   @impl true
   def start_session(workspace, _opts) do
@@ -23,16 +23,15 @@ defmodule SymphonyElixir.Claude.Adapter do
   def run_turn(session, prompt, _issue, opts \\ []) do
     on_message = Keyword.get(opts, :on_message, &default_on_message/1)
     worker_host = Keyword.get(opts, :worker_host)
-    timeout_ms = Config.settings!().agent.stream_timeout_ms
+    timeout_ms = Config.settings!().codex.stream_timeout_ms
 
     cli_args = build_cli_args(session, prompt)
 
     with {:ok, port} <- open_claude_port(session.workspace, cli_args, worker_host) do
-      try do
-        receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms, "")
-      after
-        close_port(port)
-      end
+      result = receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms)
+
+      close_port(port)
+      result
     end
   end
 
@@ -78,7 +77,6 @@ defmodule SymphonyElixir.Claude.Adapter do
 
     (base ++ session_arg ++ ["--", escaped_prompt])
     |> Enum.join(" ")
-    |> then(&"exec #{&1}")
   end
 
   defp open_claude_port(workspace, cli_args, nil) do
@@ -97,7 +95,7 @@ defmodule SymphonyElixir.Claude.Adapter do
               args: [~c"-lc", String.to_charlist(cli_args)],
               cd: String.to_charlist(workspace),
               env: port_env(),
-              line: port_line_bytes()
+              line: @port_line_bytes
             ]
           )
 
@@ -107,47 +105,27 @@ defmodule SymphonyElixir.Claude.Adapter do
 
   defp open_claude_port(workspace, cli_args, worker_host) when is_binary(worker_host) do
     remote_command = "cd #{SSH.shell_escape(workspace)} && exec #{cli_args}"
-    SSH.start_port(worker_host, remote_command, line: port_line_bytes())
+    SSH.start_port(worker_host, remote_command, line: @port_line_bytes)
   end
 
-  defp receive_stream(port, on_message, session, usage, timeout_ms, pending_line) do
+  defp receive_stream(port, on_message, session, usage, timeout_ms) do
     receive do
       {^port, {:data, {:eol, chunk}}} ->
-        line = pending_line <> to_string(chunk)
+        line = to_string(chunk)
 
         case handle_line(line, on_message, session, usage) do
-          {:complete, result} ->
-            result
-
-          {:continue, new_usage} ->
-            receive_stream(port, on_message, session, new_usage, timeout_ms, "")
+          {:complete, result} -> result
+          {:continue, new_usage, new_session} ->
+            receive_stream(port, on_message, new_session, new_usage, timeout_ms)
         end
 
-      {^port, {:data, {:noeol, chunk}}} ->
-        frag = IO.iodata_to_binary(chunk)
-        n = byte_size(frag)
-        plen = byte_size(pending_line)
-        buf = port_line_bytes()
-
-        Logger.warning(
-          "Claude adapter: stream-json line exceeded port line buffer (#{buf} bytes) without newline; " <>
-            "buffering partial segment (#{n} bytes, pending #{plen} bytes)"
-        )
-
-        emit_message(on_message, :buffer_exceeded, %{
-          adapter: :claude,
-          chunk_bytes: n,
-          pending_bytes: plen,
-          port_line_bytes: buf
-        })
-
-        receive_stream(port, on_message, session, usage, timeout_ms, pending_line <> frag)
+      {^port, {:data, {:noeol, _chunk}}} ->
+        receive_stream(port, on_message, session, usage, timeout_ms)
 
       {^port, {:exit_status, status}} ->
         {:error, {:port_exit, status}}
     after
       timeout_ms ->
-        emit_message(on_message, :turn_timeout, %{timeout_ms: timeout_ms, adapter: :claude})
         {:error, :turn_timeout}
     end
   end
@@ -161,21 +139,21 @@ defmodule SymphonyElixir.Claude.Adapter do
           session_id: sid
         })
 
-        {:continue, usage}
+        {:continue, usage, %{session | session_id: sid, resume_id: sid}}
 
       {:ok, %{"type" => "assistant"} = payload} ->
         emit_message(on_message, :notification, %{
           payload: payload
         })
 
-        {:continue, usage}
+        {:continue, usage, session}
 
       {:ok, %{"type" => "user"} = payload} ->
         emit_message(on_message, :notification, %{
           payload: payload
         })
 
-        {:continue, usage}
+        {:continue, usage, session}
 
       {:ok, %{"type" => "result", "is_error" => false} = payload} ->
         final_usage = accumulate_usage(payload, usage)
@@ -190,7 +168,7 @@ defmodule SymphonyElixir.Claude.Adapter do
           %{
             input_tokens: final_usage.input_tokens,
             output_tokens: final_usage.output_tokens,
-            resume_id: session.session_id
+            resume_id: session.resume_id
           }}}
 
       {:ok, %{"type" => "result", "is_error" => true} = payload} ->
@@ -205,7 +183,7 @@ defmodule SymphonyElixir.Claude.Adapter do
           payload: payload
         })
 
-        {:continue, usage}
+        {:continue, usage, session}
 
       {:error, _reason} ->
         emit_message(on_message, :malformed, %{
@@ -213,7 +191,7 @@ defmodule SymphonyElixir.Claude.Adapter do
           raw: line
         })
 
-        {:continue, usage}
+        {:continue, usage, session}
     end
   end
 
@@ -221,22 +199,13 @@ defmodule SymphonyElixir.Claude.Adapter do
     message = Map.get(payload, "message", %{})
     usage = Map.get(message, "usage") || Map.get(payload, "usage") || %{}
 
-    input = resolve_token_count(usage, ["inputTokens", "input_tokens"])
-    output = resolve_token_count(usage, ["outputTokens", "output_tokens"])
+    input = (usage["input_tokens"] || usage[:input_tokens]) |> int_or(0)
+    output = (usage["output_tokens"] || usage[:output_tokens]) |> int_or(0)
 
     %{
       input_tokens: current_usage.input_tokens + input,
       output_tokens: current_usage.output_tokens + output
     }
-  end
-
-  defp resolve_token_count(usage, keys) do
-    Enum.find_value(keys, 0, fn key ->
-      case Map.get(usage, key) do
-        nil -> nil
-        val -> int_or(val, 0)
-      end
-    end)
   end
 
   defp int_or(nil, default), do: default
@@ -247,10 +216,6 @@ defmodule SymphonyElixir.Claude.Adapter do
       {num, _} -> num
       :error -> default
     end
-  end
-
-  defp port_line_bytes do
-    Application.get_env(:symphony_elixir, :coding_agent_port_line_bytes, @default_port_line_bytes)
   end
 
   defp emit_message(on_message, event, details) do
