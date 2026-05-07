@@ -1,0 +1,70 @@
+defmodule SymphonyElixir.Config.SchemaRescueLoggingTest do
+  use SymphonyElixir.TestSupport
+
+  alias SymphonyElixir.Config.Schema
+
+  defp with_app_env(app, key, value, fun) do
+    env = Application.get_all_env(app)
+    had_key? = Keyword.has_key?(env, key)
+    previous = Keyword.get(env, key)
+
+    try do
+      Application.put_env(app, key, value)
+      fun.()
+    after
+      if had_key? do
+        Application.put_env(app, key, previous)
+      else
+        Application.delete_env(app, key)
+      end
+    end
+  end
+
+  defp minimal_parse_config(root) do
+    %{
+      "tracker" => %{"kind" => "memory"},
+      "polling" => %{"interval_ms" => 30_000},
+      "workspace" => %{"root" => root, "base_branch" => "main"},
+      "worker" => %{},
+      "agent" => %{"kind" => "codex", "command" => "codex app-server"},
+      "codex" => %{"command" => "codex app-server"},
+      "hooks" => %{}
+    }
+  end
+
+  test "warn_disallowed_keys rescue logs warning with error reason" do
+    root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-schema-warn-rescue-#{System.unique_integer([:positive])}"
+      )
+
+    log =
+      capture_log(fn ->
+        with_app_env(:symphony_elixir, :symphony_test_schema_warn_disallowed_raise, true, fn ->
+          assert {:ok, _} = Schema.parse(minimal_parse_config(root))
+        end)
+      end)
+
+    assert log =~ "Config.Schema.warn_disallowed_keys/1 failed, continuing:"
+    assert log =~ "simulated warn_disallowed_keys failure"
+  end
+
+  test "strip_disallowed_keys rescue logs warning with error reason" do
+    root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-schema-strip-rescue-#{System.unique_integer([:positive])}"
+      )
+
+    log =
+      capture_log(fn ->
+        with_app_env(:symphony_elixir, :symphony_test_schema_strip_disallowed_raise, true, fn ->
+          assert {:ok, _} = Schema.parse(minimal_parse_config(root))
+        end)
+      end)
+
+    assert log =~ "Config.Schema.strip_disallowed_keys/1 failed, returning raw config:"
+    assert log =~ "simulated strip_disallowed_keys failure"
+  end
+end
