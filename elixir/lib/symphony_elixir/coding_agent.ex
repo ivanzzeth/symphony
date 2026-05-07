@@ -60,4 +60,36 @@ defmodule SymphonyElixir.CodingAgent do
       "cursor" -> SymphonyElixir.Cursor.Adapter
     end
   end
+
+  @known_agent_kinds ~w(codex claude cursor)
+
+  @doc """
+  Human-readable label for `agent.kind` (dashboards and APIs).
+  """
+  @spec kind_display_label(String.t()) :: String.t()
+  def kind_display_label(kind) when kind in @known_agent_kinds do
+    case kind do
+      "codex" -> "Codex"
+      "claude" -> "Claude Code"
+      "cursor" -> "Cursor"
+    end
+  end
+
+  def kind_display_label(kind) when is_binary(kind) do
+    kind
+    |> String.trim()
+    |> case do
+      "" -> "Unknown"
+      value -> humanize_unknown_agent_kind(value)
+    end
+  end
+
+  def kind_display_label(_), do: "Unknown"
+
+  defp humanize_unknown_agent_kind(value) do
+    value
+    |> String.replace(~r/[-_]/, " ")
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.map_join(" ", &String.capitalize/1)
+  end
 end

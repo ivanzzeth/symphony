@@ -487,8 +487,8 @@ defmodule SymphonyElixir.LiveE2ETest do
         worker_ssh_hosts: worker_setup.ssh_worker_hosts,
         codex_command: worker_setup.codex_command,
         codex_approval_policy: "never",
-        codex_turn_timeout_ms: 600_000,
-        codex_stall_timeout_ms: 600_000,
+        agent_turn_timeout_ms: 600_000,
+        agent_stall_timeout_ms: 600_000,
         prompt: live_prompt(project["slugId"])
       )
 

@@ -7,7 +7,7 @@ defmodule SymphonyElixir.Orchestrator do
   require Logger
   import Bitwise, only: [<<<: 2]
 
-  alias SymphonyElixir.{AgentRunner, Config, StatusDashboard, Tracker, Workspace}
+  alias SymphonyElixir.{AgentRunner, CodingAgent, Config, StatusDashboard, Tracker, Workspace}
   alias SymphonyElixir.Linear.Issue
 
   @continuation_retry_delay_ms 1_000
@@ -76,6 +76,28 @@ defmodule SymphonyElixir.Orchestrator do
       {:error, reason} ->
         {:stop, reason}
     end
+  end
+
+  @impl true
+  def terminate(_reason, %State{running: running}) when running == %{} do
+    :ok
+  end
+
+  @impl true
+  def terminate(reason, %State{running: running}) do
+    Logger.info("Orchestrator terminating reason=#{inspect(reason)} cleaning_up=#{map_size(running)} agent(s)")
+
+    Enum.each(running, fn {_issue_id, %{pid: pid, identifier: identifier} = entry} ->
+      Logger.info("Terminating agent on shutdown issue_id=#{identifier}")
+
+      cleanup_issue_workspace(identifier, Map.get(entry, :worker_host))
+
+      if is_pid(pid) do
+        Process.exit(pid, :kill)
+      end
+    end)
+
+    :ok
   end
 
   @impl true
@@ -455,7 +477,7 @@ defmodule SymphonyElixir.Orchestrator do
 
   defp reconcile_stalled_running_issues(%State{} = state) do
     case Config.settings() do
-      {:ok, config} -> do_reconcile_stalled(state, config.codex.stall_timeout_ms)
+      {:ok, config} -> do_reconcile_stalled(state, config.agent.stall_timeout_ms)
       {:error, _reason} -> state
     end
   end
@@ -1211,12 +1233,15 @@ defmodule SymphonyElixir.Orchestrator do
         }
       end)
 
+    agent_kind = Config.settings!().agent.kind
+
     {:reply,
      %{
        running: running,
        retrying: retrying,
        codex_totals: state.codex_totals,
        rate_limits: Map.get(state, :codex_rate_limits),
+       coding_agent: %{kind: agent_kind, label: CodingAgent.kind_display_label(agent_kind)},
        polling: %{
          checking?: state.poll_check_in_progress == true,
          next_poll_in_ms: next_poll_in_ms(state.next_poll_due_at_ms, now_ms),
