@@ -32,7 +32,7 @@ agent:
   max_concurrent_agents: 10
   max_turns: 20
 codex:
-  command: cursor
+  command: cursor --model auto
   approval_policy: never
   thread_sandbox: workspace-write
   turn_sandbox_policy:
