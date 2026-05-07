@@ -374,11 +374,15 @@ exit 1
   end
 
   defp fake_claude_script("STALL", trace) do
+    # stdout is fully buffered when this script is piped (not a TTY). A tiny init line can
+    # stay buffered with the final JSON until process exit, so the adapter never observes a
+    # stall gap. Pad init beyond a typical pipe buffer so the init line is delivered before `sleep`.
     init =
       Jason.encode!(%{
         "type" => "system",
         "subtype" => "init",
-        "session_id" => "st"
+        "session_id" => "st",
+        "_flush_pad" => String.duplicate("x", 12_000)
       })
 
     fin =
@@ -396,7 +400,7 @@ exit 1
 #!/bin/sh
 printf 'ARGS:%s\\n' "$*" >> '#{trace}'
 printf '%s\\n' '#{init}'
-sleep 4
+sleep 12
 printf '%s\\n' '#{fin}'
 exit 0
 """
