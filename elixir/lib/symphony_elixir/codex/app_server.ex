@@ -200,7 +200,7 @@ defmodule SymphonyElixir.Codex.AppServer do
             :binary,
             :exit_status,
             :stderr_to_stdout,
-            args: [~c"-lc", String.to_charlist(Config.settings!().agent.command)],
+            args: [~c"-lc", String.to_charlist("exec #{Config.settings!().agent.command}")],
             cd: String.to_charlist(workspace),
             env: system_env_charlists(),
             line: @port_line_bytes

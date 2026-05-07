@@ -39,7 +39,8 @@ defmodule SymphonyElixir.HarnessManagerTest do
     harness_state_path = Path.join(symphony_dir, "harness-state.json")
 
     # Start a Harness Manager scoped to the test directory
-    {:ok, pid} = GenServer.start_link(Manager, [project_dir: test_root], name: nil)
+    workflow_file = Path.join(test_root, "WORKFLOW.md")
+    {:ok, pid} = GenServer.start_link(Manager, [project_dir: test_root, workflow_file_path: workflow_file], name: nil)
 
     on_exit(fn ->
       if Process.alive?(pid), do: GenServer.stop(pid)

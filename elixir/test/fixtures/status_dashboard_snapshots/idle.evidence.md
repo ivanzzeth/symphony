@@ -6,6 +6,7 @@
 │ Tokens: in 0 | out 0 | total 0
 │ Rate Limits: unavailable
 │ Project: https://linear.app/project/project/issues
+│ Dashboard: http://127.0.0.1:58817/
 │ Next refresh: n/a
 ├─ Running
 │
