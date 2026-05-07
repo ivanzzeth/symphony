@@ -52,7 +52,7 @@ defmodule SymphonyElixir.HttpServer do
 
   @spec bound_port(term()) :: non_neg_integer() | nil
   def bound_port(_server \\ __MODULE__) do
-    # Test-only: `:http_server_bound_port_test_mode` is set from `http_server_bound_port_test.exs` (not used in production).
+    # Test-only: `:http_server_bound_port_test_mode` is set from `http_server_test.exs` (not used in production).
     case Application.get_env(:symphony_elixir, :http_server_bound_port_test_mode) do
       :raise -> raise RuntimeError, "HttpServer.bound_port test mode (raise)"
       {:exit, reason} -> exit(reason)
@@ -68,8 +68,8 @@ defmodule SymphonyElixir.HttpServer do
       Logger.warning("HttpServer.bound_port failed: #{inspect(error)}")
       nil
   catch
-    :exit, reason ->
-      Logger.warning("HttpServer.bound_port failed: #{inspect(reason)}")
+    :exit, error ->
+      Logger.warning("HttpServer.bound_port failed: #{inspect(error)}")
       nil
   end
 

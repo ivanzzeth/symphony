@@ -1,4 +1,4 @@
-defmodule SymphonyElixir.HttpServerBoundPortTest do
+defmodule SymphonyElixir.HttpServerTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
@@ -29,6 +29,7 @@ defmodule SymphonyElixir.HttpServerBoundPortTest do
       end)
 
     assert log =~ "HttpServer.bound_port failed:"
+    assert log =~ "RuntimeError"
   end
 
   test "bound_port logs warning when test mode forces exit" do
@@ -48,5 +49,6 @@ defmodule SymphonyElixir.HttpServerBoundPortTest do
       end)
 
     assert log =~ "HttpServer.bound_port failed:"
+    assert log =~ ":simulated_bound_port_exit"
   end
 end
