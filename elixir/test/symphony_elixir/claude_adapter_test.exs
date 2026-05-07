@@ -10,7 +10,11 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   alias SymphonyElixir.Workflow
 
   setup do
-    workflow_root = Path.join(System.tmp_dir!(), "symphony-elixir-claude-adapter-#{System.unique_integer([:positive])}")
+    workflow_root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-elixir-claude-adapter-#{System.unique_integer([:positive])}"
+      )
 
     File.mkdir_p!(workflow_root)
     workflow_file = Path.join(workflow_root, "WORKFLOW.md")
@@ -80,10 +84,9 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     assert File.read!(trace) =~ "--session-id s1"
   end
 
-  test "Turn 2 — uses --resume flag" do
+  test "Turn 2 — uses --resume with real session_id from init event" do
     %{binary: bin, trace: trace, workspace: ws, test_root: root} = setup_claude_env("OK")
 
-    # After turn 1, resume_id is the real CLI session_id from the init event ("ok" in fake_claude_script).
     session = %{session_id: "s2", workspace: ws, resume_id: "ok"}
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
@@ -156,12 +159,12 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
       raise "python3 is required for the stall adapter test (unbuffered stdout)"
     end
 
-    # After the init line, the fake script sleeps before emitting the result; stream_timeout_ms must be
-    # shorter than that sleep so the adapter hits :turn_timeout, but long enough for slow python cold start.
-    stream_timeout_ms = 2_000
+    # Fake script sleeps 6s between init and result; per-turn stream_timeout_ms must be below that gap
+    # (second `receive`) but high enough for Python cold start + first JSON line.
+    stream_timeout_ms = 4_500
 
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("STALL")
-    write_claude_config_stall(bin, root, agent_stream_timeout_ms: stream_timeout_ms)
+    write_claude_config(bin, root)
 
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
@@ -171,26 +174,12 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
                %{session_id: "st", workspace: ws, resume_id: nil},
                "x",
                issue(),
-               on_message: on_msg
+               on_message: on_msg,
+               stream_timeout_ms: stream_timeout_ms
              )
 
-    events =
-      for _ <- 1..2 do
-        assert_receive {:m, %{event: ev} = msg}, 10_000
-        {ev, msg}
-      end
-
-    assert MapSet.new(Enum.map(events, &elem(&1, 0))) ==
-             MapSet.new([:session_started, :turn_timeout])
-
-    assert Enum.any?(events, fn
-           {:turn_timeout,
-            {:m, %{timeout_ms: ^stream_timeout_ms, adapter: :claude}}} ->
-             true
-
-           _ ->
-             false
-         end)
+    assert_received {:m, %{event: :session_started}}
+    assert_received {:m, %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :claude}}
   end
 
   test "short line split across noeol emits buffer_exceeded and completes without crash" do
@@ -278,7 +267,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     File.chmod!(fake_claude, 0o755)
 
     remote = "/remote/workspace/issue-1"
-    write_claude_config("claude", "/remote/workspaces")
+    write_claude_config(Path.expand(fake_claude), "/remote/workspaces")
 
     assert {:ok, _} =
              ClaudeAdapter.run_turn(
@@ -316,19 +305,6 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
         extra
       )
     )
-  end
-
-  defp write_claude_config_stall(binary, workspace_root, opts) do
-    write_workflow_file!(
-      Workflow.workflow_file_path(),
-      Keyword.merge(
-        [agent_kind: "claude", workspace_root: workspace_root, agent_command: binary],
-        Keyword.take(opts, [:agent_stream_timeout_ms, :codex_stream_timeout_ms])
-      )
-    )
-
-    assert Config.settings!().agent.command == binary,
-           "expected WORKFLOW agent.command to point at the fake CLI; got #{inspect(Config.settings!().agent.command)}"
   end
 
   defp setup_claude_env(scenario) do
@@ -391,7 +367,7 @@ python3 -u <<'PY'
 import sys, time
 sys.stdout.write(#{inspect(init)} + "\\n")
 sys.stdout.flush()
-time.sleep(5)
+time.sleep(6)
 sys.stdout.write(#{inspect(fin)} + "\\n")
 sys.stdout.flush()
 PY
