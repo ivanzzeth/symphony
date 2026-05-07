@@ -1,5 +1,6 @@
 defmodule SymphonyElixir.AppServerTest do
-  use SymphonyElixir.TestSupport
+  # Serial: AppServer spawns ports and touches global workflow/config surfaces.
+  use SymphonyElixir.TestSupport, async: false
 
   test "app server rejects the workspace root and paths outside workspace root" do
     test_root =

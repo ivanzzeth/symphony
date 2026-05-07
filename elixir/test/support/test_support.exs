@@ -118,7 +118,7 @@ defmodule SymphonyElixir.TestSupport do
           agent_stream_timeout_ms: 120_000,
           agent_read_timeout_ms: 5_000,
           agent_stall_timeout_ms: 300_000,
-          codex_approval_policy: %{reject: %{sandbox_approval: true, rules: true, mcp_elicitations: true}},
+          codex_approval_policy: "never",
           codex_thread_sandbox: "workspace-write",
           codex_turn_sandbox_policy: nil,
           hook_after_create: nil,
