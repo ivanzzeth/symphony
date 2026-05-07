@@ -114,8 +114,11 @@ defmodule SymphonyElixir.CursorAdapterTest do
   end
 
   test "emits turn_timeout via on_message before returning error when stream stalls" do
+    # Allow slow Port/bash startup before first stream-json line; idle window is still < fake script's 3s sleep.
+    stream_timeout_ms = 2_500
+
     %{binary: bin, workspace: ws, test_root: root} = setup_cursor_env("STALL")
-    write_cursor_config_stall(bin, root, codex_stream_timeout_ms: 120)
+    write_cursor_config_stall(bin, root, codex_stream_timeout_ms: stream_timeout_ms)
 
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
@@ -128,7 +131,8 @@ defmodule SymphonyElixir.CursorAdapterTest do
                on_message: on_msg
              )
 
-    assert_received {:m, %{event: :turn_timeout, timeout_ms: 120, adapter: :cursor}}
+    assert_received {:m, %{event: :session_started}}
+    assert_received {:m, %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :cursor}}
   end
 
   test "short line split across noeol emits buffer_exceeded, logs warning, and completes without crash" do
@@ -325,13 +329,14 @@ exit 0
   end
 
   defp fake_cursor_script("NOEOL", trace) do
-    ~s(#!/bin/sh
+    # ~s|...|: awk uses `)` which would terminate ~s(...)
+    ~s|#!/bin/sh
 printf 'ARGS:%s\\n' "$*" >> "#{trace}"
 printf '%s\\n' '{"type":"system","subtype":"init","session_id":"noe","tools":["bash"]}'
 awk 'BEGIN{for(i=0;i<100;i++)printf "x";print ""}'
 printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"inputTokens":1,"outputTokens":1}}'
 exit 0
-)
+|
   end
 
   defp fake_cursor_script("MALFORMED", trace) do
