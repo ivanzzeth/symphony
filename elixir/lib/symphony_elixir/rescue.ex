@@ -54,12 +54,26 @@ defmodule SymphonyElixir.Rescue do
         :ok
 
       _ ->
-        try do
-          Port.close(port)
-          :ok
-        rescue
-          ArgumentError -> :ok
-        end
+        safe_port_close(port)
     end
+  end
+
+  defp safe_port_close(port) do
+    Port.close(port)
+    :ok
+  rescue
+    ArgumentError -> :ok
+  end
+
+  @doc """
+  Run `try_fun`; on exception, invoke `rescue_fun` with the exception and stacktrace.
+  """
+  @spec rescue_map((-> result), (Exception.t(), Exception.stacktrace() -> result)) :: result
+        when result: var
+  def rescue_map(try_fun, rescue_fun)
+      when is_function(try_fun, 0) and is_function(rescue_fun, 2) do
+    try_fun.()
+  rescue
+    exception -> rescue_fun.(exception, __STACKTRACE__)
   end
 end
