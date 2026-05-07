@@ -1476,6 +1476,8 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
 
       assert log =~ "warn_disallowed_keys"
       assert log =~ "strip_disallowed_keys"
+      assert log =~ "ArgumentError"
+      assert log =~ bad_key
     after
       if had_extra? do
         Application.put_env(:symphony_elixir, :extra_disallowed_workflow_keys_for_test, prev_extra)
