@@ -11,7 +11,7 @@ defmodule SymphonyElixir.Claude.Adapter do
   require Logger
   alias SymphonyElixir.{Config, SSH}
 
-  @port_line_bytes 1_048_576
+  @default_port_line_bytes 1_048_576
 
   @impl true
   def start_session(workspace, _opts) do
@@ -28,7 +28,8 @@ defmodule SymphonyElixir.Claude.Adapter do
     cli_args = build_cli_args(session, prompt)
 
     with {:ok, port} <- open_claude_port(session.workspace, cli_args, worker_host) do
-      result = receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms)
+      result =
+        receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms, "")
 
       close_port(port)
       result
@@ -95,7 +96,7 @@ defmodule SymphonyElixir.Claude.Adapter do
               args: [~c"-lc", String.to_charlist(cli_args)],
               cd: String.to_charlist(workspace),
               env: port_env(),
-              line: @port_line_bytes
+              line: port_line_bytes()
             ]
           )
 
@@ -105,26 +106,47 @@ defmodule SymphonyElixir.Claude.Adapter do
 
   defp open_claude_port(workspace, cli_args, worker_host) when is_binary(worker_host) do
     remote_command = "cd #{SSH.shell_escape(workspace)} && exec #{cli_args}"
-    SSH.start_port(worker_host, remote_command, line: @port_line_bytes)
+    SSH.start_port(worker_host, remote_command, line: port_line_bytes())
   end
 
-  defp receive_stream(port, on_message, session, usage, timeout_ms) do
+  defp receive_stream(port, on_message, session, usage, timeout_ms, pending_line) do
     receive do
       {^port, {:data, {:eol, chunk}}} ->
-        line = to_string(chunk)
+        line = pending_line <> to_string(chunk)
 
         case handle_line(line, on_message, session, usage) do
-          {:complete, result} -> result
-          {:continue, new_usage} -> receive_stream(port, on_message, session, new_usage, timeout_ms)
+          {:complete, result} ->
+            result
+
+          {:continue, new_usage} ->
+            receive_stream(port, on_message, session, new_usage, timeout_ms, "")
         end
 
-      {^port, {:data, {:noeol, _chunk}}} ->
-        receive_stream(port, on_message, session, usage, timeout_ms)
+      {^port, {:data, {:noeol, chunk}}} ->
+        frag = IO.iodata_to_binary(chunk)
+        n = byte_size(frag)
+        plen = byte_size(pending_line)
+        buf = port_line_bytes()
+
+        Logger.warning(
+          "Claude adapter: stream-json line exceeded port line buffer (#{buf} bytes) without newline; " <>
+            "buffering partial segment (#{n} bytes, pending #{plen} bytes)"
+        )
+
+        emit_message(on_message, :buffer_exceeded, %{
+          adapter: :claude,
+          chunk_bytes: n,
+          pending_bytes: plen,
+          port_line_bytes: buf
+        })
+
+        receive_stream(port, on_message, session, usage, timeout_ms, pending_line <> frag)
 
       {^port, {:exit_status, status}} ->
         {:error, {:port_exit, status}}
     after
       timeout_ms ->
+        emit_message(on_message, :turn_timeout, %{timeout_ms: timeout_ms, adapter: :claude})
         {:error, :turn_timeout}
     end
   end
@@ -215,6 +237,10 @@ defmodule SymphonyElixir.Claude.Adapter do
       {num, _} -> num
       :error -> default
     end
+  end
+
+  defp port_line_bytes do
+    Application.get_env(:symphony_elixir, :coding_agent_port_line_bytes, @default_port_line_bytes)
   end
 
   defp emit_message(on_message, event, details) do
