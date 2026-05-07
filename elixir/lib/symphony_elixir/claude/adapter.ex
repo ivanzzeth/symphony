@@ -83,7 +83,6 @@ defmodule SymphonyElixir.Claude.Adapter do
 
     (base ++ session_arg ++ ["--", escaped_prompt])
     |> Enum.join(" ")
-    |> then(&"exec #{&1}")
   end
 
   defp open_claude_port(workspace, cli_args, nil) do

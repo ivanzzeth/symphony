@@ -155,10 +155,14 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   end
 
   test "emits turn_timeout via on_message before returning error when stream stalls" do
-    # Fake script sleeps 6s between init and result. The same `stream_timeout_ms` applies to every
-    # `receive`, so pick a value high enough for slow shell + first JSON line, but below 6s so the
-    # second per-line receive hits `:turn_timeout` before the result arrives.
-    stream_timeout_ms = 3_500
+    unless System.find_executable("python3") do
+      raise "python3 is required for the stall adapter test (unbuffered stdout)"
+    end
+
+    # Init prints immediately; Python sleeps before the result line. The same `stream_timeout_ms` applies
+    # to every `receive`, so pick a value high enough for slow Python startup + first JSON line, but
+    # below the Python sleep so the second per-line receive hits `:turn_timeout` before the result.
+    stream_timeout_ms = 10_000
 
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("STALL")
     write_claude_config(bin, root)
