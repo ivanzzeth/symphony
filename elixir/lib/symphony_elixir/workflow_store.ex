@@ -6,7 +6,7 @@ defmodule SymphonyElixir.WorkflowStore do
   use GenServer
   require Logger
 
-  alias SymphonyElixir.Workflow
+  alias SymphonyElixir.{StatusDashboard, Workflow}
 
   @poll_interval_ms 1_000
 
@@ -60,12 +60,24 @@ defmodule SymphonyElixir.WorkflowStore do
 
   @impl true
   def handle_call(:current, _from, %State{} = state) do
-    {:reply, {:ok, state.workflow}, state}
+    old_stamp = state.stamp
+
+    case reload_state(state) do
+      {:ok, new_state} ->
+        maybe_notify_workflow_changed(old_stamp, new_state.stamp)
+        {:reply, {:ok, new_state.workflow}, new_state}
+
+      {:error, _reason, new_state} ->
+        {:reply, {:ok, new_state.workflow}, new_state}
+    end
   end
 
   def handle_call(:force_reload, _from, %State{} = state) do
+    old_stamp = state.stamp
+
     case reload_state(state) do
       {:ok, new_state} ->
+        maybe_notify_workflow_changed(old_stamp, new_state.stamp)
         {:reply, :ok, new_state}
 
       {:error, reason, new_state} ->
@@ -76,15 +88,29 @@ defmodule SymphonyElixir.WorkflowStore do
   @impl true
   def handle_info(:poll, %State{} = state) do
     schedule_poll()
+    old_stamp = state.stamp
 
     case reload_state(state) do
-      {:ok, new_state} -> {:noreply, new_state}
-      {:error, _reason, new_state} -> {:noreply, new_state}
+      {:ok, new_state} ->
+        maybe_notify_workflow_changed(old_stamp, new_state.stamp)
+        {:noreply, new_state}
+
+      {:error, _reason, new_state} ->
+        {:noreply, new_state}
     end
   end
 
   defp schedule_poll do
     Process.send_after(self(), :poll, @poll_interval_ms)
+  end
+
+  defp maybe_notify_workflow_changed(stamp, stamp), do: :ok
+
+  defp maybe_notify_workflow_changed(_old_stamp, _new_stamp) do
+    # Avoid synchronous notify during WorkflowStore callbacks so PubSub/config
+    # paths cannot re-enter this GenServer (e.g. force_reload timeouts under test).
+    _ = spawn(fn -> StatusDashboard.notify_update() end)
+    :ok
   end
 
   defp reload_state(%State{} = state) do

@@ -3,7 +3,7 @@ defmodule SymphonyElixirWeb.Presenter do
   Shared projections for the observability API and dashboard.
   """
 
-  alias SymphonyElixir.{Config, Orchestrator, StatusDashboard}
+  alias SymphonyElixir.{CodingAgent, Config, Orchestrator, StatusDashboard}
 
   @spec state_payload(GenServer.name(), timeout()) :: map()
   def state_payload(orchestrator, snapshot_timeout_ms) do
@@ -11,8 +11,22 @@ defmodule SymphonyElixirWeb.Presenter do
 
     case Orchestrator.snapshot(orchestrator, snapshot_timeout_ms) do
       %{} = snapshot ->
+        agent =
+          case Map.get(snapshot, :coding_agent) do
+            %{kind: kind, label: label} when is_binary(kind) and is_binary(label) ->
+              %{kind: kind, kind_label: label}
+
+            %{kind: kind} when is_binary(kind) ->
+              %{kind: kind, kind_label: CodingAgent.kind_display_label(kind)}
+
+            _ ->
+              agent_kind = Config.settings!().agent.kind
+              %{kind: agent_kind, kind_label: CodingAgent.kind_display_label(agent_kind)}
+          end
+
         %{
           generated_at: generated_at,
+          agent: agent,
           counts: %{
             running: length(snapshot.running),
             retrying: length(snapshot.retrying)

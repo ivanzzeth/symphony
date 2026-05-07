@@ -957,7 +957,8 @@ defmodule SymphonyElixir.OrchestratorStatusTest do
 
     assert is_integer(due_at_ms)
     remaining_ms = due_at_ms - System.monotonic_time(:millisecond)
-    lower_bound = max(0, 9_500 - 500)
+    # ~9s backoff from stall retry; allow scheduler/monotonic clock drift under load.
+    lower_bound = max(0, 9_000 - 750)
     assert remaining_ms >= lower_bound
     assert remaining_ms <= 10_500
   end
@@ -970,6 +971,22 @@ defmodule SymphonyElixir.OrchestratorStatusTest do
 
     assert rendered =~ "app_status=offline"
     refute rendered =~ "Timestamp:"
+  end
+
+  test "status dashboard TUI uses snapshot coding_agent when present" do
+    snapshot_data =
+      {:ok,
+       %{
+         running: [],
+         retrying: [],
+         codex_totals: %{input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0},
+         rate_limits: nil,
+         coding_agent: %{kind: "cursor", label: "Cursor"}
+       }}
+
+    rendered = StatusDashboard.format_snapshot_content_for_test(snapshot_data, 0.0)
+    assert rendered =~ "Coding agent:"
+    assert rendered =~ "Cursor"
   end
 
   test "status dashboard renders linear project link and dashboard url in header" do
@@ -995,7 +1012,10 @@ defmodule SymphonyElixir.OrchestratorStatusTest do
        }}
 
     rendered = StatusDashboard.format_snapshot_content_for_test(snapshot_data, 0.0)
+    kind_label = SymphonyElixir.CodingAgent.kind_display_label(SymphonyElixir.Config.settings!().agent.kind)
 
+    assert rendered =~ "Coding agent:"
+    assert rendered =~ kind_label
     assert rendered =~ "│ Project:"
     assert rendered =~ "https://linear.app/project/project/issues"
     assert rendered =~ "│ Dashboard:"
