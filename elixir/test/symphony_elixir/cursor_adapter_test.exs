@@ -200,7 +200,6 @@ defmodule SymphonyElixir.CursorAdapterTest do
 
     # The exec_cmd trace captures the actual shell command passed to bash -lc
     exec_cmd_path = Path.join(root, "exec_cmd")
-
     if File.exists?(exec_cmd_path) do
       exec_cmd = File.read!(exec_cmd_path)
       assert exec_cmd =~ "exec ", "cursor command should use exec to replace bash"
@@ -293,17 +292,11 @@ defmodule SymphonyElixir.CursorAdapterTest do
   end
 
   defp write_cursor_config_stall(binary, workspace_root, opts) do
-    timeout_opts =
-      case Keyword.get(opts, :codex_stream_timeout_ms) do
-        ms when is_integer(ms) -> [agent_stream_timeout_ms: ms]
-        _ -> []
-      end
-
     write_workflow_file!(
       Workflow.workflow_file_path(),
       Keyword.merge(
         [agent_kind: "cursor", workspace_root: workspace_root, agent_command: binary],
-        timeout_opts
+        Keyword.take(opts, [:codex_stream_timeout_ms])
       )
     )
   end
