@@ -1,6 +1,11 @@
 defmodule SymphonyElixir.Config do
   @moduledoc """
   Runtime configuration loaded from `WORKFLOW.md`.
+
+  Adapter timeouts (`agent.turn_timeout_ms`, `agent.stream_timeout_ms`,
+  `agent.read_timeout_ms`, `agent.stall_timeout_ms`) apply to all agent kinds.
+  Legacy `codex.*` keys for the same timeouts are still accepted; see
+  `SymphonyElixir.Config.Schema`.
   """
 
   alias SymphonyElixir.Config.Schema

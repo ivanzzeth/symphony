@@ -728,10 +728,10 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
       codex_approval_policy: nil,
       codex_thread_sandbox: nil,
       codex_turn_sandbox_policy: nil,
-      codex_turn_timeout_ms: nil,
-      codex_stream_timeout_ms: nil,
-      codex_read_timeout_ms: nil,
-      codex_stall_timeout_ms: nil,
+      agent_turn_timeout_ms: nil,
+      agent_stream_timeout_ms: nil,
+      agent_read_timeout_ms: nil,
+      agent_stall_timeout_ms: nil,
       tracker_api_token: nil,
       tracker_project_slug: nil
     )
@@ -766,10 +766,10 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
              "excludeSlashTmp" => false
            }
 
-    assert config.codex.turn_timeout_ms == 3_600_000
-    assert config.codex.stream_timeout_ms == 120_000
-    assert config.codex.read_timeout_ms == 5_000
-    assert config.codex.stall_timeout_ms == 300_000
+    assert config.agent.turn_timeout_ms == 3_600_000
+    assert config.agent.stream_timeout_ms == 120_000
+    assert config.agent.read_timeout_ms == 5_000
+    assert config.agent.stall_timeout_ms == 300_000
 
     write_workflow_file!(Workflow.workflow_file_path(),
       codex_command: "codex --config 'model=\"gpt-5.5\"' app-server"
@@ -821,21 +821,21 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
     assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
     assert message =~ "worker.max_concurrent_agents_per_host"
 
-    write_workflow_file!(Workflow.workflow_file_path(), codex_turn_timeout_ms: "bad")
+    write_workflow_file!(Workflow.workflow_file_path(), agent_turn_timeout_ms: "bad")
     assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
-    assert message =~ "codex.turn_timeout_ms"
+    assert message =~ "agent.turn_timeout_ms"
 
-    write_workflow_file!(Workflow.workflow_file_path(), codex_stream_timeout_ms: "bad")
+    write_workflow_file!(Workflow.workflow_file_path(), agent_stream_timeout_ms: "bad")
     assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
-    assert message =~ "codex.stream_timeout_ms"
+    assert message =~ "agent.stream_timeout_ms"
 
-    write_workflow_file!(Workflow.workflow_file_path(), codex_read_timeout_ms: "bad")
+    write_workflow_file!(Workflow.workflow_file_path(), agent_read_timeout_ms: "bad")
     assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
-    assert message =~ "codex.read_timeout_ms"
+    assert message =~ "agent.read_timeout_ms"
 
-    write_workflow_file!(Workflow.workflow_file_path(), codex_stall_timeout_ms: "bad")
+    write_workflow_file!(Workflow.workflow_file_path(), agent_stall_timeout_ms: "bad")
     assert {:error, {:invalid_workflow_config, message}} = Config.validate!()
-    assert message =~ "codex.stall_timeout_ms"
+    assert message =~ "agent.stall_timeout_ms"
 
     write_workflow_file!(Workflow.workflow_file_path(),
       tracker_active_states: %{todo: true},
@@ -883,6 +883,50 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
 
     write_workflow_file!(Workflow.workflow_file_path(), codex_command: "codex app-server")
     assert Config.settings!().agent.command == "codex app-server"
+  end
+
+  test "legacy codex timeout keys merge into agent before validation" do
+    root = Path.join(System.tmp_dir!(), "symphony-wf-#{System.unique_integer([:positive])}")
+
+    assert {:ok, settings} =
+             Schema.parse(%{
+               "tracker" => %{"kind" => "memory"},
+               "polling" => %{"interval_ms" => 30_000},
+               "workspace" => %{"root" => root, "base_branch" => "main"},
+               "worker" => %{},
+               "agent" => %{"kind" => "codex", "command" => "codex app-server"},
+               "codex" => %{
+                 "command" => "codex app-server",
+                 "stream_timeout_ms" => 77_777,
+                 "stall_timeout_ms" => 88_888
+               },
+               "hooks" => %{}
+             })
+
+    assert settings.agent.stream_timeout_ms == 77_777
+    assert settings.agent.stall_timeout_ms == 88_888
+    assert settings.agent.turn_timeout_ms == 3_600_000
+  end
+
+  test "agent timeout keys override legacy codex values" do
+    root = Path.join(System.tmp_dir!(), "symphony-wf-#{System.unique_integer([:positive])}")
+
+    assert {:ok, settings} =
+             Schema.parse(%{
+               "tracker" => %{"kind" => "memory"},
+               "polling" => %{"interval_ms" => 30_000},
+               "workspace" => %{"root" => root, "base_branch" => "main"},
+               "worker" => %{},
+               "agent" => %{
+                 "kind" => "codex",
+                 "command" => "codex app-server",
+                 "stream_timeout_ms" => 1
+               },
+               "codex" => %{"command" => "codex app-server", "stream_timeout_ms" => 2},
+               "hooks" => %{}
+             })
+
+    assert settings.agent.stream_timeout_ms == 1
   end
 
   test "config resolves $VAR references for env-backed secret and path values" do
