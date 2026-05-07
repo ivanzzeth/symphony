@@ -5,6 +5,7 @@ defmodule SymphonyElixirWeb.DashboardLive do
 
   use Phoenix.LiveView, layout: {SymphonyElixirWeb.Layouts, :app}
 
+  alias SymphonyElixir.{CodingAgent, Config}
   alias SymphonyElixirWeb.{Endpoint, ObservabilityPubSub, Presenter}
   @runtime_tick_ms 1_000
 
@@ -26,7 +27,11 @@ defmodule SymphonyElixirWeb.DashboardLive do
   @impl true
   def handle_info(:runtime_tick, socket) do
     schedule_runtime_tick()
-    {:noreply, assign(socket, :now, DateTime.utc_now())}
+
+    {:noreply,
+     socket
+     |> assign(:now, DateTime.utc_now())
+     |> maybe_refresh_coding_agent()}
   end
 
   @impl true
@@ -79,6 +84,15 @@ defmodule SymphonyElixirWeb.DashboardLive do
         </section>
       <% else %>
         <section class="metric-grid">
+          <article class="metric-card">
+            <p class="metric-label">Coding agent</p>
+            <p class="metric-value"><%= @payload.agent.kind_label %></p>
+            <p class="metric-detail">
+              Active <span class="mono">agent.kind</span>:
+              <span class="mono"><%= @payload.agent.kind %></span>
+            </p>
+          </article>
+
           <article class="metric-card">
             <p class="metric-label">Running</p>
             <p class="metric-value numeric"><%= @payload.counts.running %></p>
@@ -251,6 +265,27 @@ defmodule SymphonyElixirWeb.DashboardLive do
 
   defp load_payload do
     Presenter.state_payload(orchestrator(), snapshot_timeout_ms())
+  end
+
+  defp maybe_refresh_coding_agent(socket) do
+    payload = socket.assigns.payload
+
+    cond do
+      match?(%{error: _}, payload) ->
+        socket
+
+      true ->
+        kind = Config.settings!().agent.kind
+        label = CodingAgent.kind_display_label(kind)
+
+        case Map.get(payload, :agent) do
+          %{kind: ^kind, kind_label: ^label} ->
+            socket
+
+          _ ->
+            assign(socket, :payload, Map.put(payload, :agent, %{kind: kind, kind_label: label}))
+        end
+    end
   end
 
   defp orchestrator do

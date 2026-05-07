@@ -112,13 +112,13 @@ defmodule SymphonyElixir.TestSupport do
           agent_kind: "codex",
           codex_command: "codex app-server",
           agent_command: nil,
+          agent_turn_timeout_ms: 3_600_000,
+          agent_stream_timeout_ms: 120_000,
+          agent_read_timeout_ms: 5_000,
+          agent_stall_timeout_ms: 300_000,
           codex_approval_policy: %{reject: %{sandbox_approval: true, rules: true, mcp_elicitations: true}},
           codex_thread_sandbox: "workspace-write",
           codex_turn_sandbox_policy: nil,
-          codex_turn_timeout_ms: 3_600_000,
-          codex_stream_timeout_ms: 120_000,
-          codex_read_timeout_ms: 5_000,
-          codex_stall_timeout_ms: 300_000,
           hook_after_create: nil,
           hook_before_run: nil,
           hook_after_run: nil,
@@ -152,10 +152,18 @@ defmodule SymphonyElixir.TestSupport do
     codex_approval_policy = Keyword.get(config, :codex_approval_policy)
     codex_thread_sandbox = Keyword.get(config, :codex_thread_sandbox)
     codex_turn_sandbox_policy = Keyword.get(config, :codex_turn_sandbox_policy)
-    codex_turn_timeout_ms = Keyword.get(config, :codex_turn_timeout_ms)
-    codex_stream_timeout_ms = Keyword.get(config, :codex_stream_timeout_ms)
-    codex_read_timeout_ms = Keyword.get(config, :codex_read_timeout_ms)
-    codex_stall_timeout_ms = Keyword.get(config, :codex_stall_timeout_ms)
+
+    agent_turn_timeout_ms =
+      Keyword.get(config, :agent_turn_timeout_ms) || Keyword.get(config, :codex_turn_timeout_ms)
+
+    agent_stream_timeout_ms =
+      Keyword.get(config, :agent_stream_timeout_ms) || Keyword.get(config, :codex_stream_timeout_ms)
+
+    agent_read_timeout_ms =
+      Keyword.get(config, :agent_read_timeout_ms) || Keyword.get(config, :codex_read_timeout_ms)
+
+    agent_stall_timeout_ms =
+      Keyword.get(config, :agent_stall_timeout_ms) || Keyword.get(config, :codex_stall_timeout_ms)
     hook_after_create = Keyword.get(config, :hook_after_create)
     hook_before_run = Keyword.get(config, :hook_before_run)
     hook_after_run = Keyword.get(config, :hook_after_run)
@@ -187,16 +195,16 @@ defmodule SymphonyElixir.TestSupport do
         "  max_turns: #{yaml_value(max_turns)}",
         "  max_retry_backoff_ms: #{yaml_value(max_retry_backoff_ms)}",
         "  max_concurrent_agents_by_state: #{yaml_value(max_concurrent_agents_by_state)}",
+        "  turn_timeout_ms: #{yaml_value(agent_turn_timeout_ms)}",
+        "  stream_timeout_ms: #{yaml_value(agent_stream_timeout_ms)}",
+        "  read_timeout_ms: #{yaml_value(agent_read_timeout_ms)}",
+        "  stall_timeout_ms: #{yaml_value(agent_stall_timeout_ms)}",
         agent_command_yaml(agent_command, codex_command),
         "codex:",
         "  command: #{yaml_value(codex_command)}",
         "  approval_policy: #{yaml_value(codex_approval_policy)}",
         "  thread_sandbox: #{yaml_value(codex_thread_sandbox)}",
         "  turn_sandbox_policy: #{yaml_value(codex_turn_sandbox_policy)}",
-        "  turn_timeout_ms: #{yaml_value(codex_turn_timeout_ms)}",
-        "  stream_timeout_ms: #{yaml_value(codex_stream_timeout_ms)}",
-        "  read_timeout_ms: #{yaml_value(codex_read_timeout_ms)}",
-        "  stall_timeout_ms: #{yaml_value(codex_stall_timeout_ms)}",
         hooks_yaml(hook_after_create, hook_before_run, hook_after_run, hook_before_remove, hook_timeout_ms),
         "---",
         prompt

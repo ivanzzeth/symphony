@@ -57,6 +57,13 @@ defmodule SymphonyElixir.CodingAgentTest do
     assert CodingAgent.adapter() == AppServer
   end
 
+  test "kind_display_label/1 maps configured kinds to dashboard labels" do
+    assert CodingAgent.kind_display_label("codex") == "Codex"
+    assert CodingAgent.kind_display_label("claude") == "Claude Code"
+    assert CodingAgent.kind_display_label("cursor") == "Cursor"
+    assert CodingAgent.kind_display_label("future-kind") == "Future Kind"
+  end
+
   test "ClaudeAdapter implements CodingAgent behaviour" do
     assert {:module, ClaudeAdapter} == Code.ensure_compiled(ClaudeAdapter)
     assert :erlang.function_exported(ClaudeAdapter, :start_session, 2)

@@ -6,7 +6,7 @@ defmodule SymphonyElixir.StatusDashboard do
   use GenServer
   require Logger
 
-  alias SymphonyElixir.{Config, HttpServer}
+  alias SymphonyElixir.{CodingAgent, Config, HttpServer}
   alias SymphonyElixir.Orchestrator
   alias SymphonyElixirWeb.ObservabilityPubSub
 
@@ -307,8 +307,14 @@ defmodule SymphonyElixir.StatusDashboard do
 
   defp snapshot_with_samples(token_samples, now_ms) do
     case snapshot_payload() do
-      {:ok, %{running: running, retrying: retrying, codex_totals: codex_totals} = snapshot} ->
+      {:ok, snapshot} ->
+        %{running: running, retrying: retrying, codex_totals: codex_totals} = snapshot
         total_tokens = Map.get(codex_totals, :total_tokens, 0)
+        kind = Config.settings!().agent.kind
+
+        coding_agent =
+          Map.get(snapshot, :coding_agent) ||
+            %{kind: kind, label: CodingAgent.kind_display_label(kind)}
 
         {
           {:ok,
@@ -317,7 +323,8 @@ defmodule SymphonyElixir.StatusDashboard do
              retrying: retrying,
              codex_totals: codex_totals,
              rate_limits: Map.get(snapshot, :rate_limits),
-             polling: Map.get(snapshot, :polling)
+             polling: Map.get(snapshot, :polling),
+             coding_agent: coding_agent
            }},
           update_token_samples(token_samples, now_ms, total_tokens)
         }
@@ -342,6 +349,7 @@ defmodule SymphonyElixir.StatusDashboard do
         codex_seconds_running = Map.get(codex_totals, :seconds_running, 0)
         agent_count = length(running)
         max_agents = Config.settings!().agent.max_concurrent_agents
+        coding_agent_label = coding_agent_label_for_snapshot(snapshot)
         running_event_width = running_event_width(terminal_columns_override)
         running_rows = format_running_rows(running, running_event_width)
         running_to_backoff_spacer = if(running == [], do: [], else: ["│"])
@@ -353,6 +361,7 @@ defmodule SymphonyElixir.StatusDashboard do
              colorize("#{agent_count}", @ansi_green) <>
              colorize("/", @ansi_gray) <>
              colorize("#{max_agents}", @ansi_gray),
+           colorize("│ Coding agent: ", @ansi_bold) <> colorize(coding_agent_label, @ansi_blue),
            colorize("│ Throughput: ", @ansi_bold) <> colorize("#{format_tps(tps)} tps", @ansi_cyan),
            colorize("│ Runtime: ", @ansi_bold) <>
              colorize(format_runtime_seconds(codex_seconds_running), @ansi_magenta),
@@ -379,9 +388,16 @@ defmodule SymphonyElixir.StatusDashboard do
         |> Enum.join("\n")
 
       :error ->
+        offline_label =
+          case Config.settings() do
+            {:ok, settings} -> CodingAgent.kind_display_label(settings.agent.kind)
+            {:error, _} -> "n/a"
+          end
+
         [
           colorize("╭─ SYMPHONY STATUS", @ansi_bold),
           colorize("│ Orchestrator snapshot unavailable", @ansi_red),
+          colorize("│ Coding agent: ", @ansi_bold) <> colorize(offline_label, @ansi_blue),
           colorize("│ Throughput: ", @ansi_bold) <> colorize("#{format_tps(tps)} tps", @ansi_cyan),
           format_project_link_lines(),
           format_project_refresh_line(nil),
@@ -547,6 +563,22 @@ defmodule SymphonyElixir.StatusDashboard do
   def dashboard_url_for_test(host, configured_port, bound_port),
     do: dashboard_url(host, configured_port, bound_port)
 
+  defp coding_agent_label_for_snapshot(snapshot) when is_map(snapshot) do
+    case Map.get(snapshot, :coding_agent) do
+      %{label: label} when is_binary(label) and label != "" ->
+        label
+
+      %{kind: kind} when is_binary(kind) ->
+        CodingAgent.kind_display_label(kind)
+
+      _ ->
+        case Map.get(snapshot, :coding_agent_kind) do
+          kind when is_binary(kind) -> CodingAgent.kind_display_label(kind)
+          _ -> CodingAgent.kind_display_label(Config.settings!().agent.kind)
+        end
+    end
+  end
+
   defp snapshot_payload do
     if Process.whereis(Orchestrator) do
       case Orchestrator.snapshot() do
@@ -556,13 +588,20 @@ defmodule SymphonyElixir.StatusDashboard do
           codex_totals: codex_totals
         } = snapshot
         when is_list(running) and is_list(retrying) ->
+          kind = Config.settings!().agent.kind
+
+          coding_agent =
+            Map.get(snapshot, :coding_agent) ||
+              %{kind: kind, label: CodingAgent.kind_display_label(kind)}
+
           {:ok,
            %{
              running: running,
              retrying: retrying,
              codex_totals: codex_totals,
              rate_limits: Map.get(snapshot, :rate_limits),
-             polling: Map.get(snapshot, :polling)
+             polling: Map.get(snapshot, :polling),
+             coding_agent: coding_agent
            }}
 
         _ ->

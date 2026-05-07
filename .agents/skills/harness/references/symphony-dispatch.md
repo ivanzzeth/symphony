@@ -2,16 +2,17 @@
 
 ## Overview
 
-When the harness skill is invoked by the Symphony platform (not manually by a user), additional context comes from the **Symphony execution contract** (`WORKFLOW.md` — for this monorepo `elixir/WORKFLOW.md`, or whichever path the running `symphony` process was started with). This document defines how harness agents should integrate with Symphony's orchestration layer.
+When the harness skill is invoked by the Symphony platform (not manually by a user), the **workflow file path** is injected into the dispatch context by `SymphonyElixir.Harness.Manager`. The harness agent **must** read this file in full before making any changes to `.agents/` or `AGENTS.md`. The file’s actual content — its name, structure, and terminology — is the source of truth. Never guess or assume its contents based on prior runs.
+
+## Path Injection Mechanism
+
+The workflow file path is supplied to the harness agent as part of the dispatch context. The agent reads it from the context and uses it verbatim. There is no hardcoded default path — every invocation supplies the correct path for the running `symphony` process.
 
 ## Detection
 
 Symphony dispatch is active when the harness run is triggered by Symphony’s
 orchestrator (hash change, harness ticket, or explicit dispatch), not a casual
-local edit. The **execution contract** for this repo lives at
-`elixir/WORKFLOW.md` (or whichever path the running `symphony` process was
-started with)—**not** under `.agents/`. A copy under `.agents/WORKFLOW.md` is
-optional and not required for dispatch.
+local edit.
 
 Heuristics:
 - Orchestrator-spawned harness work often includes `_workspace/symphony_context.json`
@@ -19,7 +20,7 @@ Heuristics:
 - If neither platform context nor user intent references Symphony, treat this
   as a standalone/manual harness invocation and use default protocols.
 
-**Never modify** the loaded WORKFLOW.md file; update only `.agents/` and
+**Never modify** the loaded workflow file; update only `.agents/` and
 `AGENTS.md` when reconfiguring the harness.
 
 ## Symphony Context (when active)

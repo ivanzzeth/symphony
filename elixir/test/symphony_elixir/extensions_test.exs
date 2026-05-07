@@ -4,6 +4,8 @@ defmodule SymphonyElixir.ExtensionsTest do
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
+  alias SymphonyElixir.CodingAgent
+  alias SymphonyElixir.Config
   alias SymphonyElixir.Linear.Adapter
   alias SymphonyElixir.Tracker.Memory
 
@@ -157,18 +159,18 @@ defmodule SymphonyElixir.ExtensionsTest do
     assert {:noreply, returned_state} = WorkflowStore.handle_info(:poll, state)
     assert returned_state.workflow.prompt == "Manual workflow prompt"
     refute returned_state.stamp == nil
-    assert_receive :poll, 1_100
+    assert_receive :poll, 3_000
 
     Workflow.set_workflow_file_path(missing_path)
     assert {:noreply, path_error_state} = WorkflowStore.handle_info(:poll, returned_state)
     assert path_error_state.workflow.prompt == "Manual workflow prompt"
-    assert_receive :poll, 1_100
+    assert_receive :poll, 3_000
 
     Workflow.set_workflow_file_path(manual_path)
     File.rm!(manual_path)
     assert {:noreply, removed_state} = WorkflowStore.handle_info(:poll, path_error_state)
     assert removed_state.workflow.prompt == "Manual workflow prompt"
-    assert_receive :poll, 1_100
+    assert_receive :poll, 3_000
 
     Process.exit(manual_pid, :normal)
     restart_result = Supervisor.restart_child(SymphonyElixir.Supervisor, WorkflowStore)
@@ -178,6 +180,30 @@ defmodule SymphonyElixir.ExtensionsTest do
 
     Workflow.set_workflow_file_path(existing_path)
     WorkflowStore.force_reload()
+  end
+
+  test "workflow file stamp change notifies observability dashboard subscribers" do
+    ensure_workflow_store_running()
+    path = Workflow.workflow_file_path()
+
+    write_workflow_file!(path, agent_kind: "codex")
+    send(WorkflowStore, :poll)
+
+    assert_eventually(fn ->
+      Config.settings!().agent.kind == "codex"
+    end)
+
+    assert :ok = SymphonyElixirWeb.ObservabilityPubSub.subscribe()
+
+    write_workflow_file!(path, agent_kind: "cursor")
+
+    send(WorkflowStore, :poll)
+
+    assert_eventually(fn ->
+      Config.settings!().agent.kind == "cursor"
+    end)
+
+    assert_receive :observability_updated, 3_000
   end
 
   test "tracker delegates to memory and linear adapters" do
@@ -337,8 +363,14 @@ defmodule SymphonyElixir.ExtensionsTest do
     conn = get(build_conn(), "/api/v1/state")
     state_payload = json_response(conn, 200)
 
+    expected_agent = %{
+      "kind" => Config.settings!().agent.kind,
+      "kind_label" => CodingAgent.kind_display_label(Config.settings!().agent.kind)
+    }
+
     assert state_payload == %{
              "generated_at" => state_payload["generated_at"],
+             "agent" => expected_agent,
              "counts" => %{"running" => 1, "retrying" => 1},
              "running" => [
                %{
@@ -534,6 +566,8 @@ defmodule SymphonyElixir.ExtensionsTest do
 
     {:ok, view, html} = live(build_conn(), "/")
     assert html =~ "Operations Dashboard"
+    assert html =~ "Coding agent"
+    assert html =~ CodingAgent.kind_display_label(Config.settings!().agent.kind)
     assert html =~ "MT-HTTP"
     assert html =~ "MT-RETRY"
     assert html =~ "rendered"

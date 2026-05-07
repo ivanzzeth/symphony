@@ -5,6 +5,22 @@ defmodule SymphonyElixir.StatusDashboardSnapshotTest do
 
   @terminal_columns 115
 
+  setup do
+    # Deterministic dashboard URL in snapshots (fixtures expect this port).
+    previous_port_override = Application.get_env(:symphony_elixir, :server_port_override)
+    Application.put_env(:symphony_elixir, :server_port_override, 58_903)
+
+    on_exit(fn ->
+      if is_nil(previous_port_override) do
+        Application.delete_env(:symphony_elixir, :server_port_override)
+      else
+        Application.put_env(:symphony_elixir, :server_port_override, previous_port_override)
+      end
+    end)
+
+    :ok
+  end
+
   test "snapshot fixture: idle dashboard" do
     snapshot_data =
       {:ok,
@@ -12,7 +28,8 @@ defmodule SymphonyElixir.StatusDashboardSnapshotTest do
          running: [],
          retrying: [],
          codex_totals: %{input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0},
-         rate_limits: nil
+         rate_limits: nil,
+         coding_agent: %{kind: "codex", label: "Codex"}
        }}
 
     Snapshot.assert_dashboard_snapshot!("idle", render_snapshot(snapshot_data, 0.0))
@@ -37,7 +54,8 @@ defmodule SymphonyElixir.StatusDashboardSnapshotTest do
          running: [],
          retrying: [],
          codex_totals: %{input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0},
-         rate_limits: nil
+         rate_limits: nil,
+         coding_agent: %{kind: "codex", label: "Codex"}
        }}
 
     Snapshot.assert_dashboard_snapshot!("idle_with_dashboard_url", render_snapshot(snapshot_data, 0.0))
@@ -79,7 +97,8 @@ defmodule SymphonyElixir.StatusDashboardSnapshotTest do
            primary: %{remaining: 12_345, limit: 20_000, reset_in_seconds: 30},
            secondary: %{remaining: 45, limit: 60, reset_in_seconds: 12},
            credits: %{has_credits: true, balance: 9_876.5}
-         }
+         },
+         coding_agent: %{kind: "codex", label: "Codex"}
        }}
 
     Snapshot.assert_dashboard_snapshot!("super_busy", render_snapshot(snapshot_data, 1_842.7))
@@ -132,7 +151,8 @@ defmodule SymphonyElixir.StatusDashboardSnapshotTest do
            primary: %{remaining: 0, limit: 20_000, reset_in_seconds: 95},
            secondary: %{remaining: 0, limit: 60, reset_in_seconds: 45},
            credits: %{has_credits: false}
-         }
+         },
+         coding_agent: %{kind: "codex", label: "Codex"}
        }}
 
     Snapshot.assert_dashboard_snapshot!("backoff_queue", render_snapshot(snapshot_data, 15.4))
@@ -152,7 +172,8 @@ defmodule SymphonyElixir.StatusDashboardSnapshotTest do
            })
          ],
          codex_totals: %{input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0},
-         rate_limits: nil
+         rate_limits: nil,
+         coding_agent: %{kind: "codex", label: "Codex"}
        }}
 
     rendered = render_snapshot(snapshot_data, 0.0)
@@ -188,7 +209,8 @@ defmodule SymphonyElixir.StatusDashboardSnapshotTest do
            primary: %{remaining: 100, limit: 100, reset_in_seconds: 1},
            secondary: %{remaining: 500, limit: 500, reset_in_seconds: 1},
            credits: %{unlimited: true}
-         }
+         },
+         coding_agent: %{kind: "codex", label: "Codex"}
        }}
 
     Snapshot.assert_dashboard_snapshot!("credits_unlimited", render_snapshot(snapshot_data, 42.0))

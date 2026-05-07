@@ -145,6 +145,14 @@ Notes:
   Symphony validation.
 - `agent.max_turns` caps how many back-to-back Codex turns Symphony will run in a single agent
   invocation when a turn completes normally but the issue is still in an active state. Default: `20`.
+- **Timeouts (all backends):** `agent.turn_timeout_ms`, `agent.stream_timeout_ms`,
+  `agent.read_timeout_ms`, and `agent.stall_timeout_ms` apply to every `agent.kind` (Codex, Claude
+  Code, Cursor). Defaults match `SymphonyElixir.Config.Schema.Agent` (same values as the historical
+  Codex-only defaults).
+- **Deprecated `codex.*` timeouts:** Older `WORKFLOW.md` files may still list those four keys under
+  `codex`. They are merged into `agent` for that load when the same key is missing on `agent`; if
+  both are set, **`agent.*` wins**. Symphony logs a deprecation warning when legacy `codex.*`
+  timeout keys are present—prefer `agent.*` in new configs.
 - If the Markdown body is blank, Symphony uses a default prompt template that includes the issue
   identifier, title, and body.
 - Use `hooks.after_create` to bootstrap a fresh workspace. For a Git-backed repo, you can run

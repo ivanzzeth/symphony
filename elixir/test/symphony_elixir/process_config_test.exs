@@ -15,6 +15,14 @@ defmodule SymphonyElixir.ProcessConfigTest do
   end
 
   describe "load/1 with no file" do
+    setup do
+      # Isolate from the real ~/.config/symphony/symphony.yaml
+      previous_cfg = System.get_env("SYMPHONY_CONFIG_PATH")
+      System.put_env("SYMPHONY_CONFIG_PATH", "/nonexistent/symphony-for-test.yaml")
+      on_exit(fn -> restore_env("SYMPHONY_CONFIG_PATH", previous_cfg) end)
+      :ok
+    end
+
     test "returns defaults when no config file exists" do
       assert {:ok, config} = ProcessConfig.load("/nonexistent/path/symphony.yaml")
       assert config.server.host == "127.0.0.1"
@@ -170,6 +178,17 @@ defmodule SymphonyElixir.ProcessConfigTest do
   end
 
   describe "Config.server_port/0 convenience function" do
+    setup do
+      previous_cfg = System.get_env("SYMPHONY_CONFIG_PATH")
+      System.put_env("SYMPHONY_CONFIG_PATH", "/nonexistent/symphony-for-test.yaml")
+      original_store_state = save_and_replace_store_with_defaults()
+      on_exit(fn ->
+        restore_env("SYMPHONY_CONFIG_PATH", previous_cfg)
+        restore_store_state(original_store_state)
+      end)
+      :ok
+    end
+
     test "reads from SYMPHONY_PORT env var when no CLI override set" do
       previous = System.get_env("SYMPHONY_PORT")
       System.put_env("SYMPHONY_PORT", "6000")
@@ -206,6 +225,17 @@ defmodule SymphonyElixir.ProcessConfigTest do
   end
 
   describe "Config.server_host/0 convenience function" do
+    setup do
+      previous_cfg = System.get_env("SYMPHONY_CONFIG_PATH")
+      System.put_env("SYMPHONY_CONFIG_PATH", "/nonexistent/symphony-for-test.yaml")
+      original_store_state = save_and_replace_store_with_defaults()
+      on_exit(fn ->
+        restore_env("SYMPHONY_CONFIG_PATH", previous_cfg)
+        restore_store_state(original_store_state)
+      end)
+      :ok
+    end
+
     test "reads from SYMPHONY_HOST env var when no CLI override set" do
       previous = System.get_env("SYMPHONY_HOST")
       System.put_env("SYMPHONY_HOST", "10.0.0.1")
@@ -237,6 +267,27 @@ defmodule SymphonyElixir.ProcessConfigTest do
       Application.delete_env(:symphony_elixir, :server_host_override)
 
       assert SymphonyElixir.Config.server_host() == "127.0.0.1"
+    end
+  end
+
+  defp save_and_replace_store_with_defaults do
+    store_pid = Process.whereis(SymphonyElixir.ProcessConfig.Store)
+    if store_pid do
+      original = :sys.get_state(store_pid)
+      defaults = %SymphonyElixir.ProcessConfig{
+        server: %{port: nil, host: "127.0.0.1"},
+        observability: %{dashboard_enabled: true, refresh_ms: 1_000, render_interval_ms: 16}
+      }
+      :sys.replace_state(store_pid, fn _state -> defaults end)
+      original
+    end
+  end
+
+  defp restore_store_state(nil), do: :ok
+  defp restore_store_state(%{} = state) do
+    store_pid = Process.whereis(SymphonyElixir.ProcessConfig.Store)
+    if store_pid do
+      :sys.replace_state(store_pid, fn _state -> state end)
     end
   end
 

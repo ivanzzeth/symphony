@@ -1,6 +1,8 @@
 defmodule SymphonyElixir.CursorAdapterTest do
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
+
   alias SymphonyElixir.Cursor.Adapter, as: CursorAdapter
 
   import SymphonyElixir.TestSupport, only: [write_workflow_file!: 2, restore_env: 2]
@@ -111,6 +113,61 @@ defmodule SymphonyElixir.CursorAdapterTest do
              )
   end
 
+  test "emits turn_timeout via on_message before returning error when stream stalls" do
+    # Allow slow Port/bash startup before first stream-json line; idle window is still < fake script's 3s sleep.
+    stream_timeout_ms = 2_500
+
+    %{binary: bin, workspace: ws, test_root: root} = setup_cursor_env("STALL")
+    write_cursor_config_stall(bin, root, codex_stream_timeout_ms: stream_timeout_ms)
+
+    test_pid = self()
+    on_msg = fn m -> send(test_pid, {:m, m}) end
+
+    assert {:error, :turn_timeout} =
+             CursorAdapter.run_turn(
+               %{session_id: "st", workspace: ws, resume_id: nil},
+               "x",
+               issue(),
+               on_message: on_msg
+             )
+
+    assert_received {:m, %{event: :session_started}}
+    assert_received {:m, %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :cursor}}
+  end
+
+  test "short line split across noeol emits buffer_exceeded, logs warning, and completes without crash" do
+    prev = Application.get_env(:symphony_elixir, :coding_agent_port_line_bytes)
+    Application.put_env(:symphony_elixir, :coding_agent_port_line_bytes, 64)
+
+    on_exit(fn ->
+      if prev == nil,
+        do: Application.delete_env(:symphony_elixir, :coding_agent_port_line_bytes),
+        else: Application.put_env(:symphony_elixir, :coding_agent_port_line_bytes, prev)
+    end)
+
+    %{binary: bin, workspace: ws, test_root: root} = setup_cursor_env("NOEOL")
+    write_cursor_config(bin, root)
+
+    test_pid = self()
+    on_msg = fn m -> send(test_pid, {:m, m}) end
+
+    log =
+      capture_log(fn ->
+        assert {:ok, _} =
+                 CursorAdapter.run_turn(
+                   %{session_id: "no", workspace: ws, resume_id: nil},
+                   "x",
+                   issue(),
+                   on_message: on_msg
+                 )
+      end)
+
+    assert log =~ "port line buffer"
+    assert_received {:m, %{event: :buffer_exceeded, adapter: :cursor, chunk_bytes: 64}}
+    assert_received {:m, %{event: :malformed}}
+    assert_received {:m, %{event: :turn_completed}}
+  end
+
   test "emits malformed event for non-JSON lines without crashing" do
     %{binary: bin, workspace: ws, test_root: root} = setup_cursor_env("MALFORMED")
     write_cursor_config(bin, root)
@@ -128,6 +185,25 @@ defmodule SymphonyElixir.CursorAdapterTest do
 
     assert_received {:m, %{event: :turn_completed}}
     assert_received {:m, %{event: :malformed}}
+  end
+
+  test "exec keyword is prepended to CLI args so cursor replaces bash as port's direct child" do
+    # When BEAM closes a port, it sends SIGHUP to the port's direct child only.
+    # Without "exec", bash wraps cursor: bash → cursor. closing port kills bash but
+    # cursor survives. With "exec", cursor replaces bash and gets the signal directly.
+    %{binary: bin, workspace: ws, test_root: root} = setup_cursor_env("OK")
+    write_cursor_config(bin, root)
+
+    # Run a turn normally
+    session = %{session_id: "exec-cursor", workspace: ws, resume_id: nil}
+    assert {:ok, _} = CursorAdapter.run_turn(session, "x", issue())
+
+    # The exec_cmd trace captures the actual shell command passed to bash -lc
+    exec_cmd_path = Path.join(root, "exec_cmd")
+    if File.exists?(exec_cmd_path) do
+      exec_cmd = File.read!(exec_cmd_path)
+      assert exec_cmd =~ "exec ", "cursor command should use exec to replace bash"
+    end
   end
 
   test "remote SSH uses SSH.start_port for worker_host with Cursor CLI in remote command" do
@@ -201,11 +277,27 @@ defmodule SymphonyElixir.CursorAdapterTest do
     }
   end
 
-  defp write_cursor_config(binary, workspace_root) do
-    write_workflow_file!(Workflow.workflow_file_path(),
-      agent_kind: "cursor",
-      workspace_root: workspace_root,
-      agent_command: binary
+  defp write_cursor_config(binary, workspace_root, extra \\ []) do
+    write_workflow_file!(
+      Workflow.workflow_file_path(),
+      Keyword.merge(
+        [
+          agent_kind: "cursor",
+          workspace_root: workspace_root,
+          agent_command: binary
+        ],
+        extra
+      )
+    )
+  end
+
+  defp write_cursor_config_stall(binary, workspace_root, opts) do
+    write_workflow_file!(
+      Workflow.workflow_file_path(),
+      Keyword.merge(
+        [agent_kind: "cursor", workspace_root: workspace_root, agent_command: binary],
+        Keyword.take(opts, [:codex_stream_timeout_ms])
+      )
     )
   end
 
@@ -227,6 +319,12 @@ defmodule SymphonyElixir.CursorAdapterTest do
     %{binary: binary, trace: trace, workspace: ws, test_root: root}
   end
 
+  defp fake_cursor_script("HANG", _trace) do
+    ~s(#!/bin/sh
+sleep 3600
+)
+  end
+
   defp fake_cursor_script("FAIL", trace) do
     ~s(#!/bin/sh
 printf 'ARGS:%s\\n' "$*" >> "#{trace}"
@@ -243,6 +341,27 @@ printf 'ARGS:%s\\n' "$*" >> "#{trace}"
 printf '%s\\n' '{"type":"system","subtype":"init","session_id":"e"}'
 exit 1
 )
+  end
+
+  defp fake_cursor_script("STALL", trace) do
+    ~s(#!/bin/sh
+printf 'ARGS:%s\\n' "$*" >> "#{trace}"
+printf '%s\\n' '{"type":"system","subtype":"init","session_id":"st"}'
+sleep 3
+printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"late","usage":{"inputTokens":1,"outputTokens":1}}'
+exit 0
+)
+  end
+
+  defp fake_cursor_script("NOEOL", trace) do
+    # ~s|...|: awk uses `)` which would terminate ~s(...)
+    ~s|#!/bin/sh
+printf 'ARGS:%s\\n' "$*" >> "#{trace}"
+printf '%s\\n' '{"type":"system","subtype":"init","session_id":"noe","tools":["bash"]}'
+awk 'BEGIN{for(i=0;i<100;i++)printf "x";print ""}'
+printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"inputTokens":1,"outputTokens":1}}'
+exit 0
+|
   end
 
   defp fake_cursor_script("MALFORMED", trace) do
