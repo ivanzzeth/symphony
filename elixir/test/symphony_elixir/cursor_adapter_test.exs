@@ -116,9 +116,15 @@ defmodule SymphonyElixir.CursorAdapterTest do
   test "emits turn_timeout via on_message before returning error when stream stalls" do
     # Post-init sleep must exceed per-receive `stream_timeout_ms`. Pass timeout in opts so parallel tests
     # cannot clobber WORKFLOW between setup and `run_turn`.
-    stream_timeout_ms = 8_000
+    stream_timeout_ms = 2_500
 
     %{binary: bin, workspace: ws, test_root: root} = setup_cursor_env("STALL")
+    prev_home = System.get_env("HOME")
+    fake_home = Path.join(root, "_home")
+    File.mkdir_p!(fake_home)
+    on_exit(fn -> restore_env("HOME", prev_home) end)
+    System.put_env("HOME", fake_home)
+
     write_cursor_config(bin, root)
 
     test_pid = self()
@@ -133,23 +139,8 @@ defmodule SymphonyElixir.CursorAdapterTest do
                stream_timeout_ms: stream_timeout_ms
              )
 
-    events =
-      for _ <- 1..2 do
-        assert_receive {:m, %{event: ev} = msg}, 15_000
-        {ev, msg}
-      end
-
-    assert MapSet.new(Enum.map(events, &elem(&1, 0))) ==
-             MapSet.new([:session_started, :turn_timeout])
-
-    assert Enum.any?(events, fn
-           {:turn_timeout,
-            {:m, %{timeout_ms: ^stream_timeout_ms, adapter: :cursor}}} ->
-             true
-
-           _ ->
-             false
-         end)
+    assert_received {:m, %{event: :session_started}}
+    assert_received {:m, %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :cursor}}
   end
 
   test "short line split across noeol emits buffer_exceeded, logs warning, and completes without crash" do
@@ -354,7 +345,7 @@ exit 1
     ~s(#!/bin/sh
 printf 'ARGS:%s\\n' "$*" >> "#{trace}"
 printf '%s\\n' '{"type":"system","subtype":"init","session_id":"st"}'
-sleep 12
+sleep 4
 printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"late","usage":{"inputTokens":1,"outputTokens":1}}'
 exit 0
 )

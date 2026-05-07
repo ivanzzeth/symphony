@@ -108,6 +108,8 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     assert after_turn1.resume_id == "ok"
 
     session2 = %{session1 | resume_id: after_turn1.resume_id}
+    # Other test modules mutate global WORKFLOW concurrently; re-assert this test's workflow before turn 2.
+    write_claude_config(bin, root)
     assert {:ok, _} = ClaudeAdapter.run_turn(session2, "Second", fixture_issue())
 
     trace_text = File.read!(trace)
@@ -155,14 +157,9 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   end
 
   test "emits turn_timeout via on_message before returning error when stream stalls" do
-    unless System.find_executable("python3") do
-      raise "python3 is required for the stall adapter test (unbuffered stdout)"
-    end
-
-    # Init prints immediately; Python sleeps before the result line. The same `stream_timeout_ms` applies
-    # to every `receive`, so pick a value high enough for slow Python startup + first JSON line, but
-    # below the Python sleep so the second per-line receive hits `:turn_timeout` before the result.
-    stream_timeout_ms = 10_000
+    # Post-init sleep must exceed per-receive `stream_timeout_ms`. Pass timeout in opts so parallel tests
+    # cannot clobber WORKFLOW between setup and `run_turn` (same pattern as Cursor adapter STALL test).
+    stream_timeout_ms = 8_000
 
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("STALL")
     write_claude_config(bin, root)
@@ -179,8 +176,23 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
                stream_timeout_ms: stream_timeout_ms
              )
 
-    assert_received {:m, %{event: :session_started}}
-    assert_received {:m, %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :claude}}
+    events =
+      for _ <- 1..2 do
+        assert_receive {:m, %{event: ev} = msg}, 15_000
+        {ev, msg}
+      end
+
+    assert MapSet.new(Enum.map(events, &elem(&1, 0))) ==
+             MapSet.new([:session_started, :turn_timeout])
+
+    assert Enum.any?(events, fn
+           {:turn_timeout,
+            {:m, %{timeout_ms: ^stream_timeout_ms, adapter: :claude}}} ->
+             true
+
+           _ ->
+             false
+         end)
   end
 
   test "short line split across noeol emits buffer_exceeded and completes without crash" do
@@ -361,17 +373,13 @@ exit 1
         "usage" => %{"input_tokens" => 1, "output_tokens" => 1}
       })
 
+    # Emit init from the shell so the first stream-json line is not delayed by Python startup.
     """
 #!/bin/sh
 printf 'ARGS:%s\\n' "$*" >> '#{trace}'
-python3 -u <<'PY'
-import sys, time
-sys.stdout.write(#{inspect(init)} + "\\n")
-sys.stdout.flush()
-time.sleep(6)
-sys.stdout.write(#{inspect(fin)} + "\\n")
-sys.stdout.flush()
-PY
+printf '%s\\n' '#{init}'
+sleep 15
+printf '%s\\n' '#{fin}'
 exit 0
 """
   end
