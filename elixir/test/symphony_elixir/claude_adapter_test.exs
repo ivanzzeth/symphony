@@ -4,7 +4,6 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   import ExUnit.CaptureLog
 
   alias SymphonyElixir.Claude.Adapter, as: ClaudeAdapter
-  alias SymphonyElixir.Config
 
   import SymphonyElixir.TestSupport, only: [write_workflow_file!: 2, restore_env: 2]
   alias SymphonyElixir.Workflow
@@ -78,7 +77,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     assert result.output_tokens == 17
     # Fake CLI init reports session_id "ok"; resume_id must match CLI, not adapter placeholder "s1".
     assert result.resume_id == "ok"
-    assert_received {:m, %{event: :session_started}}
+    assert_received {:m, %{event: :session_started, session_id: "ok"}}
     assert_received {:m, %{event: :notification}}
     assert_received {:m, %{event: :turn_completed}}
     assert File.read!(trace) =~ "--session-id s1"
@@ -93,8 +92,9 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     write_claude_config(bin, root)
 
-    assert {:ok, _} = ClaudeAdapter.run_turn(session, "Continue", issue(), on_message: on_msg)
+    assert {:ok, result} = ClaudeAdapter.run_turn(session, "Continue", issue(), on_message: on_msg)
 
+    assert result.resume_id == "ok"
     assert_received {:m, %{event: :turn_completed}}
     assert File.read!(trace) =~ "--resume ok"
   end
@@ -155,16 +155,12 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   end
 
   test "emits turn_timeout via on_message before returning error when stream stalls" do
-    unless System.find_executable("python3") do
-      raise "python3 is required for the stall adapter test (unbuffered stdout)"
-    end
-
-    # Fake script sleeps 6s between init and result; per-turn stream_timeout_ms must be below that gap
-    # (second `receive`) but high enough for Python cold start + first JSON line.
-    stream_timeout_ms = 4_500
+    # Fake script sleeps 5s between init and result lines; stream_timeout_ms must be below that gap on
+    # the second `receive` but high enough for shell + first JSON line on the first `receive`.
+    stream_timeout_ms = 2_000
 
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("STALL")
-    write_claude_config(bin, root)
+    write_claude_config(bin, root, agent_stream_timeout_ms: stream_timeout_ms)
 
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
@@ -174,8 +170,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
                %{session_id: "st", workspace: ws, resume_id: nil},
                "x",
                issue(),
-               on_message: on_msg,
-               stream_timeout_ms: stream_timeout_ms
+               on_message: on_msg
              )
 
     assert_received {:m, %{event: :session_started}}
@@ -286,7 +281,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   # --- helpers ---
 
   defp issue do
-    %SymphonyElixir.Linear.Issue{
+    %{
       id: "issue-1",
       identifier: "MT-1",
       title: "Bug",
