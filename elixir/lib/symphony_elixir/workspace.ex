@@ -27,10 +27,11 @@ defmodule SymphonyElixir.Workspace do
       end
     rescue
       error in [ArgumentError, ErlangError, File.Error] ->
-        prefix =
-          "Workspace creation failed #{issue_log_context(issue_context)} worker_host=#{SSH.worker_host_for_log(worker_host)}"
+        Rescue.log_error_message(
+          "Workspace creation failed #{issue_log_context(issue_context)} worker_host=#{SSH.worker_host_for_log(worker_host)} error=",
+          error
+        )
 
-        Rescue.log_error(prefix, error, __STACKTRACE__)
         {:error, error}
     end
   end

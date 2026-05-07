@@ -36,6 +36,20 @@ defmodule SymphonyElixir.RescueTest do
     assert log =~ "boom"
   end
 
+  test "log_error_message/2 emits prefix plus Exception.message only" do
+    log =
+      capture_log(fn ->
+        try do
+          raise ArgumentError, "short"
+        rescue
+          e in [ArgumentError] ->
+            Rescue.log_error_message("ctx error=", e)
+        end
+      end)
+
+    assert log =~ "ctx error=short"
+  end
+
   test "log_exit_warning/2 emits inspect(reason)" do
     log =
       capture_log(fn ->

@@ -26,6 +26,17 @@ defmodule SymphonyElixir.Rescue do
   end
 
   @doc """
+  Logs `prefix <> Exception.message(exception)` at `:error` (no stacktrace).
+
+  Used when rescue paths intentionally surface a short operator-facing line.
+  """
+  @spec log_error_message(String.t(), Exception.t()) :: :ok
+  def log_error_message(prefix, exception) when is_binary(prefix) do
+    Logger.error(fn -> prefix <> Exception.message(exception) end)
+    :ok
+  end
+
+  @doc """
   Logs a `catch` exit reason at `:warning` (no stacktrace from exits).
   """
   @spec log_exit_warning(String.t(), term()) :: :ok
