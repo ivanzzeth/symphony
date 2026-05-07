@@ -5,7 +5,7 @@ defmodule SymphonyElixir.Codex.AppServer do
   @behaviour SymphonyElixir.CodingAgent
 
   require Logger
-  alias SymphonyElixir.{Codex.DynamicTool, Config, PathSafety, SSH}
+  alias SymphonyElixir.{Codex.DynamicTool, Config, PathSafety, Rescue, SSH}
 
   @initialize_id 1
   @thread_start_id 2
@@ -997,21 +997,7 @@ defmodule SymphonyElixir.Codex.AppServer do
     "issue_id=#{issue_id} issue_identifier=#{identifier}"
   end
 
-  defp stop_port(port) when is_port(port) do
-    case :erlang.port_info(port) do
-      :undefined ->
-        :ok
-
-      _ ->
-        try do
-          Port.close(port)
-          :ok
-        rescue
-          ArgumentError ->
-            :ok
-        end
-    end
-  end
+  defp stop_port(port) when is_port(port), do: Rescue.close_port_if_open(port)
 
   defp emit_message(on_message, event, details, metadata) when is_function(on_message, 1) do
     message = metadata |> Map.merge(details) |> Map.put(:event, event) |> Map.put(:timestamp, DateTime.utc_now())

@@ -3,9 +3,7 @@ defmodule SymphonyElixir.HttpServer do
   Compatibility facade that starts the Phoenix observability endpoint when enabled.
   """
 
-  require Logger
-
-  alias SymphonyElixir.{Config, Orchestrator}
+  alias SymphonyElixir.{Config, Orchestrator, Rescue}
   alias SymphonyElixirWeb.Endpoint
 
   @secret_key_bytes 48
@@ -62,17 +60,11 @@ defmodule SymphonyElixir.HttpServer do
     end
   rescue
     error ->
-      Logger.warning(
-        "HttpServer.bound_port/1: failed, returning nil: #{Exception.format(:error, error, __STACKTRACE__)}"
-      )
-
+      Rescue.log_warning("HttpServer.bound_port/1: failed, returning nil", error, __STACKTRACE__)
       nil
   catch
     :exit, reason ->
-      Logger.warning(
-        "HttpServer.bound_port/1: failed (exit), returning nil: #{inspect(reason)}"
-      )
-
+      Rescue.log_exit_warning("HttpServer.bound_port/1: failed (exit), returning nil", reason)
       nil
   end
 

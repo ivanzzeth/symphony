@@ -15,7 +15,7 @@ defmodule SymphonyElixir.Config.Schema do
 
   require Logger
 
-  alias SymphonyElixir.PathSafety
+  alias SymphonyElixir.{PathSafety, Rescue}
 
   @primary_key false
 
@@ -340,10 +340,7 @@ defmodule SymphonyElixir.Config.Schema do
     end)
   rescue
     exception ->
-      Logger.warning(
-        "Config.Schema.warn_disallowed_keys/1 failed, continuing: #{Exception.format(:error, exception, __STACKTRACE__)}"
-      )
-
+      Rescue.log_warning("Config.Schema.warn_disallowed_keys/1 failed, continuing", exception, __STACKTRACE__)
       :ok
   end
 
@@ -353,10 +350,7 @@ defmodule SymphonyElixir.Config.Schema do
     |> Map.drop(Enum.map(disallowed_workflow_keys(), &String.to_existing_atom/1))
   rescue
     exception ->
-      Logger.warning(
-        "Config.Schema.strip_disallowed_keys/1 failed, returning raw config: #{Exception.format(:error, exception, __STACKTRACE__)}"
-      )
-
+      Rescue.log_warning("Config.Schema.strip_disallowed_keys/1 failed, returning raw config", exception, __STACKTRACE__)
       config
   end
 

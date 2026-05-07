@@ -14,7 +14,7 @@ defmodule SymphonyElixir.Harness.Manager do
   use GenServer
   require Logger
 
-  alias SymphonyElixir.{CodingAgent, Workflow}
+  alias SymphonyElixir.{CodingAgent, Rescue, Workflow}
 
   @harness_state_dir ".symphony"
   @harness_state_file "harness-state.json"
@@ -70,8 +70,7 @@ defmodule SymphonyElixir.Harness.Manager do
   @doc false
   @spec git_toplevel(Path.t()) :: Path.t()
   def git_toplevel(start_dir \\ File.cwd!()) do
-    case System.cmd("git", ["-C", start_dir, "rev-parse", "--show-toplevel"],
-           stderr_to_stdout: true) do
+    case System.cmd("git", ["-C", start_dir, "rev-parse", "--show-toplevel"], stderr_to_stdout: true) do
       {toplevel, 0} -> String.trim(toplevel)
       _ -> start_dir
     end
@@ -219,8 +218,7 @@ defmodule SymphonyElixir.Harness.Manager do
           do_dispatch_harness(adapter, state, prompt)
         rescue
           e ->
-            stack = Exception.format(:error, e, __STACKTRACE__)
-            Logger.error("Harness agent task crashed: #{inspect(e)}\n#{stack}")
+            Rescue.log_error("Harness agent task crashed", e, __STACKTRACE__)
             send(__MODULE__, {:harness_complete, {:error, e}})
         end
       end)
