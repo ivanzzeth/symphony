@@ -22,7 +22,7 @@ defmodule SymphonyElixir.Cursor.Adapter do
   def run_turn(session, prompt, _issue, opts \\ []) do
     on_message = Keyword.get(opts, :on_message, &default_on_message/1)
     worker_host = Keyword.get(opts, :worker_host)
-    timeout_ms = Config.settings!().codex.stream_timeout_ms
+    timeout_ms = Config.settings!().agent.stream_timeout_ms
 
     cli_args = build_cli_args(session, prompt)
 

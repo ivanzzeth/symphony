@@ -477,7 +477,7 @@ defmodule SymphonyElixir.Orchestrator do
 
   defp reconcile_stalled_running_issues(%State{} = state) do
     case Config.settings() do
-      {:ok, config} -> do_reconcile_stalled(state, config.codex.stall_timeout_ms)
+      {:ok, config} -> do_reconcile_stalled(state, config.agent.stall_timeout_ms)
       {:error, _reason} -> state
     end
   end

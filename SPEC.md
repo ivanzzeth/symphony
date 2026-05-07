@@ -423,6 +423,23 @@ Fields:
   - Default: empty map.
   - State keys are normalized (`lowercase`) for lookup.
   - Invalid entries (non-positive or non-numeric) are ignored.
+- `turn_timeout_ms` (integer)
+  - Default: `3600000` (1 hour)
+  - Applies to all supported coding-agent kinds.
+- `stream_timeout_ms` (integer)
+  - Default: `120000` (2 minutes)
+  - Applies to all supported coding-agent kinds.
+- `read_timeout_ms` (integer)
+  - Default: `5000`
+  - Applies to all supported coding-agent kinds; exact semantics depend on the integration (for
+    example, app-server sync reads vs CLI stream timeouts).
+- `stall_timeout_ms` (integer)
+  - Default: `300000` (5 minutes)
+  - If `<= 0`, stall detection is disabled.
+  - Applies to orchestrator stall reconciliation for all agent kinds.
+- Backward compatibility: the same four timeout keys MAY appear under `codex` in older
+  `WORKFLOW.md` files. Implementations MUST merge them into the effective `agent` settings for that
+  load, with explicit `agent.*` values taking precedence, and SHOULD emit a deprecation warning.
 
 #### 5.3.6 `codex` (object)
 
@@ -446,13 +463,6 @@ fields locally if they want stricter startup checks.
   - Default: implementation-defined.
 - `turn_sandbox_policy` (Codex `SandboxPolicy` value)
   - Default: implementation-defined.
-- `turn_timeout_ms` (integer)
-  - Default: `3600000` (1 hour)
-- `read_timeout_ms` (integer)
-  - Default: `5000`
-- `stall_timeout_ms` (integer)
-  - Default: `300000` (5 minutes)
-  - If `<= 0`, stall detection is disabled.
 
 ### 5.4 Prompt Template Contract
 
@@ -587,13 +597,18 @@ not require recognizing or validating extension fields unless that extension is 
 - `agent.max_turns`: integer, default `20`
 - `agent.max_retry_backoff_ms`: integer, default `300000` (5m)
 - `agent.max_concurrent_agents_by_state`: map of positive integers, default `{}`
+- `agent.turn_timeout_ms`: integer, default `3600000`
+- `agent.stream_timeout_ms`: integer, default `120000`
+- `agent.read_timeout_ms`: integer, default `5000`
+- `agent.stall_timeout_ms`: integer, default `300000` (use `0` to disable stall detection)
 - `codex.command`: shell command string, default `codex app-server`
 - `codex.approval_policy`: Codex `AskForApproval` value, default implementation-defined
 - `codex.thread_sandbox`: Codex `SandboxMode` value, default implementation-defined
 - `codex.turn_sandbox_policy`: Codex `SandboxPolicy` value, default implementation-defined
-- `codex.turn_timeout_ms`: integer, default `3600000`
-- `codex.read_timeout_ms`: integer, default `5000`
-- `codex.stall_timeout_ms`: integer, default `300000`
+- Legacy note: older workflows MAY list `turn_timeout_ms`, `stream_timeout_ms`, `read_timeout_ms`,
+  and `stall_timeout_ms` under `codex` instead of `agent`. Implementations MUST accept these for
+  backward compatibility by merging them into the effective `agent` settings (`agent` wins when
+  both are set).
 
 ## 7. Orchestration State Machine
 
@@ -785,7 +800,7 @@ Part A: Stall detection
 - For each running issue, compute `elapsed_ms` since:
   - `last_codex_timestamp` if any event has been seen, else
   - `started_at`
-- If `elapsed_ms > codex.stall_timeout_ms`, terminate the worker and queue a retry.
+- If `elapsed_ms > agent.stall_timeout_ms`, terminate the worker and queue a retry.
 - If `stall_timeout_ms <= 0`, skip stall detection entirely.
 
 Part B: Tracker state refresh
@@ -1098,9 +1113,11 @@ User-input-required policy:
 
 Timeouts:
 
-- `codex.read_timeout_ms`: request/response timeout during startup and sync requests
-- `codex.turn_timeout_ms`: total turn stream timeout
-- `codex.stall_timeout_ms`: enforced by orchestrator based on event inactivity
+- `agent.read_timeout_ms`: request/response timeout during startup and sync requests (Codex
+  app-server integration)
+- `agent.stream_timeout_ms` / `agent.turn_timeout_ms`: bounded turn / stream waits (semantics depend
+  on the selected coding agent)
+- `agent.stall_timeout_ms`: enforced by orchestrator based on event inactivity
 
 Error mapping (RECOMMENDED normalized categories):
 
