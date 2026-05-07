@@ -230,7 +230,12 @@ defmodule SymphonyElixir.Workspace do
     |> Solid.render!(%{"workspace" => %{"base_branch" => ws.base_branch}})
     |> IO.iodata_to_binary()
   rescue
-    _ -> command
+    exception ->
+      Logger.warning(
+        "Workspace.render_hook_command/1 failed, using raw command: #{Exception.format(:error, exception, __STACKTRACE__)}"
+      )
+
+      command
   end
 
   defp maybe_run_after_create_hook(workspace, issue_context, created?, worker_host) do

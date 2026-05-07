@@ -13,6 +13,8 @@ defmodule SymphonyElixir.Config.Schema do
 
   import Ecto.Changeset
 
+  require Logger
+
   alias SymphonyElixir.PathSafety
 
   @primary_key false
@@ -297,6 +299,11 @@ defmodule SymphonyElixir.Config.Schema do
 
   @disallowed_workflow_keys ["server", "observability"]
 
+  defp disallowed_workflow_keys do
+    @disallowed_workflow_keys ++
+      Application.get_env(:symphony_elixir, :extra_disallowed_workflow_keys_for_test, [])
+  end
+
   @legacy_codex_timeout_keys ~w(turn_timeout_ms stream_timeout_ms read_timeout_ms stall_timeout_ms)
 
   @spec parse(map()) :: {:ok, %__MODULE__{}} | {:error, {:invalid_workflow_config, String.t()}}
@@ -326,23 +333,31 @@ defmodule SymphonyElixir.Config.Schema do
   end
 
   defp warn_disallowed_keys(config) when is_map(config) do
-    Enum.each(@disallowed_workflow_keys, fn key ->
+    Enum.each(disallowed_workflow_keys(), fn key ->
       if Map.has_key?(config, key) or Map.has_key?(config, String.to_existing_atom(key)) do
-        require Logger
-
         Logger.warning("[WORKFLOW.md] '#{key}' key is disallowed in WORKFLOW.md. Use symphony.yaml for process-level config.")
       end
     end)
   rescue
-    _ -> :ok
+    exception ->
+      Logger.warning(
+        "Config.Schema.warn_disallowed_keys/1 failed, continuing: #{Exception.format(:error, exception, __STACKTRACE__)}"
+      )
+
+      :ok
   end
 
   defp strip_disallowed_keys(config) when is_map(config) do
     config
-    |> Map.drop(@disallowed_workflow_keys)
-    |> Map.drop(Enum.map(@disallowed_workflow_keys, &String.to_existing_atom/1))
+    |> Map.drop(disallowed_workflow_keys())
+    |> Map.drop(Enum.map(disallowed_workflow_keys(), &String.to_existing_atom/1))
   rescue
-    _ -> config
+    exception ->
+      Logger.warning(
+        "Config.Schema.strip_disallowed_keys/1 failed, returning raw config: #{Exception.format(:error, exception, __STACKTRACE__)}"
+      )
+
+      config
   end
 
   @spec resolve_turn_sandbox_policy(%__MODULE__{}, Path.t() | nil) :: map()

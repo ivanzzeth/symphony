@@ -1973,14 +1973,26 @@ defmodule SymphonyElixir.StatusDashboard do
   defp dashboard_enabled? do
     if Code.ensure_loaded?(Mix) and function_exported?(Mix, :env, 0) do
       try do
+        if Application.get_env(:symphony_elixir, :status_dashboard_mix_env_raise, false) do
+          raise ArgumentError, "symphony test: forced Mix.env path failure"
+        end
+
         Mix.env() != :test
       rescue
-        _ -> true
+        exception ->
+          Logger.warning(
+            "StatusDashboard.dashboard_enabled?: Mix.env check failed, defaulting to enabled: #{Exception.format(:error, exception, __STACKTRACE__)}"
+          )
+
+          true
       end
     else
       true
     end
   end
+
+  @doc false
+  def dashboard_enabled_for_test, do: dashboard_enabled?()
 
   defp keyword_override(opts, key) do
     if Keyword.has_key?(opts, key), do: Keyword.fetch!(opts, key), else: nil

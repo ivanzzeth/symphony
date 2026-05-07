@@ -1448,4 +1448,65 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
     assert log =~ "server"
     assert log =~ "observability"
   end
+
+  test "schema logs when disallowed workflow key list references a non-existent atom" do
+    bad_key = "symphony_bad_disallowed_key_#{System.unique_integer([:positive])}"
+    env = Application.get_all_env(:symphony_elixir)
+    had_extra? = Keyword.has_key?(env, :extra_disallowed_workflow_keys_for_test)
+    prev_extra = Keyword.get(env, :extra_disallowed_workflow_keys_for_test)
+
+    try do
+      Application.put_env(:symphony_elixir, :extra_disallowed_workflow_keys_for_test, [bad_key])
+
+      root = Path.join(System.tmp_dir!(), "symphony-wf-#{System.unique_integer([:positive])}")
+
+      log =
+        capture_log(fn ->
+          assert {:ok, _} =
+                   Schema.parse(%{
+                     "tracker" => %{"kind" => "memory"},
+                     "polling" => %{"interval_ms" => 30_000},
+                     "workspace" => %{"root" => root, "base_branch" => "main"},
+                     "worker" => %{},
+                     "agent" => %{"kind" => "codex", "command" => "codex app-server"},
+                     "codex" => %{"command" => "codex app-server"},
+                     "hooks" => %{}
+                   })
+        end)
+
+      assert log =~ "warn_disallowed_keys"
+      assert log =~ "strip_disallowed_keys"
+    after
+      if had_extra? do
+        Application.put_env(:symphony_elixir, :extra_disallowed_workflow_keys_for_test, prev_extra)
+      else
+        Application.delete_env(:symphony_elixir, :extra_disallowed_workflow_keys_for_test)
+      end
+    end
+  end
+
+  test "workspace logs when hook command template fails to render" do
+    root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-elixir-workspace-bad-hook-#{System.unique_integer([:positive])}"
+      )
+
+    try do
+      write_workflow_file!(Workflow.workflow_file_path(),
+        workspace_root: root,
+        hook_after_create: "{{ unclosed"
+      )
+
+      log =
+        capture_log(fn ->
+          assert {:error, {:workspace_hook_failed, "after_create", _, _}} =
+                   Workspace.create_for_issue("MT-BAD-HOOK-TPL")
+        end)
+
+      assert log =~ "Workspace.render_hook_command"
+    after
+      File.rm_rf(root)
+    end
+  end
 end
