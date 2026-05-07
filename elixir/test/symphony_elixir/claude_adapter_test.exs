@@ -208,7 +208,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     assert_received {:m, %{event: :turn_completed}}
     assert_received {:m, %{event: :malformed}}
   end
-s
+
   test "remote SSH uses SSH.start_port for worker_host" do
     test_root = Path.join(System.tmp_dir!(), "symphony-elixir-claude-ssh-#{System.unique_integer([:positive])}")
     File.mkdir_p!(test_root)
@@ -366,6 +366,15 @@ printf 'ARGS:%s\\n' "$*" >> "#{trace}"
 printf '%s\\n' '{"type":"system","subtype":"init","session_id":"noe","tools":["bash"]}'
 awk 'BEGIN{for(i=0;i<100;i++)printf "x";print ""}'
 printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"input_tokens":1,"output_tokens":1}}'
+exit 0
+)
+  end
+
+  defp fake_claude_script("SLOW", trace) do
+    ~s(#!/bin/sh
+printf 'ARGS:%s\\n' "$*" >> "#{trace}"
+printf '%s\\n' '{"type":"system","subtype":"init","session_id":"slow","tools":["bash"]}'
+sleep 3
 exit 0
 )
   end
