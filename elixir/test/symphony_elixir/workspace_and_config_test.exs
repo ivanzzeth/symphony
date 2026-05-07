@@ -1505,6 +1505,7 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
         end)
 
       assert log =~ "Workspace.render_hook_command"
+      assert log =~ "failed, using raw command"
     after
       File.rm_rf(root)
     end
