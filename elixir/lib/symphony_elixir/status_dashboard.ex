@@ -2018,6 +2018,9 @@ defmodule SymphonyElixir.StatusDashboard do
   def dashboard_enabled_for_test, do: dashboard_enabled?()
 
   @doc false
+  def maybe_render_for_test(%__MODULE__{} = state), do: maybe_render(state)
+
+  @doc false
   def render_content_for_test(%__MODULE__{} = state, content, now_ms)
       when is_binary(content) and is_integer(now_ms),
       do: render_content(state, content, now_ms)

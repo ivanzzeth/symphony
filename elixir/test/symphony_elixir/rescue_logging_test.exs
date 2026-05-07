@@ -74,27 +74,29 @@ defmodule SymphonyElixir.RescueLoggingTest do
     )
   end
 
-  test "StatusDashboard maybe_render logs warning when render pipeline raises ArgumentError" do
-    name = :"status_dash_maybe_render_#{System.unique_integer([:positive])}"
+  test "StatusDashboard maybe_render logs warning when render pipeline is forced to raise" do
+    state = %StatusDashboard{
+      refresh_ms: 99_999,
+      enabled: true,
+      render_interval_ms: 16,
+      refresh_ms_override: nil,
+      enabled_override: nil,
+      render_interval_ms_override: nil,
+      render_fun: fn _ -> :ok end,
+      token_samples: [],
+      last_tps_second: nil,
+      last_tps_value: nil,
+      last_rendered_content: nil,
+      last_rendered_at_ms: nil,
+      pending_content: nil,
+      flush_timer_ref: nil,
+      last_snapshot_fingerprint: nil
+    }
 
-    {:ok, pid} =
-      StatusDashboard.start_link(
-        name: name,
-        enabled: true,
-        refresh_ms: 99_999,
-        render_interval_ms: 99_999,
-        render_fun: fn _ -> :ok end
-      )
-
-    on_exit(fn ->
-      if Process.alive?(pid), do: GenServer.stop(name, :normal, 5_000)
-    end)
-
-    with_symphony_app_env(:status_dashboard_maybe_render_raise_exception, ArgumentError, fn ->
+    with_symphony_app_env(:status_dashboard_maybe_render_force_raise, true, fn ->
       log =
         capture_warning_log(fn ->
-          send(name, :tick)
-          _ = :sys.get_state(name, 5_000)
+          _ = StatusDashboard.maybe_render_for_test(state)
         end)
 
       assert log =~ "Failed rendering status dashboard"
@@ -131,10 +133,6 @@ defmodule SymphonyElixir.RescueLoggingTest do
   test "Config.Schema logs warning when disallowed-workflow key list references a non-existing atom" do
     bad_key = "symphony_bad_disallowed_key_#{System.unique_integer([:positive])}"
 
-    assert_raise ArgumentError, fn ->
-      String.to_existing_atom(bad_key)
-    end
-
     with_symphony_app_env(:extra_disallowed_workflow_keys_for_test, [bad_key], fn ->
       root = Path.join(System.tmp_dir!(), "symphony-schema-rescue-#{System.unique_integer([:positive])}")
 
@@ -164,5 +162,62 @@ defmodule SymphonyElixir.RescueLoggingTest do
       end)
 
     assert log =~ "Workspace.render_hook_command"
+  end
+
+  test "Workspace logs warning when after_create hook exits non-zero" do
+    root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-elixir-rescue-hook-fail-#{System.unique_integer([:positive])}"
+      )
+
+    issue_id = "MT-HOOK-FAIL-#{System.unique_integer([:positive])}"
+
+    try do
+      write_workflow_file!(Workflow.workflow_file_path(),
+        workspace_root: root,
+        hook_after_create: "echo nope && exit 17"
+      )
+
+      log =
+        capture_warning_log(fn ->
+          assert {:error, {:workspace_hook_failed, "after_create", 17, _output}} =
+                   Workspace.create_for_issue(issue_id)
+        end)
+
+      assert log =~ "Workspace hook failed"
+      assert log =~ "hook=after_create"
+    after
+      File.rm_rf(root)
+    end
+  end
+
+  test "Workspace logs warning when after_create hook times out" do
+    root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-elixir-rescue-hook-timeout-#{System.unique_integer([:positive])}"
+      )
+
+    issue_id = "MT-HOOK-TIMEOUT-#{System.unique_integer([:positive])}"
+
+    try do
+      write_workflow_file!(Workflow.workflow_file_path(),
+        workspace_root: root,
+        hook_timeout_ms: 10,
+        hook_after_create: "sleep 1"
+      )
+
+      log =
+        capture_warning_log(fn ->
+          assert {:error, {:workspace_hook_timeout, "after_create", 10}} =
+                   Workspace.create_for_issue(issue_id)
+        end)
+
+      assert log =~ "Workspace hook timed out"
+      assert log =~ "hook=after_create"
+    after
+      File.rm_rf(root)
+    end
   end
 end
