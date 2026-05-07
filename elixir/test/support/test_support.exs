@@ -1,9 +1,11 @@
 defmodule SymphonyElixir.TestSupport do
   @workflow_prompt "You are an agent for this repository."
 
-  defmacro __using__(_opts) do
+  defmacro __using__(opts \\ []) do
+    async = Keyword.get(opts, :async, true)
+
     quote do
-      use ExUnit.Case
+      use ExUnit.Case, async: unquote(async)
       import ExUnit.CaptureLog
 
       alias SymphonyElixir.AgentRunner
@@ -166,6 +168,7 @@ defmodule SymphonyElixir.TestSupport do
 
     agent_stall_timeout_ms =
       resolve_timeout_override(overrides, config, :agent_stall_timeout_ms, :codex_stall_timeout_ms)
+
     hook_after_create = Keyword.get(config, :hook_after_create)
     hook_before_run = Keyword.get(config, :hook_before_run)
     hook_after_run = Keyword.get(config, :hook_after_run)

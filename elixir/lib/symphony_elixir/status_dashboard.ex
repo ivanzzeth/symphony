@@ -191,11 +191,20 @@ defmodule SymphonyElixir.StatusDashboard do
   defp schedule_tick(_refresh_ms, false), do: :ok
 
   defp maybe_render_simulate_failure! do
-    if Application.get_env(:symphony_elixir, :status_dashboard_maybe_render_force_raise, false) do
-      raise RuntimeError, "symphony test: force maybe_render rescue path"
-    end
+    raise_mod =
+      if TestEnv.active?(),
+        do: Application.get_env(:symphony_elixir, :status_dashboard_maybe_render_raise_exception, false)
 
-    :ok
+    cond do
+      is_atom(raise_mod) and raise_mod not in [false, nil, true] ->
+        raise raise_mod, "simulated status dashboard render failure"
+
+      Application.get_env(:symphony_elixir, :status_dashboard_maybe_render_force_raise, false) ->
+        raise RuntimeError, "symphony test: force maybe_render rescue path"
+
+      true ->
+        :ok
+    end
   end
 
   defp maybe_render(state) do
@@ -503,14 +512,6 @@ defmodule SymphonyElixir.StatusDashboard do
           normalize_status_lines(content),
           "\n"
         ])
-    end
-  end
-
-  defp maybe_render_simulate_failure! do
-    case TestEnv.active?() && Application.get_env(:symphony_elixir, :status_dashboard_maybe_render_raise_exception) do
-      false -> :ok
-      nil -> :ok
-      mod when is_atom(mod) -> raise mod, "simulated status dashboard render failure"
     end
   end
 
@@ -2015,9 +2016,6 @@ defmodule SymphonyElixir.StatusDashboard do
 
   @doc false
   def dashboard_enabled_for_test, do: dashboard_enabled?()
-
-  @doc false
-  def maybe_render_for_test(%__MODULE__{} = state), do: maybe_render(state)
 
   @doc false
   def render_content_for_test(%__MODULE__{} = state, content, now_ms)

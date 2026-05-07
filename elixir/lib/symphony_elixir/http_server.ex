@@ -5,7 +5,7 @@ defmodule SymphonyElixir.HttpServer do
 
   require Logger
 
-  alias SymphonyElixir.{Config, Orchestrator}
+  alias SymphonyElixir.{Config, Orchestrator, TestEnv}
   alias SymphonyElixirWeb.Endpoint
 
   @secret_key_bytes 48
@@ -52,11 +52,7 @@ defmodule SymphonyElixir.HttpServer do
 
   @spec bound_port(term()) :: non_neg_integer() | nil
   def bound_port(_server \\ __MODULE__) do
-    if Application.get_env(:symphony_elixir, :http_server_bound_port_force_raise, false) do
-      raise RuntimeError, "symphony test: force bound_port rescue path"
-    end
-
-    case Bandit.PhoenixAdapter.server_info(Endpoint, :http) do
+    case phoenix_http_server_info() do
       {:ok, {_ip, port}} when is_integer(port) -> port
       _ -> nil
     end
@@ -74,6 +70,17 @@ defmodule SymphonyElixir.HttpServer do
       )
 
       nil
+  end
+
+  defp phoenix_http_server_info do
+    if TestEnv.active?() do
+      case Application.get_env(:symphony_elixir, :http_server_phoenix_http_server_info_stub) do
+        fun when is_function(fun, 0) -> fun.()
+        _ -> Bandit.PhoenixAdapter.server_info(Endpoint, :http)
+      end
+    else
+      Bandit.PhoenixAdapter.server_info(Endpoint, :http)
+    end
   end
 
   defp parse_host({_, _, _, _} = ip), do: {:ok, ip}

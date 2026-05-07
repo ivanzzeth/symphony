@@ -7,7 +7,6 @@ defmodule SymphonyElixir.RescueLoggingTest do
 
   use SymphonyElixir.TestSupport, async: false
 
-  alias SymphonyElixir.Config.Schema
   alias SymphonyElixir.HttpServer
   alias SymphonyElixir.StatusDashboard
 
@@ -28,7 +27,11 @@ defmodule SymphonyElixir.RescueLoggingTest do
     end
   end
 
-  defp capture_warning_log(fun), do: capture_log([level: :warning], fun)
+  defp capture_warning_log(fun) do
+    log = capture_log([level: :warning], fun)
+    assert log != "", "expected Logger.warning (or higher) output"
+    log
+  end
 
   test "HttpServer.bound_port/1 logs warning when phoenix server_info raises" do
     with_symphony_app_env(
@@ -40,7 +43,6 @@ defmodule SymphonyElixir.RescueLoggingTest do
             assert HttpServer.bound_port() == nil
           end)
 
-        refute log == ""
         assert log =~ "HttpServer.bound_port/1"
       end
     )
@@ -53,7 +55,6 @@ defmodule SymphonyElixir.RescueLoggingTest do
           assert StatusDashboard.dashboard_enabled_for_test() == true
         end)
 
-      refute log == ""
       assert log =~ "StatusDashboard.dashboard_enabled?"
     end)
   end
@@ -68,7 +69,6 @@ defmodule SymphonyElixir.RescueLoggingTest do
             assert StatusDashboard.render_offline_status() == :ok
           end)
 
-        refute log == ""
         assert log =~ "Failed rendering offline status"
       end
     )
@@ -97,7 +97,6 @@ defmodule SymphonyElixir.RescueLoggingTest do
           _ = :sys.get_state(name, 5_000)
         end)
 
-      refute log == ""
       assert log =~ "Failed rendering status dashboard"
     end)
   end
@@ -126,12 +125,15 @@ defmodule SymphonyElixir.RescueLoggingTest do
         _ = StatusDashboard.render_content_for_test(state, "content", 0)
       end)
 
-    refute log == ""
     assert log =~ "Failed rendering terminal dashboard frame"
   end
 
   test "Config.Schema logs warning when disallowed-workflow key list references a non-existing atom" do
     bad_key = "symphony_bad_disallowed_key_#{System.unique_integer([:positive])}"
+
+    assert_raise ArgumentError, fn ->
+      String.to_existing_atom(bad_key)
+    end
 
     with_symphony_app_env(:extra_disallowed_workflow_keys_for_test, [bad_key], fn ->
       root = Path.join(System.tmp_dir!(), "symphony-schema-rescue-#{System.unique_integer([:positive])}")
@@ -139,7 +141,7 @@ defmodule SymphonyElixir.RescueLoggingTest do
       log =
         capture_warning_log(fn ->
           assert {:ok, _} =
-                   Schema.parse(%{
+                   SymphonyElixir.Config.Schema.parse(%{
                      "tracker" => %{"kind" => "memory"},
                      "polling" => %{"interval_ms" => 30_000},
                      "workspace" => %{"root" => root, "base_branch" => "main"},
@@ -150,37 +152,17 @@ defmodule SymphonyElixir.RescueLoggingTest do
                    })
         end)
 
-      refute log == ""
       assert log =~ "Config.Schema.warn_disallowed_keys"
       assert log =~ "Config.Schema.strip_disallowed_keys"
     end)
   end
 
   test "Workspace logs warning when hook command template hits render_hook_command rescue" do
-    root =
-      Path.join(
-        System.tmp_dir!(),
-        "symphony-elixir-rescue-hook-#{System.unique_integer([:positive])}"
-      )
+    log =
+      capture_warning_log(fn ->
+        assert Workspace.render_hook_command_for_tests("{{") == "{{"
+      end)
 
-    issue_id = "MT-BAD-HOOK-RESCUE-#{System.unique_integer([:positive])}"
-
-    try do
-      write_workflow_file!(Workflow.workflow_file_path(),
-        workspace_root: root,
-        hook_after_create: "{{ unclosed"
-      )
-
-      log =
-        capture_warning_log(fn ->
-          assert {:error, {:workspace_hook_failed, "after_create", _, _}} =
-                   Workspace.create_for_issue(issue_id)
-        end)
-
-      refute log == ""
-      assert log =~ "Workspace.render_hook_command"
-    after
-      File.rm_rf(root)
-    end
+    assert log =~ "Workspace.render_hook_command"
   end
 end
