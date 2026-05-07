@@ -1,7 +1,9 @@
-# Isolate ExUnit from the parent shell's SYMPHONY_* exports (Config precedence)
-# and from a developer-local ~/.config/symphony/symphony.yaml that binds :4000,
-# which would make `mix test` fail with :eaddrinuse when a daemon already
-# listens there. HttpServer stays disabled when process `server.port` is nil.
+# Isolate ExUnit from the parent shell's SYMPHONY_* exports (Config precedence).
+# Mix 1.19+ starts the app before this file runs; early boot uses
+# `config/config.exs` → `test/fixtures/symphony_process_minimal.yaml` via
+# `:config_arg` so HttpServer does not read ~/.config/symphony/symphony.yaml first.
+# When SYMPHONY_CONFIG_PATH is unset, also write a temp yaml for code paths that
+# only consult the environment variable.
 unless System.get_env("SYMPHONY_CONFIG_PATH") do
   path =
     Path.join(

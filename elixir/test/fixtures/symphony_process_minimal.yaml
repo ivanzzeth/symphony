@@ -1,0 +1,4 @@
+# Minimal process-level config for ExUnit: no server.port so HttpServer does not
+# bind during app.start (Mix 1.19+ runs app.start before test/test_helper.exs).
+observability:
+  dashboard_enabled: true
