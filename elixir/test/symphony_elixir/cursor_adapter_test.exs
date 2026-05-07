@@ -177,6 +177,7 @@ defmodule SymphonyElixir.CursorAdapterTest do
     assert trace =~ "-T -p 2200 worker-01 bash -lc"
     assert trace =~ "cd "
     assert trace =~ remote
+    assert trace =~ "&& exec"
     assert trace =~ "cursor"
     assert trace =~ "agent"
     assert trace =~ "--print"
@@ -185,6 +186,50 @@ defmodule SymphonyElixir.CursorAdapterTest do
     assert trace =~ "--force"
     assert trace =~ "--trust"
     assert trace =~ "--workspace"
+  end
+
+  test "remote SSH includes --resume in wrapped Cursor CLI when session has resume_id" do
+    test_root = Path.join(System.tmp_dir!(), "symphony-elixir-cursor-ssh-resume-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(test_root)
+
+    prev_path = System.get_env("PATH")
+    prev_ssh = System.get_env("SYMP_TEST_SSH_TRACE")
+
+    on_exit(fn ->
+      restore_env("PATH", prev_path)
+      restore_env("SYMP_TEST_SSH_TRACE", prev_ssh)
+      File.rm_rf(test_root)
+    end)
+
+    ssh_trace = Path.join(test_root, "ssh.trace")
+    fake_ssh = Path.join(test_root, "ssh")
+    System.put_env("SYMP_TEST_SSH_TRACE", ssh_trace)
+    System.put_env("PATH", test_root <> ":" <> (prev_path || ""))
+
+    File.write!(fake_ssh, """
+    #!/bin/sh
+    printf 'ARGS:%s\\n' "$*" >> "#{ssh_trace}"
+    printf '%s\\n' '{"type":"system","subtype":"init","session_id":"ssh-r"}'
+    printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"inputTokens":1,"outputTokens":1}}'
+    exit 0
+    """)
+
+    File.chmod!(fake_ssh, 0o755)
+
+    remote = "/remote/ws/issue-2"
+    write_cursor_config("cursor", "/remote/workspaces")
+
+    assert {:ok, _} =
+             CursorAdapter.run_turn(
+               %{session_id: "ssh-r", workspace: remote, resume_id: "ssh-r"},
+               "Continue",
+               issue(),
+               worker_host: "worker-02:2201"
+             )
+
+    trace = File.read!(ssh_trace)
+    assert trace =~ "-p 2201 worker-02"
+    assert trace =~ "--resume ssh-r"
   end
 
   # --- helpers ---
