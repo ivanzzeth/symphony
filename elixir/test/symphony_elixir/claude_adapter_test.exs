@@ -73,6 +73,22 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     assert File.read!(trace) =~ "--resume ok"
   end
 
+  test "Turn 1 then Turn 2 — second CLI uses --resume with resume_id from first turn init" do
+    %{binary: bin, trace: trace, workspace: ws, test_root: root} = setup_claude_env("OK")
+    write_claude_config(bin, root)
+
+    session1 = %{session_id: "adapter-placeholder", workspace: ws, resume_id: nil}
+    assert {:ok, after_turn1} = ClaudeAdapter.run_turn(session1, "First", issue())
+    assert after_turn1.resume_id == "ok"
+
+    session2 = %{session1 | resume_id: after_turn1.resume_id}
+    assert {:ok, _} = ClaudeAdapter.run_turn(session2, "Second", issue())
+
+    trace_text = File.read!(trace)
+    assert trace_text =~ "--session-id adapter-placeholder"
+    assert trace_text =~ "--resume #{after_turn1.resume_id}"
+  end
+
   test "returns {:ok, result} with resume_id for next turn" do
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("OK")
     write_claude_config(bin, root)
