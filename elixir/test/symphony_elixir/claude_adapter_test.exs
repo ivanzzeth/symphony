@@ -138,8 +138,8 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
       raise "python3 is required for the stall adapter test (unbuffered stdout)"
     end
 
-    # `python3 -u` cold start + first JSON line can be slow; idle window must stay below fake script's 3s sleep.
-    stream_timeout_ms = 2_500
+    # `python3 -u` cold start + first JSON line can be slow; idle window must stay below fake script's sleep after init.
+    stream_timeout_ms = 4_000
 
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("STALL")
     write_claude_config_stall(bin, root, codex_stream_timeout_ms: stream_timeout_ms)
@@ -351,18 +351,18 @@ exit 1
       })
 
     """
-#!/bin/sh
-printf 'ARGS:%s\\n' "$*" >> '#{trace}'
-python3 -u <<'PY'
-import sys, time
-sys.stdout.write(#{inspect(init)} + "\\n")
-sys.stdout.flush()
-time.sleep(3)
-sys.stdout.write(#{inspect(fin)} + "\\n")
-sys.stdout.flush()
-PY
-exit 0
-"""
+    #!/bin/sh
+    printf 'ARGS:%s\\n' "$*" >> '#{trace}'
+    python3 -u <<'PY'
+    import sys, time
+    sys.stdout.write(#{inspect(init)} + "\\n")
+    sys.stdout.flush()
+    time.sleep(6)
+    sys.stdout.write(#{inspect(fin)} + "\\n")
+    sys.stdout.flush()
+    PY
+    exit 0
+    """
   end
 
   defp fake_claude_script("NOEOL", trace) do

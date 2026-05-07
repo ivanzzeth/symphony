@@ -114,8 +114,12 @@ defmodule SymphonyElixir.CursorAdapterTest do
   end
 
   test "emits turn_timeout via on_message before returning error when stream stalls" do
-    # Allow slow Port/bash startup before first stream-json line; idle window is still < fake script's 3s sleep.
-    stream_timeout_ms = 2_500
+    unless System.find_executable("python3") do
+      raise "python3 is required for the stall adapter test (unbuffered stdout)"
+    end
+
+    # Cold start + first JSON line must land before this timeout; stall sleeps longer after init.
+    stream_timeout_ms = 4_000
 
     %{binary: bin, workspace: ws, test_root: root} = setup_cursor_env("STALL")
     write_cursor_config_stall(bin, root, codex_stream_timeout_ms: stream_timeout_ms)
@@ -200,6 +204,7 @@ defmodule SymphonyElixir.CursorAdapterTest do
 
     # The exec_cmd trace captures the actual shell command passed to bash -lc
     exec_cmd_path = Path.join(root, "exec_cmd")
+
     if File.exists?(exec_cmd_path) do
       exec_cmd = File.read!(exec_cmd_path)
       assert exec_cmd =~ "exec ", "cursor command should use exec to replace bash"
@@ -344,13 +349,35 @@ exit 1
   end
 
   defp fake_cursor_script("STALL", trace) do
-    ~s(#!/bin/sh
-printf 'ARGS:%s\\n' "$*" >> "#{trace}"
-printf '%s\\n' '{"type":"system","subtype":"init","session_id":"st"}'
-sleep 3
-printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"late","usage":{"inputTokens":1,"outputTokens":1}}'
-exit 0
-)
+    init =
+      Jason.encode!(%{
+        "type" => "system",
+        "subtype" => "init",
+        "session_id" => "st"
+      })
+
+    fin =
+      Jason.encode!(%{
+        "type" => "result",
+        "subtype" => "success",
+        "is_error" => false,
+        "result" => "late",
+        "usage" => %{"inputTokens" => 1, "outputTokens" => 1}
+      })
+
+    """
+    #!/bin/sh
+    printf 'ARGS:%s\\n' "$*" >> '#{trace}'
+    python3 -u <<'PY'
+    import sys, time
+    sys.stdout.write(#{inspect(init)} + "\\n")
+    sys.stdout.flush()
+    time.sleep(6)
+    sys.stdout.write(#{inspect(fin)} + "\\n")
+    sys.stdout.flush()
+    PY
+    exit 0
+    """
   end
 
   defp fake_cursor_script("NOEOL", trace) do
