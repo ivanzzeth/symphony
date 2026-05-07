@@ -155,12 +155,13 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   end
 
   test "emits turn_timeout via on_message before returning error when stream stalls" do
-    # Fake script sleeps 5s between init and result lines; stream_timeout_ms must be below that gap on
-    # the second `receive` but high enough for shell + first JSON line on the first `receive`.
-    stream_timeout_ms = 2_000
+    # Fake script sleeps 6s between init and result. The same `stream_timeout_ms` applies to every
+    # `receive`, so pick a value high enough for slow shell + first JSON line, but below 6s so the
+    # second per-line receive hits `:turn_timeout` before the result arrives.
+    stream_timeout_ms = 3_500
 
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("STALL")
-    write_claude_config(bin, root, agent_stream_timeout_ms: stream_timeout_ms)
+    write_claude_config(bin, root)
 
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
@@ -170,7 +171,8 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
                %{session_id: "st", workspace: ws, resume_id: nil},
                "x",
                fixture_issue(),
-               on_message: on_msg
+               on_message: on_msg,
+               stream_timeout_ms: stream_timeout_ms
              )
 
     assert_received {:m, %{event: :session_started}}
