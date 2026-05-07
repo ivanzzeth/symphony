@@ -135,7 +135,7 @@ defmodule SymphonyElixir.Claude.Adapter do
 
         emit_message(on_message, :buffer_exceeded, %{
           adapter: :claude,
-          chunk_bytes: n,
+          fragment_bytes: n,
           pending_bytes: plen,
           port_line_bytes: buf
         })

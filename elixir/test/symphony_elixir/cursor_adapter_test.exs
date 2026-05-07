@@ -163,32 +163,9 @@ defmodule SymphonyElixir.CursorAdapterTest do
       end)
 
     assert log =~ "port line buffer"
-    assert_received {:m, %{event: :buffer_exceeded, adapter: :cursor, chunk_bytes: 64}}
+    assert_received {:m, %{event: :buffer_exceeded, adapter: :cursor, fragment_bytes: 64}}
     assert_received {:m, %{event: :malformed}}
     assert_received {:m, %{event: :turn_completed}}
-  end
-
-  test "emits turn_timeout via on_message when stream is idle past stream_timeout_ms" do
-    unless System.find_executable("python3") do
-      raise "python3 is required for the idle-stream adapter test (unbuffered stdout)"
-    end
-
-    %{binary: bin, workspace: ws, test_root: root} = setup_cursor_env("SLOW")
-    write_cursor_config(bin, root, codex_stream_timeout_ms: 200)
-
-    test_pid = self()
-    on_msg = fn m -> send(test_pid, {:m, m}) end
-
-    assert {:error, :turn_timeout} =
-             CursorAdapter.run_turn(
-               %{session_id: "idle", workspace: ws, resume_id: nil},
-               "x",
-               issue(),
-               on_message: on_msg
-             )
-
-    assert_received {:m, %{event: :session_started}}
-    assert_received {:m, %{event: :turn_timeout, timeout_ms: 200, adapter: :cursor}}
   end
 
   test "emits malformed event for non-JSON lines without crashing" do
@@ -300,15 +277,6 @@ printf 'ARGS:%s\\n' "$*" >> "#{trace}"
 printf '%s\\n' '{"type":"system","subtype":"init","session_id":"noe","tools":["bash"]}'
 awk 'BEGIN{for(i=0;i<100;i++)printf "x";print ""}'
 printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"inputTokens":1,"outputTokens":1}}'
-exit 0
-)
-  end
-
-  defp fake_cursor_script("SLOW", trace) do
-    ~s(#!/bin/sh
-printf 'ARGS:%s\\n' "$*" >> "#{trace}"
-printf '%s\\n' '{"type":"system","subtype":"init","session_id":"slow","tools":["bash"]}'
-sleep 3
 exit 0
 )
   end

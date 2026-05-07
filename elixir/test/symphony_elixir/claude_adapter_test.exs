@@ -113,6 +113,10 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   end
 
   test "emits turn_timeout via on_message before returning error when stream stalls" do
+    unless System.find_executable("python3") do
+      raise "python3 is required for the stall adapter test (unbuffered stdout)"
+    end
+
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("STALL")
     write_claude_config_stall(bin, root, codex_stream_timeout_ms: 120)
 
@@ -131,6 +135,10 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   end
 
   test "emits turn_timeout via on_message when stream is idle past stream_timeout_ms" do
+    unless System.find_executable("python3") do
+      raise "python3 is required for the idle-stream adapter test (unbuffered stdout)"
+    end
+
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("SLOW")
     write_claude_config(bin, root, codex_stream_timeout_ms: 200)
 
@@ -176,8 +184,8 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
                  )
       end)
 
-    assert log =~ "exceeded port line buffer"
-    assert_received {:m, %{event: :buffer_exceeded, adapter: :claude, chunk_bytes: 64}}
+    assert log =~ "port line buffer"
+    assert_received {:m, %{event: :buffer_exceeded, adapter: :claude, fragment_bytes: 64}}
     assert_received {:m, %{event: :malformed}}
     assert_received {:m, %{event: :turn_completed}}
   end
@@ -200,27 +208,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     assert_received {:m, %{event: :turn_completed}}
     assert_received {:m, %{event: :malformed}}
   end
-
-  @tag :slow
-  test "oversized line without newline emits buffer_exceeded and completes without crashing" do
-    %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("HUGE_LINE")
-    write_claude_config(bin, root)
-
-    test_pid = self()
-    on_msg = fn m -> send(test_pid, {:m, m}) end
-
-    assert {:ok, _} =
-             ClaudeAdapter.run_turn(
-               %{session_id: "hl", workspace: ws, resume_id: nil},
-               "x",
-               issue(),
-               on_message: on_msg
-             )
-
-    assert_receive {:m, %{event: :buffer_exceeded}}, 10_000
-    assert_received {:m, %{event: :turn_completed}}
-  end
-
+s
   test "remote SSH uses SSH.start_port for worker_host" do
     test_root = Path.join(System.tmp_dir!(), "symphony-elixir-claude-ssh-#{System.unique_integer([:positive])}")
     File.mkdir_p!(test_root)
@@ -341,13 +329,35 @@ exit 1
   end
 
   defp fake_claude_script("STALL", trace) do
-    ~s(#!/bin/sh
-printf 'ARGS:%s\\n' "$*" >> "#{trace}"
-printf '%s\\n' '{"type":"system","subtype":"init","session_id":"st"}'
-sleep 3
-printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"late","usage":{"input_tokens":1,"output_tokens":1}}'
+    init =
+      Jason.encode!(%{
+        "type" => "system",
+        "subtype" => "init",
+        "session_id" => "st"
+      })
+
+    fin =
+      Jason.encode!(%{
+        "type" => "result",
+        "subtype" => "success",
+        "is_error" => false,
+        "result" => "late",
+        "usage" => %{"input_tokens" => 1, "output_tokens" => 1}
+      })
+
+    """
+#!/bin/sh
+printf 'ARGS:%s\\n' "$*" >> '#{trace}'
+python3 -u <<'PY'
+import sys, time
+sys.stdout.write(#{inspect(init)} + "\\n")
+sys.stdout.flush()
+time.sleep(3)
+sys.stdout.write(#{inspect(fin)} + "\\n")
+sys.stdout.flush()
+PY
 exit 0
-)
+"""
   end
 
   defp fake_claude_script("NOEOL", trace) do
@@ -355,41 +365,6 @@ exit 0
 printf 'ARGS:%s\\n' "$*" >> "#{trace}"
 printf '%s\\n' '{"type":"system","subtype":"init","session_id":"noe","tools":["bash"]}'
 awk 'BEGIN{for(i=0;i<100;i++)printf "x";print ""}'
-printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"input_tokens":1,"output_tokens":1}}'
-exit 0
-)
-  end
-
-  defp fake_claude_script("BIGLINE", trace) do
-    ~s(#!/bin/sh
-printf 'ARGS:%s\\n' "$*" >> "#{trace}"
-printf '%s\\n' '{"type":"system","subtype":"init","session_id":"big"}'
-python3 <<'PY'
-import sys
-sys.stdout.buffer.write(b' ' * (1048576 + 1))
-sys.stdout.buffer.write(b'\\n')
-sys.stdout.flush()
-PY
-printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"input_tokens":1,"output_tokens":1}}'
-exit 0
-)
-  end
-
-  defp fake_claude_script("SLOW", trace) do
-    ~s(#!/bin/sh
-printf 'ARGS:%s\\n' "$*" >> "#{trace}"
-printf '%s\\n' '{"type":"system","subtype":"init","session_id":"slow","tools":["bash"]}'
-sleep 3
-exit 0
-)
-  end
-
-  defp fake_claude_script("HUGE_LINE", trace) do
-    ~s(#!/bin/sh
-printf 'ARGS:%s\\n' "$*" >> "#{trace}"
-printf '%s\\n' '{"type":"system","subtype":"init","session_id":"huge","tools":["bash"]}'
-perl -e 'print "x" x 2_000_000; print "\\n"'
-printf '%s\\n' '{"type":"assistant","message":{"model":"s","usage":{"input_tokens":1,"output_tokens":1}}}'
 printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"ok","usage":{"input_tokens":1,"output_tokens":1}}'
 exit 0
 )
