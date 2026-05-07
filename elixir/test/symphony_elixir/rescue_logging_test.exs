@@ -74,7 +74,7 @@ defmodule SymphonyElixir.RescueLoggingTest do
     )
   end
 
-  test "StatusDashboard maybe_render logs warning when render pipeline is forced to raise" do
+  test "StatusDashboard maybe_render logs warning when render pipeline raises" do
     state = %StatusDashboard{
       refresh_ms: 99_999,
       enabled: true,
@@ -93,7 +93,7 @@ defmodule SymphonyElixir.RescueLoggingTest do
       last_snapshot_fingerprint: nil
     }
 
-    with_symphony_app_env(:status_dashboard_maybe_render_force_raise, true, fn ->
+    with_symphony_app_env(:status_dashboard_maybe_render_raise_exception, RuntimeError, fn ->
       log =
         capture_warning_log(fn ->
           _ = StatusDashboard.maybe_render_for_test(state)

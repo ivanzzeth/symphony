@@ -195,15 +195,10 @@ defmodule SymphonyElixir.StatusDashboard do
       if TestEnv.active?(),
         do: Application.get_env(:symphony_elixir, :status_dashboard_maybe_render_raise_exception, false)
 
-    cond do
-      is_atom(raise_mod) and raise_mod not in [false, nil, true] ->
-        raise raise_mod, "simulated status dashboard render failure"
-
-      Application.get_env(:symphony_elixir, :status_dashboard_maybe_render_force_raise, false) ->
-        raise RuntimeError, "symphony test: force maybe_render rescue path"
-
-      true ->
-        :ok
+    if is_atom(raise_mod) and raise_mod not in [false, nil, true] do
+      raise raise_mod, "simulated status dashboard render failure"
+    else
+      :ok
     end
   end
 
