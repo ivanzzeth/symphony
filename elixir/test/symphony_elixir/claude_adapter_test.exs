@@ -161,6 +161,9 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     # cannot clobber WORKFLOW between setup and `run_turn` (same pattern as Cursor adapter STALL test).
     stream_timeout_ms = 8_000
 
+    # Prior tests can leave `{:m, _}` from `on_message` without draining the mailbox.
+    flush_claude_adapter_mailbox()
+
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("STALL")
     write_claude_config(bin, root)
 
@@ -186,13 +189,9 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
              MapSet.new([:session_started, :turn_timeout])
 
     assert Enum.any?(events, fn
-           {:turn_timeout,
-            {:m, %{timeout_ms: ^stream_timeout_ms, adapter: :claude}}} ->
-             true
-
-           _ ->
-             false
-         end)
+      {:turn_timeout, %{timeout_ms: ^stream_timeout_ms, adapter: :claude}} -> true
+      _ -> false
+    end)
   end
 
   test "short line split across noeol emits buffer_exceeded and completes without crash" do
@@ -297,6 +296,14 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   end
 
   # --- helpers ---
+
+  defp flush_claude_adapter_mailbox do
+    receive do
+      {:m, _} -> flush_claude_adapter_mailbox()
+    after
+      0 -> :ok
+    end
+  end
 
   defp fixture_issue do
     %{
