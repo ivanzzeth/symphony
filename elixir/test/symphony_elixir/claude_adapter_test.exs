@@ -10,7 +10,11 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   alias SymphonyElixir.Workflow
 
   setup do
-    workflow_root = Path.join(System.tmp_dir!(), "symphony-elixir-claude-adapter-#{System.unique_integer([:positive])}")
+    workflow_root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-elixir-claude-adapter-#{System.unique_integer([:positive])}"
+      )
 
     File.mkdir_p!(workflow_root)
     workflow_file = Path.join(workflow_root, "WORKFLOW.md")
@@ -52,8 +56,8 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     assert result.input_tokens == 99
     assert result.output_tokens == 11
-    assert result.resume_id == "s-camel"
-    assert_received {:m, %{event: :session_started}}
+    assert result.resume_id == "camel"
+    assert_received {:m, %{event: :session_started, session_id: "camel"}}
     assert_received {:m, %{event: :notification}}
     assert_received {:m, %{event: :turn_completed}}
     assert File.read!(trace) =~ "--session-id s-camel"
@@ -72,26 +76,45 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     assert result.input_tokens == 42
     assert result.output_tokens == 17
-    assert result.resume_id == "s1"
-    assert_received {:m, %{event: :session_started}}
+    assert result.resume_id == "ok"
+    assert_received {:m, %{event: :session_started, session_id: "ok"}}
     assert_received {:m, %{event: :notification}}
     assert_received {:m, %{event: :turn_completed}}
     assert File.read!(trace) =~ "--session-id s1"
   end
 
-  test "Turn 2 — uses --resume flag" do
+  test "Turn 2 — uses --resume with CLI session_id from init event" do
     %{binary: bin, trace: trace, workspace: ws, test_root: root} = setup_claude_env("OK")
 
-    session = %{session_id: "s2", workspace: ws, resume_id: "s2"}
+    session = %{session_id: "s2", workspace: ws, resume_id: "ok"}
     test_pid = self()
     on_msg = fn m -> send(test_pid, {:m, m}) end
 
     write_claude_config(bin, root)
 
-    assert {:ok, _} = ClaudeAdapter.run_turn(session, "Continue", issue(), on_message: on_msg)
+    assert {:ok, result} =
+             ClaudeAdapter.run_turn(session, "Continue", issue(), on_message: on_msg)
 
+    assert result.resume_id == "ok"
     assert_received {:m, %{event: :turn_completed}}
-    assert File.read!(trace) =~ "--resume s2"
+    assert File.read!(trace) =~ "--resume ok"
+  end
+
+  test "Turn 1 then Turn 2 — second CLI uses --resume with resume_id from first turn init" do
+    %{binary: bin, trace: trace, workspace: ws, test_root: root} = setup_claude_env("OK")
+    write_claude_config(bin, root)
+
+    session1 = %{session_id: "adapter-placeholder", workspace: ws, resume_id: nil}
+    assert {:ok, after_turn1} = ClaudeAdapter.run_turn(session1, "First", issue())
+    assert after_turn1.resume_id == "ok"
+
+    session2 = %{session1 | resume_id: after_turn1.resume_id}
+    write_claude_config(bin, root)
+    assert {:ok, _} = ClaudeAdapter.run_turn(session2, "Second", issue())
+
+    trace_text = File.read!(trace)
+    assert trace_text =~ "--session-id adapter-placeholder"
+    assert trace_text =~ "--resume #{after_turn1.resume_id}"
   end
 
   test "returns {:ok, result} with resume_id for next turn" do
@@ -100,7 +123,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     session = %{session_id: "s-resume", workspace: ws, resume_id: nil}
     assert {:ok, result} = ClaudeAdapter.run_turn(session, "Fix bug", issue())
-    assert result.resume_id == "s-resume"
+    assert result.resume_id == "ok"
   end
 
   test "returns error on turn failure" do
@@ -134,12 +157,9 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   end
 
   test "emits turn_timeout via on_message before returning error when stream stalls" do
-    unless System.find_executable("python3") do
-      raise "python3 is required for the stall adapter test (unbuffered stdout)"
-    end
-
-    # `python3 -u` cold start + first JSON line can be slow; idle window must stay below fake script's sleep after init.
-    stream_timeout_ms = 4_000
+    # Fake CLI emits init from the shell, then sleeps longer than `stream_timeout_ms`. Allow headroom
+    # for slow CI / bash -lc startup before the first JSON line is observed.
+    stream_timeout_ms = 8_000
 
     %{binary: bin, workspace: ws, test_root: root} = setup_claude_env("STALL")
     write_claude_config_stall(bin, root, codex_stream_timeout_ms: stream_timeout_ms)
@@ -156,7 +176,9 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
              )
 
     assert_received {:m, %{event: :session_started}}
-    assert_received {:m, %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :claude}}
+
+    assert_received {:m,
+                     %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :claude}}
   end
 
   test "short line split across noeol emits buffer_exceeded and completes without crash" do
@@ -212,7 +234,12 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   end
 
   test "remote SSH uses SSH.start_port for worker_host" do
-    test_root = Path.join(System.tmp_dir!(), "symphony-elixir-claude-ssh-#{System.unique_integer([:positive])}")
+    test_root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-elixir-claude-ssh-#{System.unique_integer([:positive])}"
+      )
+
     File.mkdir_p!(test_root)
 
     prev_path = System.get_env("PATH")
@@ -246,13 +273,15 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
     remote = "/remote/workspace/issue-1"
     write_claude_config("claude", "/remote/workspaces")
 
-    assert {:ok, _} =
+    assert {:ok, result} =
              ClaudeAdapter.run_turn(
                %{session_id: "ssh", workspace: remote, resume_id: nil},
                "Fix bug",
                issue(),
                worker_host: "worker-01:2200"
              )
+
+    assert result.resume_id == "ssh-s"
 
     trace = File.read!(ssh_trace)
     assert trace =~ "-T -p 2200 worker-01 bash -lc"
@@ -298,7 +327,9 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
   end
 
   defp setup_claude_env(scenario) do
-    root = Path.join(System.tmp_dir!(), "symphony-elixir-claude-#{System.unique_integer([:positive])}")
+    root =
+      Path.join(System.tmp_dir!(), "symphony-elixir-claude-#{System.unique_integer([:positive])}")
+
     File.mkdir_p!(root)
 
     ws = Path.join(root, "workspace")
@@ -338,7 +369,8 @@ exit 1
       Jason.encode!(%{
         "type" => "system",
         "subtype" => "init",
-        "session_id" => "st"
+        "session_id" => "st",
+        "_flush_pad" => String.duplicate("x", 70_000)
       })
 
     fin =
@@ -353,14 +385,9 @@ exit 1
     """
     #!/bin/sh
     printf 'ARGS:%s\\n' "$*" >> '#{trace}'
-    python3 -u <<'PY'
-    import sys, time
-    sys.stdout.write(#{inspect(init)} + "\\n")
-    sys.stdout.flush()
-    time.sleep(6)
-    sys.stdout.write(#{inspect(fin)} + "\\n")
-    sys.stdout.flush()
-    PY
+    printf '%s\\n' '#{init}'
+    sleep 15
+    printf '%s\\n' '#{fin}'
     exit 0
     """
   end
