@@ -7,6 +7,10 @@ description:
 
 # Push
 
+## Symphony issue execution (unattended)
+
+When this skill runs inside the Linear issue-execution flow (`elixir/WORKFLOW.md`), the session is **unattended**: do not ask the human for follow-ups. Surface blockers in the `## Codex Workpad` per WORKFLOW. Every PR must **target `develop`** and include the **`symphony`** label (`gh pr create ... -l symphony` or `gh pr edit --add-label symphony`).
+
 ## Prerequisites
 
 - `gh` CLI is installed and available in `PATH`.
@@ -38,9 +42,12 @@ description:
      rewriting remotes or switching protocols as a workaround.
 
 5. Ensure a PR exists for the branch:
-   - If no PR exists, create one.
+   - If no PR exists, create one with `--base develop` (or the repo’s configured
+     `workspace.base_branch`, which is `develop` for Symphony).
    - If a PR exists and is open, update it.
    - If branch is tied to a closed/merged PR, create a new branch + PR.
+   - Ensure the **`symphony`** label is present on the PR (add on create or via
+     `gh pr edit --add-label symphony`).
    - Write a proper PR title that clearly describes the change outcome
    - For branch updates, explicitly reconsider whether current PR title still
      matches the latest scope; update it if it no longer does.
@@ -53,7 +60,9 @@ description:
      including newly added work, removed work, or changed approach.
    - Do not reuse stale description text from earlier iterations.
 7. Validate PR body with `mix pr_body.check` and fix all reported issues.
-8. Reply with the PR URL from `gh pr view`.
+8. Reply with the PR URL from `gh pr view` (orchestrator/session output is fine;
+   do **not** paste the PR URL into the Linear `## Codex Workpad` body—link the PR
+   on the issue per WORKFLOW).
 
 ## Commands
 
@@ -87,10 +96,11 @@ fi
 # Write a clear, human-friendly title that summarizes the shipped change.
 pr_title="<clear PR title written for this change>"
 if [ -z "$pr_state" ]; then
-  gh pr create --title "$pr_title"
+  gh pr create --base develop --head "$branch" -l symphony --title "$pr_title"
 else
   # Reconsider title on every branch update; edit if scope shifted.
   gh pr edit --title "$pr_title"
+  gh pr edit --add-label symphony 2>/dev/null || true
 fi
 
 # Write/edit PR body to match .github/pull_request_template.md before validation.

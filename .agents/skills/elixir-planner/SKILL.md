@@ -29,7 +29,7 @@ The WORKFLOW.md file at `elixir/WORKFLOW.md` is the **Symphony execution contrac
 - Polling interval
 - Workspace settings (root, base_branch)
 - Agent config (kind, max_concurrent, max_turns)
-- Runner config under YAML key `codex` (command e.g. `cursor`, approval_policy, sandbox policies)
+- Runner config under YAML key `codex` (command e.g. `cursor --model auto`, approval_policy, sandbox policies)
 
 If the plan requires modifying WORKFLOW.md, flag it as BLOCKED and inform the user.
 

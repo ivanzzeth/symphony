@@ -1,6 +1,6 @@
 ---
 name: harness
-description: "Configure agent harnesses. Meta-skill that defines specialized agents and creates the skills they will use. Trigger when: (1) 'configure harness', 'build harness', 'set up harness' requested, (2) 'harness design', 'harness engineering' requested, (3) building harness-based automation for a new domain/project, (4) reconfiguring or extending an existing harness, (5) 'harness check', 'harness audit', 'harness status', 'agent/skill sync' or any harness operations/maintenance request."
+description: "Configure agent harnesses. Meta-skill that defines specialized agents and creates the skills they will use. Trigger when: (1) 'configure harness', 'build harness', 'set up harness' requested, (2) 'harness design', 'harness engineering' requested, (3) building harness-based automation for a new domain/project, (4) reconfiguring or extending an existing harness, (5) 'harness check', 'harness audit', 'harness status', 'agent/skill sync' or any harness operations/maintenance request, (6) 'continue harness', 'resume harness', or finishing a partial harness reconfiguration from current workspace state."
 ---
 
 # Harness — Agent Team & Skill Architect
@@ -463,6 +463,18 @@ Confirm after generation:
 - [ ] **AGENTS.md change history records agent/skill additions, deletions, modifications**
 - [ ] **Orchestrator Phase 1 includes context detection step** (initial/follow-up/partial re-run detection)
 - [ ] **Symphony dispatch context integrated** — when invoked under Symphony, WORKFLOW.md and platform state are considered
+
+## Test scenarios (Symphony harness)
+
+Use these as quick dry-runs after reconfiguring `.agents/` or `AGENTS.md`:
+
+1. **Normal:** User asks to sync harness with `elixir/WORKFLOW.md`. Expect Phase 0
+   audit, diff of YAML + prompt sections, updates under `.agents/` + `AGENTS.md`
+   only, change-history row.
+2. **Error:** `elixir/WORKFLOW.md` missing or unreadable. Expect harness to stop
+   after reporting the blocker; no partial writes to skills.
+3. **Continuation:** Resume harness configuration from current tree. Expect
+   re-audit, no duplicate agent files, linear/land/pull alignment verified.
 
 ## References
 

@@ -9,6 +9,10 @@ description:
 
 # Pull
 
+## Symphony issue execution (unattended)
+
+When this skill runs inside the Linear issue-execution flow (`elixir/WORKFLOW.md`), the session is **unattended**: do not ask the human for follow-up actions. Document merge decisions, risks, and blockers in the single Linear `## Codex Workpad` comment (or the update script equivalent).
+
 ## Workflow
 
 1. Verify git status is clean or commit/stash changes before merging.
@@ -36,6 +40,12 @@ description:
 9. Summarize the merge:
    - Call out the most challenging conflicts/files and how they were resolved.
    - Note any assumptions or follow-ups.
+10. **Workpad evidence (issue execution only):** If a Linear `## Codex Workpad`
+    exists for this ticket, append a short **`pull skill evidence`** note (WORKFLOW
+    Step 1) under `Notes` (or the nearest appropriate section), including:
+    - merge source(s) (for example `origin/develop`),
+    - outcome: `clean` or `conflicts resolved`,
+    - resulting `HEAD` short SHA (`git rev-parse --short HEAD` after the merge completes).
 
 ## Conflict Resolution Guidance (Best Practices)
 
@@ -84,6 +94,9 @@ description:
 
 Do not ask for input unless there is no safe, reversible alternative. Prefer
 making a best-effort decision, documenting the rationale, and proceeding.
+
+For **Symphony issue-execution** workspaces, prefer the workpad + blocked-access
+escape hatch from WORKFLOW over asking a human.
 
 Ask the user only when:
 

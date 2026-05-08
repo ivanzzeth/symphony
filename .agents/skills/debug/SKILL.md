@@ -16,6 +16,10 @@ description:
 
 ## Log Sources
 
+Issue-execution runs invoke the Cursor CLI as configured in `elixir/WORKFLOW.md`
+(currently `cursor --model auto` under the YAML key `codex`). Adapter log lines
+still correlate by `issue_identifier` / `session_id` as below.
+
 - Primary runtime log: `log/symphony.log`
   - Default comes from `SymphonyElixir.LogFile` (`log/symphony.log`).
   - Includes orchestrator, agent runner, and coding-agent adapter lifecycle

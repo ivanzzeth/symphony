@@ -38,6 +38,7 @@ When running under Symphony, these platform-level details are available:
 
 ### Execution Contract
 - `WORKFLOW.md` defines what Symphony expects from this harness run
+- The file has two layers: YAML config (tracker, polling, workspace, hooks, agent, `codex`) **and** the Markdown prompt after the second `---` (status routing, workpad rules, PR feedback sweep, completion bar). Harness reconfiguration must keep **AGENTS.md** and issue-execution skills (`pull`, `push`, `land`, `linear`, …) aligned with **both** layers.
 - May specify: target files, acceptance criteria, constraints, artifact paths
 
 ## Harness Agent Behavior Under Symphony

@@ -42,9 +42,9 @@ description:
    - Rationale and trade-offs (why it changed).
    - Tests or validation run (or explicit note if not run).
 9. Append a `Co-authored-by` trailer using the project's configured identity
-   (match the active CLI in WORKFLOW.md—for Cursor-backed runs, use the team's
-   Cursor co-author line if documented; otherwise follow repo AGENTS.md /
-   commit conventions).
+   (match the active CLI in WORKFLOW.md—for Cursor-backed runs the orchestrator
+   uses `cursor --model auto`; use the team's Cursor co-author line if documented;
+   otherwise follow repo AGENTS.md / commit conventions).
 10. Wrap body lines at 72 characters.
 11. Create the commit message with a here-doc or temp file and use
     `git commit -F <file>` so newlines are literal (avoid `-m` with `\n`).

@@ -11,6 +11,7 @@ defmodule SymphonyElixir.Cursor.Adapter do
   alias SymphonyElixir.{Config, Rescue, SSH}
 
   @default_port_line_bytes 1_048_576
+  @prompt_file_prefix "cursor-agent-prompt-"
 
   @impl true
   def start_session(workspace, _opts) do
@@ -24,14 +25,19 @@ defmodule SymphonyElixir.Cursor.Adapter do
     worker_host = Keyword.get(opts, :worker_host)
     timeout_ms = Config.settings!().agent.stream_timeout_ms
 
-    cli_args = build_cli_args(session, prompt)
+    prompt_file = write_prompt_file(prompt)
+    cli_args = build_cli_args(session, prompt_file, worker_host)
 
-    with {:ok, port} <- open_cursor_port(session.workspace, cli_args, worker_host) do
-      try do
-        receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms, "")
-      after
-        close_port(port)
+    try do
+      with {:ok, port} <- open_cursor_port(session.workspace, cli_args, worker_host) do
+        try do
+          receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms, "")
+        after
+          close_port(port)
+        end
       end
+    after
+      cleanup_prompt_file(prompt_file)
     end
   end
 
@@ -44,7 +50,7 @@ defmodule SymphonyElixir.Cursor.Adapter do
     "#{:erlang.unique_integer([:positive])}-#{System.system_time(:millisecond)}"
   end
 
-  defp build_cli_args(session, prompt) do
+  defp build_cli_args(session, prompt_file, worker_host) do
     # Split the full agent.command (e.g. "stdbuf -oL -eL /path/cursor") so the
     # "agent" subcommand comes after the real CLI binary, not after a stdbuf prefix.
     command_parts =
@@ -71,11 +77,32 @@ defmodule SymphonyElixir.Cursor.Adapter do
         []
       end
 
-    escaped_prompt = SSH.shell_escape(prompt)
+    args =
+      (base ++ session_arg)
+      |> Enum.join(" ")
 
-    (base ++ session_arg ++ ["--", escaped_prompt])
-    |> Enum.join(" ")
-    |> then(&"exec #{&1}")
+    if worker_host do
+      # SSH remote: prompt file is local-only, embed prompt as arg (less likely to hit
+      # ARG_MAX since remote hosts typically have smaller env + fewer concurrent agents)
+      escaped_prompt = prompt_file |> File.read!() |> SSH.shell_escape()
+      "exec #{args} -- #{escaped_prompt}"
+    else
+      # Local: redirect prompt from temp file to avoid ARG_MAX (2MB limit)
+      # cursor agent reads prompt from stdin when no positional argument is given
+      "exec #{args} < #{SSH.shell_escape(prompt_file)}"
+    end
+  end
+
+  defp write_prompt_file(prompt) do
+    dir = System.tmp_dir!()
+    path = Path.join(dir, @prompt_file_prefix <> generate_session_id())
+    File.write!(path, prompt)
+    path
+  end
+
+  defp cleanup_prompt_file(nil), do: :ok
+  defp cleanup_prompt_file(path) do
+    File.rm_rf(path)
   end
 
   defp open_cursor_port(workspace, cli_args, nil) do

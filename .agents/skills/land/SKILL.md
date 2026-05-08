@@ -14,6 +14,22 @@ those headers as **stable contract strings**—do not rename them in skills; the
 merge loop below still applies to all PR/issue review traffic (human, bot, or
 Codex-branded jobs).
 
+## Symphony `Merging` state (WORKFLOW)
+
+When the Linear issue is in **`Merging`**, `elixir/WORKFLOW.md` requires opening
+**this** skill and running the land loop until the PR is merged. That means:
+use **`python3 .agents/skills/land/land_watch.py`** (preferred) and the gates
+below—do **not** squash-merge from a one-off shell command **without** going
+through the checks/review handling this document defines. The sample
+`gh pr merge` at the end of **Commands** is the sanctioned final step **after**
+green checks and addressed feedback, not a shortcut around the land flow.
+
+For **Symphony issue-execution** runs (unattended), treat WORKFLOW as overriding
+generic “wait for the human” wording in **Steps** 12–14 where it would block
+completion: resolve ambiguity via inline/`[codex]` replies, PR metadata, and the
+Linear `## Codex Workpad` blocker brief; only stop the loop for true external
+blockers (auth, missing required secrets) documented in the workpad.
+
 ## Goals
 
 - Ensure the PR is conflict-free with develop.

@@ -196,15 +196,22 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 **Execution Rules:**
 - Symphony orchestrator polls Linear for Todo issues and dispatches one Cursor-backed agent run per issue (polling interval: 5000ms)
 - Each agent operates in an isolated workspace per issue (root: `~/code/symphony-workspaces`), following the WORKFLOW.md execution contract
-- For issue execution work, the orchestrator runs the Cursor CLI (`cursor` per workflow `codex.command`) with the WORKFLOW.md prompt template
+- For issue execution work, the orchestrator runs the Cursor CLI per workflow `codex.command` (currently `cursor --model auto`) with the WORKFLOW.md prompt template
 - The WORKFLOW.md defines the execution contract (tracker, polling, workspace, agent, codex, hooks, and prompt template)
 - Agent config: kind=cursor, max_concurrent_agents=10, max_turns=20
-- Runner config (YAML key remains `codex`): command=cursor, approval_policy=never, thread_sandbox=workspace-write, turn_sandbox_policy maps to workspaceWrite (see WORKFLOW for exact shape)
+- Runner config (YAML key remains `codex`): command=`cursor --model auto`, approval_policy=never, thread_sandbox=workspace-write, turn_sandbox_policy maps to workspaceWrite (see WORKFLOW for exact shape)
 - Tracker: kind=linear, project_slug="symphony-079b97dd6409"; active states include Todo through Rework; terminal states include Backlog, Done, Canceled, Duplicate
 - Base branch: develop (all PRs target origin/develop)
-- Workspace hooks: after_create (git clone + conditional `mise trust` + `mise exec -- mix deps.get` in `elixir/`), before_remove (`mise exec -- mix workspace.before_remove`)
-- Prompt requires Linear access (Linear MCP or `linear_graphql` tool); blocked-access protocol treats missing non-GitHub tools/auth as the primary escape hatch—GitHub is not a default blocker (try fallbacks first, document in workpad)
-- App-touching changes: follow WORKFLOW completion bar (`launch-app`, `github-pr-media` when required)
+- Workspace hooks: after_create (shallow `git clone` of `base_branch`, `git checkout` that branch, then conditional `mise trust` + `mise exec -- mix deps.get` in `elixir/`), before_remove (`mise exec -- mix workspace.before_remove`)
+- Issue-execution prompt is **unattended**: do not ask the human for follow-ups; final agent message reports completed actions and blockers only (see WORKFLOW instructions)
+- Single Linear workpad per issue: marker `## Codex Workpad`; when searching for an existing workpad, **ignore resolved comments**—only active/unresolved comments qualify
+- After each mandated `pull` sync, record **`pull skill evidence`** in the workpad (merge source(s), `clean` vs `conflicts resolved`, resulting `HEAD` short SHA)—see `pull` skill
+- PRs must target `origin/develop`, carry the **`symphony`** GitHub label, and link on the issue; do **not** paste the PR URL into the workpad body
+- Before `In Review`, run the full **PR feedback sweep** (top-level, inline via GitHub API, review summaries); read **Manual QA Plan** on the PR when present; keep workpad `Plan` / `Acceptance Criteria` / `Validation` aligned with reality; add `### Confusions` only when execution was unclear
+- **`Rework`**: treat as full reset—close the existing PR, remove the prior `## Codex Workpad` comment, branch fresh from `origin/develop`, create a new workpad, re-execute end-to-end (see WORKFLOW Step 4)
+- Prompt requires Linear access (Linear MCP or `linear_graphql` tool). WORKFLOW’s prerequisite block still applies: if neither is available, stop for operator configuration—that is the intentional exception to otherwise-unattended issue runs. Blocked-access protocol: missing **non-GitHub** tools/auth is the primary escape hatch; GitHub is not a default blocker (try fallbacks first, document in workpad)
+- PR / review / completion-bar reminders: `.agents/skills/harness/references/issue-execution-checklist.md` (checklist only; `elixir/WORKFLOW.md` remains authoritative)
+- App-touching changes: follow WORKFLOW completion bar (`launch-app`, `github-pr-media` when required; see **App runtime validation** in WORKFLOW)
 - Daemon-level config (server port/host, observability) lives in `~/.config/symphony/symphony.yaml` — NOT in WORKFLOW.md
   - `server` and `observability` keys in WORKFLOW.md are disallowed and silently stripped with a warning
   - CLI flags `--config`, `--port`, `--host` override YAML values for single-instance multi-project management
@@ -228,7 +235,7 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 │   │   └── SKILL.md
 │   ├── harness/
 │   │   ├── SKILL.md
-│   │   └── references/
+│   │   └── references/   # includes issue-execution-checklist.md, symphony-dispatch.md, …
 │   ├── land/
 │   │   ├── SKILL.md
 │   │   └── land_watch.py
@@ -271,6 +278,8 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 | 2026-05-07 | Harness sync to Cursor WORKFLOW.md | AGENTS.md, .agents/skills (pull, commit, debug, land, elixir-planner), symphony-dispatch.md | WORKFLOW.md: agent.kind=cursor, codex.command=cursor, Duplicate terminal state, Linear MCP prerequisite, blocked-access/GitHub guidance, app validation gates; fixed harness directory tree; skills aligned with Cursor execution + log triage |
 | 2026-05-07 | Harness continuation (multi-turn) | pull/SKILL.md, elixir-planner/SKILL.md, symphony-dispatch.md, AGENTS.md | Explicit post-merge `mise exec -- mix test` gate after pull; planner notes Duplicate terminal state; documented Harness.Manager follow-up prompt behavior |
 | 2026-05-07 | Harness docs: WORKFLOW contract path | harness/SKILL.md, symphony-dispatch.md, AGENTS.md | Phase 0 + AGENTS template: Symphony dispatch tied to platform/heuristics, not `.agents/WORKFLOW.md`; contract canonical at `elixir/WORKFLOW.md` |
+| 2026-05-08 | Harness sync to updated WORKFLOW.md | AGENTS.md, pull/push/commit/elixir-planner skills | `codex.command` → `cursor --model auto`; after_create checkout; unattended + workpad/PR/Rework/completion-bar alignment |
+| 2026-05-08 | Harness continuation | linear/land/debug skills, symphony-dev ref, harness SKILL | Workpad GraphQL notes; WORKFLOW `Merging`/unattended land; debug CLI note; orchestrator-workflow cross-link; harness test scenarios |
 
 ## Harness: Symphony Development
 

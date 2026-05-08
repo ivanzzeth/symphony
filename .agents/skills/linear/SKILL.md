@@ -237,6 +237,50 @@ mutation CreateComment($issueId: String!, $body: String!) {
 }
 ```
 
+### Issue execution workpad (`## Codex Workpad`)
+
+Symphony’s `elixir/WORKFLOW.md` treats **one** Linear comment per issue as the live
+scratchpad. Header must match exactly: `## Codex Workpad`.
+
+**Find or reuse (bootstrap):**
+
+1. Query the issue’s comments (include fields needed to detect resolution/archival
+   in your client—Linear exposes different flags over time; skip any comment the
+   API marks as resolved, archived, or otherwise ineligible per WORKFLOW).
+2. Prefer the **active** workpad: WORKFLOW requires ignoring **resolved** comments
+   when searching—only unresolved/active comments qualify.
+3. If a reusable workpad exists, note its `id` and use **`commentUpdate`** for all
+   further edits. Do not create a second workpad.
+
+**Rework reset (WORKFLOW Step 4):**
+
+When the ticket is in `Rework` and the flow calls for a clean slate: delete the
+prior workpad comment (requires permission on that comment), then
+**`commentCreate`** a fresh `## Codex Workpad` after branching from
+`origin/develop`.
+
+```graphql
+mutation DeleteWorkpadComment($id: String!) {
+  commentDelete(id: $id) {
+    success
+  }
+}
+```
+
+If `commentDelete` fails (permissions, API policy), use the project’s documented
+fallback (for example the update script mentioned in WORKFLOW guardrails) and
+record the failure mode in the workpad.
+
+**Post-merge (`Merging` → `Done`):** After land completes, transition the issue
+to **`Done`** with `issueUpdate` + terminal `stateId` for the team.
+
+**PR linkage vs workpad body:**
+
+- Attach the GitHub PR with **`attachmentLinkGitHubPR`** (or equivalent) so the
+  issue shows the PR link.
+- Do **not** paste the PR URL into the workpad body—WORKFLOW keeps PR linkage on
+  the issue, not duplicated inside the workpad.
+
 ### Move an issue to a different state
 
 Use `issueUpdate` with the destination `stateId`:
