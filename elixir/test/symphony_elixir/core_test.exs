@@ -753,7 +753,7 @@ defmodule SymphonyElixir.CoreTest do
 
   defp assert_due_in_range(due_at_ms, min_remaining_ms, max_remaining_ms) do
     remaining_ms = due_at_ms - System.monotonic_time(:millisecond)
-    # Wider slack: monotonic clock vs scheduled due_at can skew a few ms under load.
+    # Wider slack: monotonic clock vs scheduled due_at can skew under load (CI).
     lower_bound = max(0, min_remaining_ms - 800)
 
     assert remaining_ms >= lower_bound

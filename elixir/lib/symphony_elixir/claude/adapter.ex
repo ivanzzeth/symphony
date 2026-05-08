@@ -9,7 +9,7 @@ defmodule SymphonyElixir.Claude.Adapter do
 
   import Bitwise
   require Logger
-  alias SymphonyElixir.{Config, SSH}
+  alias SymphonyElixir.{Config, Rescue, SSH}
 
   @default_port_line_bytes 1_048_576
 
@@ -29,7 +29,14 @@ defmodule SymphonyElixir.Claude.Adapter do
 
     with {:ok, port} <- open_claude_port(session.workspace, cli_args, worker_host) do
       try do
-        receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms, "")
+        receive_stream(
+          port,
+          on_message,
+          session,
+          %{input_tokens: 0, output_tokens: 0},
+          timeout_ms,
+          ""
+        )
       after
         close_port(port)
       end
@@ -47,7 +54,9 @@ defmodule SymphonyElixir.Claude.Adapter do
     d_variant = (d &&& 0x3FFF) ||| 0x8000
     hex = Base.encode16(<<a::32, b::16, c_v4::16, d_variant::16, e::48>>, case: :lower)
 
-    <<p0::binary-size(8), p1::binary-size(4), p2::binary-size(4), p3::binary-size(4), p4::binary-size(12)>> = hex
+    <<p0::binary-size(8), p1::binary-size(4), p2::binary-size(4), p3::binary-size(4),
+      p4::binary-size(12)>> = hex
+
     "#{p0}-#{p1}-#{p2}-#{p3}-#{p4}"
   end
 
@@ -119,8 +128,8 @@ defmodule SymphonyElixir.Claude.Adapter do
           {:complete, result} ->
             result
 
-          {:continue, new_usage} ->
-            receive_stream(port, on_message, session, new_usage, timeout_ms, "")
+          {:continue, new_usage, new_session} ->
+            receive_stream(port, on_message, new_session, new_usage, timeout_ms, "")
         end
 
       {^port, {:data, {:noeol, chunk}}} ->
@@ -155,27 +164,30 @@ defmodule SymphonyElixir.Claude.Adapter do
   defp handle_line(line, on_message, session, usage) do
     case Jason.decode(line) do
       {:ok, %{"type" => "system", "subtype" => "init"} = payload} ->
-        sid = Map.get(payload, "session_id", session.session_id)
+        sid =
+          Map.get(payload, "session_id") ||
+            Map.get(payload, "sessionId") ||
+            session.session_id
 
         emit_message(on_message, :session_started, %{
           session_id: sid
         })
 
-        {:continue, usage}
+        {:continue, usage, %{session | session_id: sid, resume_id: sid}}
 
       {:ok, %{"type" => "assistant"} = payload} ->
         emit_message(on_message, :notification, %{
           payload: payload
         })
 
-        {:continue, usage}
+        {:continue, usage, session}
 
       {:ok, %{"type" => "user"} = payload} ->
         emit_message(on_message, :notification, %{
           payload: payload
         })
 
-        {:continue, usage}
+        {:continue, usage, session}
 
       {:ok, %{"type" => "result", "is_error" => false} = payload} ->
         final_usage = accumulate_usage(payload, usage)
@@ -190,7 +202,7 @@ defmodule SymphonyElixir.Claude.Adapter do
           %{
             input_tokens: final_usage.input_tokens,
             output_tokens: final_usage.output_tokens,
-            resume_id: session.session_id
+            resume_id: session.resume_id
           }}}
 
       {:ok, %{"type" => "result", "is_error" => true} = payload} ->
@@ -205,7 +217,7 @@ defmodule SymphonyElixir.Claude.Adapter do
           payload: payload
         })
 
-        {:continue, usage}
+        {:continue, usage, session}
 
       {:error, _reason} ->
         emit_message(on_message, :malformed, %{
@@ -213,7 +225,7 @@ defmodule SymphonyElixir.Claude.Adapter do
           raw: line
         })
 
-        {:continue, usage}
+        {:continue, usage, session}
     end
   end
 
@@ -288,18 +300,5 @@ defmodule SymphonyElixir.Claude.Adapter do
     end
   end
 
-  defp close_port(port) when is_port(port) do
-    case :erlang.port_info(port) do
-      :undefined ->
-        :ok
-
-      _ ->
-        try do
-          Port.close(port)
-          :ok
-        rescue
-          ArgumentError -> :ok
-        end
-    end
-  end
+  defp close_port(port) when is_port(port), do: Rescue.close_port_if_open(port)
 end

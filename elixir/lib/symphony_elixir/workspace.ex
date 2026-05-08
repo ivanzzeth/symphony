@@ -4,7 +4,7 @@ defmodule SymphonyElixir.Workspace do
   """
 
   require Logger
-  alias SymphonyElixir.{AgentSymlinks, Config, PathSafety, SSH}
+  alias SymphonyElixir.{AgentSymlinks, Config, PathSafety, Rescue, SSH}
 
   @remote_workspace_marker "__SYMPHONY_WORKSPACE__"
 
@@ -27,7 +27,11 @@ defmodule SymphonyElixir.Workspace do
       end
     rescue
       error in [ArgumentError, ErlangError, File.Error] ->
-        Logger.error("Workspace creation failed #{issue_log_context(issue_context)} worker_host=#{SSH.worker_host_for_log(worker_host)} error=#{Exception.message(error)}")
+        Rescue.log_error_message(
+          "Workspace creation failed #{issue_log_context(issue_context)} worker_host=#{SSH.worker_host_for_log(worker_host)} error=",
+          error
+        )
+
         {:error, error}
     end
   end
@@ -231,10 +235,7 @@ defmodule SymphonyElixir.Workspace do
     |> IO.iodata_to_binary()
   rescue
     exception ->
-      Logger.warning(
-        "Workspace.render_hook_command/1 failed, using raw command: #{Exception.format(:error, exception, __STACKTRACE__)}"
-      )
-
+      Rescue.log_warning("Workspace.render_hook_command/1 failed, using raw command", exception, __STACKTRACE__)
       command
   end
 

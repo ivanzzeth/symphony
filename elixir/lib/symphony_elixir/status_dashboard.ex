@@ -6,7 +6,7 @@ defmodule SymphonyElixir.StatusDashboard do
   use GenServer
   require Logger
 
-  alias SymphonyElixir.{CodingAgent, Config, HttpServer, TestEnv}
+  alias SymphonyElixir.{CodingAgent, Config, HttpServer, Rescue, TestEnv}
   alias SymphonyElixir.Orchestrator
   alias SymphonyElixirWeb.ObservabilityPubSub
 
@@ -140,7 +140,7 @@ defmodule SymphonyElixir.StatusDashboard do
     :ok
   rescue
     error in [ArgumentError, RuntimeError] ->
-      Logger.warning("Failed rendering offline status: #{Exception.message(error)}")
+      Rescue.log_warning("Failed rendering offline status", error, __STACKTRACE__)
       :ok
   end
 
@@ -240,7 +240,7 @@ defmodule SymphonyElixir.StatusDashboard do
     end
   rescue
     error in [ArgumentError, RuntimeError] ->
-      Logger.warning("Failed rendering status dashboard: #{Exception.message(error)}")
+      Rescue.log_warning("Failed rendering status dashboard", error, __STACKTRACE__)
       state
   end
 
@@ -315,7 +315,7 @@ defmodule SymphonyElixir.StatusDashboard do
     }
   rescue
     error in [ArgumentError, RuntimeError] ->
-      Logger.warning("Failed rendering terminal dashboard frame: #{Exception.message(error)}")
+      Rescue.log_warning("Failed rendering terminal dashboard frame", error, __STACKTRACE__)
       %{state | pending_content: nil, flush_timer_ref: nil}
   end
 
@@ -1975,11 +1975,7 @@ defmodule SymphonyElixir.StatusDashboard do
     end
   end
 
-  defp alternate_key(key) when is_binary(key) do
-    String.to_existing_atom(key)
-  rescue
-    ArgumentError -> key
-  end
+  defp alternate_key(key) when is_binary(key), do: Rescue.to_existing_atom_or_same(key)
 
   defp alternate_key(key) when is_atom(key), do: Atom.to_string(key)
   defp alternate_key(key), do: key
@@ -2000,7 +1996,11 @@ defmodule SymphonyElixir.StatusDashboard do
         Mix.env() != :test
       rescue
         exception ->
-          Logger.warning("StatusDashboard.dashboard_enabled?: Mix.env check failed, defaulting to enabled: #{Exception.format(:error, exception, __STACKTRACE__)}")
+          Rescue.log_warning(
+            "StatusDashboard.dashboard_enabled?: Mix.env check failed, defaulting to enabled",
+            exception,
+            __STACKTRACE__
+          )
 
           true
       end

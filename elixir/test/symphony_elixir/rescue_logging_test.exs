@@ -43,7 +43,7 @@ defmodule SymphonyElixir.RescueLoggingTest do
             assert HttpServer.bound_port() == nil
           end)
 
-        assert log =~ "HttpServer.bound_port failed:"
+        assert log =~ "HttpServer.bound_port/1: failed, returning nil"
       end
     )
   end

@@ -140,7 +140,10 @@ defmodule SymphonyElixir.SpecsCheckTest do
 
     test "start_session returns {:ok, %{session_id: _, workspace: _}}" do
       workspace =
-        Path.join(System.tmp_dir!(), "specs-check-claude-ws-#{System.unique_integer([:positive])}")
+        Path.join(
+          System.tmp_dir!(),
+          "specs-check-claude-ws-#{System.unique_integer([:positive])}"
+        )
 
       File.mkdir_p!(workspace)
 
@@ -173,7 +176,7 @@ defmodule SymphonyElixir.SpecsCheckTest do
 
       assert is_integer(input_tokens)
       assert is_integer(output_tokens)
-      assert resume_id == "cl-spec"
+      assert resume_id == "ok"
       assert_received {:m, %{event: :turn_completed}}
     end
   end
@@ -210,7 +213,10 @@ defmodule SymphonyElixir.SpecsCheckTest do
 
     test "start_session returns {:ok, %{session_id: _, workspace: _}}" do
       workspace =
-        Path.join(System.tmp_dir!(), "specs-check-cursor-ws-#{System.unique_integer([:positive])}")
+        Path.join(
+          System.tmp_dir!(),
+          "specs-check-cursor-ws-#{System.unique_integer([:positive])}"
+        )
 
       File.mkdir_p!(workspace)
 
@@ -300,7 +306,9 @@ defmodule SymphonyElixir.SpecsCheckTest do
   end
 
   defp setup_claude_ok_env do
-    root = Path.join(System.tmp_dir!(), "specs-check-claude-cli-#{System.unique_integer([:positive])}")
+    root =
+      Path.join(System.tmp_dir!(), "specs-check-claude-cli-#{System.unique_integer([:positive])}")
+
     File.mkdir_p!(root)
 
     ws = Path.join(root, "workspace")
@@ -328,7 +336,9 @@ exit 0
   end
 
   defp setup_cursor_ok_env do
-    root = Path.join(System.tmp_dir!(), "specs-check-cursor-#{System.unique_integer([:positive])}")
+    root =
+      Path.join(System.tmp_dir!(), "specs-check-cursor-#{System.unique_integer([:positive])}")
+
     File.mkdir_p!(root)
 
     ws = Path.join(root, "workspace")
