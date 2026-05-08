@@ -1,5 +1,6 @@
 defmodule SymphonyElixir.AppServerTest do
-  use SymphonyElixir.TestSupport
+  # Serial: AppServer spawns ports and touches global workflow/config surfaces.
+  use SymphonyElixir.TestSupport, async: false
 
   test "app server rejects the workspace root and paths outside workspace root" do
     test_root =
@@ -299,7 +300,8 @@ defmodule SymphonyElixir.AppServerTest do
 
       write_workflow_file!(Workflow.workflow_file_path(),
         workspace_root: workspace_root,
-        agent_command: "#{codex_binary} app-server"
+        agent_command: "#{codex_binary} app-server",
+        codex_approval_policy: "on-request"
       )
 
       issue = %Issue{

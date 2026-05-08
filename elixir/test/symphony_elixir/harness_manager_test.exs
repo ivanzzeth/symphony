@@ -1,5 +1,6 @@
 defmodule SymphonyElixir.HarnessManagerTest do
-  use ExUnit.Case
+  # Serial: interacts with global CodingAgent / config surfaces under load.
+  use ExUnit.Case, async: false
 
   alias SymphonyElixir.Harness.Manager
 

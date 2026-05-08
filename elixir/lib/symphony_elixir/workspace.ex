@@ -469,6 +469,10 @@ defmodule SymphonyElixir.Workspace do
     end
   end
 
+  @doc false
+  @spec render_hook_command_for_tests(String.t()) :: String.t()
+  def render_hook_command_for_tests(command) when is_binary(command), do: render_hook_command(command)
+
   defp issue_context(%{id: issue_id, identifier: identifier}) do
     %{
       issue_id: issue_id,

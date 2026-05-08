@@ -135,8 +135,8 @@ defmodule SymphonyElixir.CursorAdapterTest do
                on_message: on_msg
              )
 
-    assert_received {:m, %{event: :session_started}}
-    assert_received {:m, %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :cursor}}
+    # Stall can fire before `system/init`; only :turn_timeout is guaranteed on_message.
+    assert_receive {:m, %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :cursor}}, 5_000
   end
 
   test "short line split across noeol emits buffer_exceeded, logs warning, and completes without crash" do

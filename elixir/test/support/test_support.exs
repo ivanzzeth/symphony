@@ -2,10 +2,12 @@ defmodule SymphonyElixir.TestSupport do
   @workflow_prompt "You are an agent for this repository."
 
   defmacro __using__(opts \\ []) do
+    async = Keyword.get(opts, :async, true)
     ex_unit_case_opts = Keyword.get(opts, :ex_unit_case_opts, [])
+    ex_unit_opts = Keyword.merge([async: async], ex_unit_case_opts)
 
     quote do
-      use ExUnit.Case, unquote(ex_unit_case_opts)
+      use ExUnit.Case, unquote(ex_unit_opts)
       import ExUnit.CaptureLog
 
       alias SymphonyElixir.AgentRunner
@@ -56,6 +58,7 @@ defmodule SymphonyElixir.TestSupport do
   end
 
   def write_workflow_file!(path, overrides \\ []) do
+    path |> Path.dirname() |> File.mkdir_p!()
     workflow = workflow_content(overrides)
     File.write!(path, workflow)
 
@@ -120,7 +123,7 @@ defmodule SymphonyElixir.TestSupport do
           agent_stream_timeout_ms: 120_000,
           agent_read_timeout_ms: 5_000,
           agent_stall_timeout_ms: 300_000,
-          codex_approval_policy: %{reject: %{sandbox_approval: true, rules: true, mcp_elicitations: true}},
+          codex_approval_policy: "never",
           codex_thread_sandbox: "workspace-write",
           codex_turn_sandbox_policy: nil,
           hook_after_create: nil,
@@ -170,6 +173,7 @@ defmodule SymphonyElixir.TestSupport do
 
     agent_stall_timeout_ms =
       resolve_timeout_override(overrides, config, :agent_stall_timeout_ms, :codex_stall_timeout_ms)
+
     hook_after_create = Keyword.get(config, :hook_after_create)
     hook_before_run = Keyword.get(config, :hook_before_run)
     hook_after_run = Keyword.get(config, :hook_after_run)

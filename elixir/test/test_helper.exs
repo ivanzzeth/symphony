@@ -16,6 +16,7 @@ end
 System.delete_env("SYMPHONY_PORT")
 System.delete_env("SYMPHONY_HOST")
 
-ExUnit.start()
+# Serialize tests: many suites share Application-backed workflow + process config state.
+ExUnit.start(max_cases: 1)
 Code.require_file("support/snapshot_support.exs", __DIR__)
 Code.require_file("support/test_support.exs", __DIR__)
