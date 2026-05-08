@@ -1,5 +1,5 @@
 defmodule SymphonyElixir.StatusDashboardSnapshotTest do
-  use SymphonyElixir.TestSupport
+  use SymphonyElixir.TestSupport, ex_unit_case_opts: [async: false]
 
   alias SymphonyElixir.TestSupport.Snapshot
 

@@ -9,7 +9,7 @@ defmodule SymphonyElixir.Claude.Adapter do
 
   import Bitwise
   require Logger
-  alias SymphonyElixir.{Config, SSH}
+  alias SymphonyElixir.{Config, Rescue, SSH}
 
   @default_port_line_bytes 1_048_576
 
@@ -300,18 +300,5 @@ defmodule SymphonyElixir.Claude.Adapter do
     end
   end
 
-  defp close_port(port) when is_port(port) do
-    case :erlang.port_info(port) do
-      :undefined ->
-        :ok
-
-      _ ->
-        try do
-          Port.close(port)
-          :ok
-        rescue
-          ArgumentError -> :ok
-        end
-    end
-  end
+  defp close_port(port) when is_port(port), do: Rescue.close_port_if_open(port)
 end

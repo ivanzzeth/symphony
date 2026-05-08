@@ -1,9 +1,11 @@
 defmodule SymphonyElixir.TestSupport do
   @workflow_prompt "You are an agent for this repository."
 
-  defmacro __using__(_opts) do
+  defmacro __using__(opts \\ []) do
+    ex_unit_case_opts = Keyword.get(opts, :ex_unit_case_opts, [])
+
     quote do
-      use ExUnit.Case
+      use ExUnit.Case, unquote(ex_unit_case_opts)
       import ExUnit.CaptureLog
 
       alias SymphonyElixir.AgentRunner
@@ -40,7 +42,9 @@ defmodule SymphonyElixir.TestSupport do
 
         on_exit(fn ->
           Application.delete_env(:symphony_elixir, :workflow_file_path)
-          Application.delete_env(:symphony_elixir, :server_port_override)
+          # Do not clear :server_port_override here — global Application env; clearing it races
+          # parallel tests (e.g. StatusDashboardSnapshotTest). Tests that set an override must
+          # restore in their own on_exit callbacks.
           Application.delete_env(:symphony_elixir, :memory_tracker_issues)
           Application.delete_env(:symphony_elixir, :memory_tracker_recipient)
           File.rm_rf(workflow_root)
