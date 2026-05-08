@@ -235,7 +235,7 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 │   │   └── SKILL.md
 │   ├── harness/
 │   │   ├── SKILL.md
-│   │   └── references/   # includes issue-execution-checklist.md, symphony-dispatch.md, …
+│   │   └── references/
 │   ├── land/
 │   │   ├── SKILL.md
 │   │   └── land_watch.py
@@ -280,6 +280,7 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 | 2026-05-07 | Harness docs: WORKFLOW contract path | harness/SKILL.md, symphony-dispatch.md, AGENTS.md | Phase 0 + AGENTS template: Symphony dispatch tied to platform/heuristics, not `.agents/WORKFLOW.md`; contract canonical at `elixir/WORKFLOW.md` |
 | 2026-05-08 | Harness sync to updated WORKFLOW.md | AGENTS.md, pull/push/commit/elixir-planner skills | `codex.command` → `cursor --model auto`; after_create checkout; unattended + workpad/PR/Rework/completion-bar alignment |
 | 2026-05-08 | Harness continuation | linear/land/debug skills, symphony-dev ref, harness SKILL | Workpad GraphQL notes; WORKFLOW `Merging`/unattended land; debug CLI note; orchestrator-workflow cross-link; harness test scenarios |
+| 2026-05-08 | Harness continuation (PR gates + Linear) | linear skill, harness refs, AGENTS.md | `commentDelete` example; `issue-execution-checklist.md`; Linear prerequisite vs unattended; merge→`Done` state note |
 
 ## Harness: Symphony Development
 

@@ -485,3 +485,4 @@ Use these as quick dry-runs after reconfiguring `.agents/` or `AGENTS.md`:
 - **Skill testing guide**: `references/skill-testing-guide.md` — testing/evaluation/iterative improvement methodology
 - **QA agent guide**: `references/qa-agent-guide.md` — reference when including QA agents in build harnesses. Covers integration consistency verification methodology, boundary bug patterns, QA agent definition template. Based on 7 real bugs found in actual projects.
 - **Symphony dispatch**: `references/symphony-dispatch.md` — Symphony platform integration protocols for harness agents dispatched by the Symphony orchestrator.
+- **Issue PR gates (checklist)**: `references/issue-execution-checklist.md` — PR feedback sweep, Manual QA Plan, completion bar, merge→Done (pointers only; `elixir/WORKFLOW.md` is authoritative).

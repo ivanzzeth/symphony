@@ -2,7 +2,9 @@
 name: linear
 description: |
   Use Symphony's `linear_graphql` client tool for raw Linear GraphQL
-  operations such as comment editing and upload flows.
+  operations: comment create/update/delete, issue state transitions, GitHub PR
+  attachments, uploads, and issue execution workpad (`## Codex Workpad`) flows
+  including Rework reset. Use whenever Linear API access is needed in-session.
 ---
 
 # Linear GraphQL
@@ -271,15 +273,16 @@ If `commentDelete` fails (permissions, API policy), use the project’s document
 fallback (for example the update script mentioned in WORKFLOW guardrails) and
 record the failure mode in the workpad.
 
-**Post-merge (`Merging` → `Done`):** After land completes, transition the issue
-to **`Done`** with `issueUpdate` + terminal `stateId` for the team.
-
 **PR linkage vs workpad body:**
 
 - Attach the GitHub PR with **`attachmentLinkGitHubPR`** (or equivalent) so the
   issue shows the PR link.
 - Do **not** paste the PR URL into the workpad body—WORKFLOW keeps PR linkage on
   the issue, not duplicated inside the workpad.
+
+**After PR merge (`Merging` → `Done`):** When `.agents/skills/land/SKILL.md` has
+completed and the PR is merged, transition the issue to **`Done`** with
+`issueUpdate` + the team’s completed `stateId`.
 
 ### Move an issue to a different state
 
