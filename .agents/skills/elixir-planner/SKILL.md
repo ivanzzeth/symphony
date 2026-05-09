@@ -24,14 +24,12 @@ Domain-specific planning guidance for the Symphony Elixir orchestrator. Use this
 
 ### WORKFLOW.md Boundaries
 
-The WORKFLOW.md file at `elixir/WORKFLOW.md` is the **Symphony execution contract** and must NEVER be modified. It contains:
-- Tracker config (Linear project slug, state machine; terminal states include `Duplicate` alongside Backlog/Done/Canceled)
-- Polling interval
-- Workspace settings (root, base_branch)
-- Agent config (kind, max_concurrent, max_turns)
-- Runner config under YAML key `codex` (command e.g. `cursor --model auto`, approval_policy, sandbox policies)
+The WORKFLOW.md file at `elixir/WORKFLOW.md` is the **Symphony execution contract** and must NEVER be modified by dev-harness agents. It has two layers; plans that need behavior changes in either layer belong in **Elixir code** or **`.agents/` skills**, not in edited WORKFLOW text:
 
-If the plan requires modifying WORKFLOW.md, flag it as BLOCKED and inform the user.
+- **YAML front matter:** tracker (Linear project slug; active vs terminal states including `Duplicate`), polling interval, workspace (`root`, `base_branch`), `hooks.after_create` / `before_remove`, `agent` pool limits (including `stream_timeout_ms`), `codex` runner (`cursor --model auto`, sandbox policies).
+- **Markdown prompt (after second `---`):** Step 0–4 routing (branch/PR hygiene, Todo kickoff order, `In Review` / `Merging` / `Rework`), single `## Codex Workpad` rules, PR feedback sweep, blocked-access escape hatch, completion bar, `{% if attempt %}` continuation semantics for issue-execution retries.
+
+If the plan requires modifying WORKFLOW.md prose or YAML, flag it as **BLOCKED** for automated agents and instruct the human to edit the contract deliberately. When the orchestrator must mirror new prompt rules, update harness docs (`AGENTS.md`) and issue-execution skills under `.agents/skills/` instead.
 
 ### Planning Heuristics
 

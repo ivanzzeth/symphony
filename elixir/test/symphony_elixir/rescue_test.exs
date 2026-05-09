@@ -82,6 +82,43 @@ defmodule SymphonyElixir.RescueTest do
     refute Port.info(port)
   end
 
+  test "close_port_tree/1 is idempotent on an already-closed port" do
+    port = Port.open({:spawn, "cat"}, [:binary])
+    assert Rescue.close_port_tree(port) == :ok
+    refute Port.info(port)
+    assert Rescue.close_port_tree(port) == :ok
+  end
+
+  test "close_port_tree/1 closes an open port and reaps its OS process" do
+    port = Port.open({:spawn, "cat"}, [:binary])
+    {:os_pid, os_pid} = :erlang.port_info(port, :os_pid)
+
+    assert Rescue.close_port_tree(port) == :ok
+    refute Port.info(port)
+
+    # Verify the OS process is actually dead (kill -0 returns non-zero)
+    {_output, exit_code} = System.cmd("kill", ["-0", Integer.to_string(os_pid)], stderr_to_stdout: true)
+    assert exit_code != 0, "OS process #{os_pid} should have been killed"
+  end
+
+  test "close_port_tree/1 does not kill processes outside the target PID" do
+    # Open two ports and only close the first one with close_port_tree
+    port1 = Port.open({:spawn, "cat"}, [:binary])
+    {:os_pid, _pid1} = :erlang.port_info(port1, :os_pid)
+    port2 = Port.open({:spawn, "cat"}, [:binary])
+    {:os_pid, pid2} = :erlang.port_info(port2, :os_pid)
+
+    assert Rescue.close_port_tree(port1) == :ok
+    refute Port.info(port1)
+
+    # Verify port2's process is still alive (close_port_tree of port1 should not affect port2)
+    {_output, exit_code} = System.cmd("kill", ["-0", Integer.to_string(pid2)], stderr_to_stdout: true)
+    assert exit_code == 0, "port2's OS process #{pid2} should still be alive"
+
+    # Clean up port2
+    Rescue.close_port_if_open(port2)
+  end
+
   test "rescue_map/2 returns try_fun result on success" do
     assert Rescue.rescue_map(fn -> 42 end, fn _, _ -> :bad end) == 42
   end

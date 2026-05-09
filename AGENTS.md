@@ -31,7 +31,7 @@ support the human in directing them.
 | `In Review` | PR attached, waiting for human | **REVIEW the PR** and give a recommendation |
 | `Merging` | Approved, agent executing merge | Observe |
 | `Rework` | Reviewer requested changes | **This is the reject state** — agent will pick it up again |
-| `Done` / `Canceled` | Terminal | No action needed |
+| `Done` / `Canceled` / `Duplicate` | Terminal | No action needed |
 
 ## PR Review Workflow (CRITICAL)
 
@@ -104,7 +104,7 @@ This is your main contribution area. Use the full toolset:
 | Consult the human before acting | Make unilateral merge/approve decisions |
 | Post review comments on PRs | Open competing PRs |
 | Track issue status and report | Impersonate the Symphony agent |
-| Tell the human what commands to run | **Kill any process or tmux session** |
+| Tell the human what commands to run | **Kill any process** |
 
 ## Repository structure & runtime
 
@@ -141,22 +141,22 @@ The CLI guardrails flag is required on every invocation. The escript takes an
 optional WORKFLOW.md path; it defaults to `WORKFLOW.md` in the current directory
 when omitted.
 
-It runs inside a tmux session named `symphony` for persistence:
-```bash
-tmux attach -t symphony   # view dashboard
-```
-
 To run in the background:
 
 ```bash
 nohup mise exec -- ./bin/symphony \
   --i-understand-that-this-will-be-running-without-the-usual-guardrails \
+  --config ~/.config/symphony/symphony.yaml \
   WORKFLOW.md &>/tmp/symphony-stdout.log &
+
+tail -f /tmp/symphony-stdout.log
 ```
 
 ### How to stop Symphony
 
-Send SIGTERM or Ctrl+C in the tmux session. The process handles it cleanly — writes an offline-status snapshot and exits.
+```bash
+kill $(pgrep -f 'symphony')
+```
 
 ### How to test
 
@@ -195,15 +195,24 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 
 **Execution Rules:**
 - Symphony orchestrator polls Linear for Todo issues and dispatches one Cursor-backed agent run per issue (polling interval: 5000ms)
+- **Unattended session (WORKFLOW Instructions):** never ask the human for follow-up actions except the documented Linear-access blocker; final message reports **completed actions and blockers only** (no “next steps for user”); if blocked early, record details in the workpad and move the issue per WORKFLOW (blocked-access / state rules)—do not stop without that handling
+- **Todo kickoff sequencing (WORKFLOW Step 0):** for tickets in `Todo`, perform startup in this order only: move the issue to `In Progress`, find or create the single `## Codex Workpad` comment, then begin analysis/planning/implementation—never start substantive work before the workpad exists when kicking off from `Todo`
+- **Default posture (WORKFLOW):** determine the ticket’s current status and follow the matching flow; **workpad-first**—open the tracking `## Codex Workpad` and bring it up to date before new implementation work; invest early in planning and verification design; **reproduce first**—confirm the current behavior or issue signal before changing code so the fix target is explicit
+- **Continuation / retry attempts:** when the injected prompt includes continuation context (retry attempt number, resume-from-current-workspace instructions), resume from the existing workspace and workpad state; do not repeat already-completed investigation or validation unless new code changes require it; do not end the turn while the issue remains in an active workflow state unless blocked by missing required permissions/secrets (per WORKFLOW)
+- **Step 0 inconsistency:** if workflow state and issue content or attachments disagree, add a brief Linear comment and follow the safest Step 0 branch (WORKFLOW Step 0 §6)
+- **`In Review` freeze:** no implementation work; do **not** change **ticket content** (WORKFLOW Step 3); wait and poll for review/approval outcomes per WORKFLOW Step 3
+- **Single workpad:** all progress and handoff notes live in `## Codex Workpad`; do not post separate “done”/summary comments (WORKFLOW Default posture)
+- **Ticket metadata:** keep ticket metadata current per WORKFLOW—**state**, **checklist**, **acceptance criteria**, and **links** (including PR attachments), plus labels when required; do **not** use the issue **body/description** for planning or progress (that stays in the workpad—WORKFLOW Default posture + Guardrails)
+- **Plan hygiene:** never leave completed work unchecked in the workpad (WORKFLOW Step 2)
+- **Blocked before workpad:** if blocked and no workpad exists yet, add one blocker comment (blocker, impact, next unblock action) per WORKFLOW Guardrails
 - Each agent operates in an isolated workspace per issue (root: `~/code/symphony-workspaces`), following the WORKFLOW.md execution contract
 - For issue execution work, the orchestrator runs the Cursor CLI per workflow `codex.command` (currently `cursor --model auto`) with the WORKFLOW.md prompt template
 - The WORKFLOW.md defines the execution contract (tracker, polling, workspace, agent, codex, hooks, and prompt template)
-- Agent config: kind=cursor, max_concurrent_agents=10, max_turns=20
+- Agent config: kind=cursor, max_concurrent_agents=10, max_turns=20, stream_timeout_ms=600000
 - Runner config (YAML key remains `codex`): command=`cursor --model auto`, approval_policy=never, thread_sandbox=workspace-write, turn_sandbox_policy maps to workspaceWrite (see WORKFLOW for exact shape)
 - Tracker: kind=linear, project_slug="symphony-079b97dd6409"; active states include Todo through Rework; terminal states include Backlog, Done, Canceled, Duplicate
 - Base branch: develop (all PRs target origin/develop)
 - Workspace hooks: after_create (shallow `git clone` of `base_branch`, `git checkout` that branch, then conditional `mise trust` + `mise exec -- mix deps.get` in `elixir/`), before_remove (`mise exec -- mix workspace.before_remove`)
-- Issue-execution prompt is **unattended**: do not ask the human for follow-ups; final agent message reports completed actions and blockers only (see WORKFLOW instructions)
 - Single Linear workpad per issue: marker `## Codex Workpad`; when searching for an existing workpad, **ignore resolved comments**—only active/unresolved comments qualify
 - **Step 0 branch hygiene:** if a PR for the current branch is `CLOSED` or `MERGED` on GitHub, do not reuse that branch or prior implementation state—branch fresh from `origin/develop` and restart kickoff
 - Workpad top: one fenced `text` environment stamp `<hostname>:<abs-path>@<short-sha>` (WORKFLOW Step 1); omit issue metadata redundant with Linear fields
@@ -212,13 +221,13 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 - PRs must target `origin/develop`, carry the **`symphony`** GitHub label, and link on the issue; do **not** paste the PR URL into the workpad body
 - Before `In Review`, run the full **PR feedback sweep** (top-level, inline via GitHub API, review summaries); read **Manual QA Plan** on the PR when present; keep workpad `Plan` / `Acceptance Criteria` / `Validation` aligned with reality; add `### Confusions` only when execution was unclear
 - **`Rework`**: treat as full reset—close the existing PR, remove the prior `## Codex Workpad` comment, branch fresh from `origin/develop`, create a new workpad, re-execute end-to-end (see WORKFLOW Step 4)
-- Prompt requires Linear access (Linear MCP or `linear_graphql` tool). WORKFLOW’s prerequisite block still applies: if neither is available, stop for operator configuration—that is the intentional exception to otherwise-unattended issue runs. Blocked-access protocol: missing **non-GitHub** tools/auth is the primary escape hatch; GitHub is not a default blocker (try fallbacks first, document in workpad). If using the escape hatch to move to `In Review`, the workpad must state what is missing, why it blocks acceptance/validation, and exact human unblock actions
+- Prompt requires Linear access (Linear MCP or `linear_graphql` tool). WORKFLOW’s prerequisite block still applies: if neither is available, **stop and ask the user to configure Linear**—that is the intentional exception to otherwise-unattended issue runs. Blocked-access protocol: missing **non-GitHub** tools/auth is the primary escape hatch; GitHub is not a default blocker (try fallbacks first, document in workpad). If using the escape hatch to move to `In Review`, the workpad must state what is missing, why it blocks acceptance/validation, and exact human unblock actions
 - PR / review / completion-bar reminders: `.agents/skills/harness/references/issue-execution-checklist.md` (checklist only; `elixir/WORKFLOW.md` remains authoritative)
 - App-touching changes: follow WORKFLOW Step 2 and the **Completion bar before In Review** (`launch-app`, `github-pr-media` when the change touches app files or behavior)
 - Daemon-level config (server port/host, observability) lives in `~/.config/symphony/symphony.yaml` — NOT in WORKFLOW.md
   - `server` and `observability` keys in WORKFLOW.md are disallowed and silently stripped with a warning
   - CLI flags `--config`, `--port`, `--host` override YAML values for single-instance multi-project management
-- Out-of-scope discoveries are filed as separate Backlog issues, never expanding current scope
+- Out-of-scope discoveries are filed as separate **`Backlog`** issues (clear title, description, acceptance criteria; same project; **`related`** link to current issue; **`blockedBy`** when the follow-up depends on the current issue)—never expanding current scope (WORKFLOW Default posture + Guardrails)
 - WORKFLOW.md hash changes trigger harness reconfiguration via Harness.Manager
 
 **Directory Structure:**
@@ -285,6 +294,15 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 | 2026-05-08 | Harness continuation | linear/land/debug skills, symphony-dev ref, harness SKILL | Workpad GraphQL notes; WORKFLOW `Merging`/unattended land; debug CLI note; orchestrator-workflow cross-link; harness test scenarios |
 | 2026-05-09 | Harness sync to WORKFLOW.md (Step 0 PR reuse, workpad stamp, proof edits, blocked-access brief, GitHub fallback posture, resume/symlink notes) | AGENTS.md, harness-agent, symphony-dispatch, issue-execution-checklist, commit/push skills, orchestrator-workflow ref | `elixir/WORKFLOW.md` contract alignment |
 | 2026-05-09 | Harness continuation (AGENTS app validation wording; linear prerequisite; harness Phase 0 multi-turn resume) | AGENTS.md, linear/SKILL.md, harness/SKILL.md | Resume pass after prior sync |
+| 2026-05-09 | Harness sync to WORKFLOW (Todo kickoff order, `Duplicate` terminal state, continuation attempt semantics) | AGENTS.md, linear/SKILL.md, issue-execution-checklist, symphony-dispatch | Align harness docs with `elixir/WORKFLOW.md` Step 0 + prompt continuation block |
+| 2026-05-09 | Harness continuation (multi-turn resume clarity; planner WORKFLOW layers) | symphony-dispatch.md, elixir-planner/SKILL.md, AGENTS.md | Resume pass: separate harness meta-continuation vs issue `attempt` continuation; document YAML + Markdown contract layers for planners |
+| 2026-05-09 | Harness continuation (Step 0 inconsistency, `In Review` freeze; harness resume verification) | issue-execution-checklist, harness/SKILL.md, AGENTS.md | Align checklist + AGENTS with WORKFLOW Step 0 §6 + Step 3; multi-turn resume allows verification-only history row |
+| 2026-05-09 | Harness sync to WORKFLOW (unattended final message, ticket-content freeze, workpad-only updates, plan hygiene, blocker-without-workpad, follow-up issue links) | AGENTS.md, issue-execution-checklist.md, linear/SKILL.md, symphony-dispatch.md | Re-read `elixir/WORKFLOW.md`; align harness docs + skills without editing the contract |
+| 2026-05-09 | Harness continuation (multi-turn resume; unattended commit/pull/land alignment) | AGENTS.md, commit/SKILL.md, pull/SKILL.md, land/SKILL.md, issue-execution-checklist.md | Re-audit vs WORKFLOW Instructions: no interactive user prompts in issue-execution; blocker handling via workpad + workflow transitions |
+| 2026-05-09 | Harness continuation (ticket metadata vs issue body; verification pass) | AGENTS.md, issue-execution-checklist.md, symphony-dispatch.md | Multi-turn resume: clarify WORKFLOW Default posture “ticket metadata” vs Guardrails on issue description; re-audit `.agents/` aligned with `elixir/WORKFLOW.md` |
+| 2026-05-09 | Harness sync to WORKFLOW (`stream_timeout_ms`, Default posture) | AGENTS.md, issue-execution-checklist.md, symphony-dispatch.md, elixir-planner/SKILL.md | Align harness docs with updated `elixir/WORKFLOW.md` YAML `agent` block and Default posture (workpad-first, reproduce-first, ticket metadata fields) |
+| 2026-05-09 | Harness continuation (multi-turn resume; verification) | symphony-dispatch.md, harness-agent.md, debug/SKILL.md, AGENTS.md | Re-audit vs `elixir/WORKFLOW.md`: no further contract drift; document `stream_timeout_ms` in dispatch context + debug triage; harness-agent YAML drift rule |
+| 2026-05-09 | Harness continuation (multi-turn resume; verification only) | AGENTS.md | Re-read `elixir/WORKFLOW.md`; compare `.agents/` + `AGENTS.md` to contract—no additional edits needed |
 
 ## Harness: Symphony Development
 

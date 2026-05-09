@@ -33,7 +33,7 @@ defmodule SymphonyElixir.Cursor.Adapter do
         try do
           receive_stream(port, on_message, session, %{input_tokens: 0, output_tokens: 0}, timeout_ms, "")
         after
-          close_port(port)
+          close_port(port, worker_host)
         end
       end
     after
@@ -309,5 +309,6 @@ defmodule SymphonyElixir.Cursor.Adapter do
 
   defp default_on_message(_message), do: :ok
 
-  defp close_port(port) when is_port(port), do: Rescue.close_port_if_open(port)
+  defp close_port(port, nil), do: Rescue.close_port_tree(port)
+  defp close_port(port, _worker_host), do: Rescue.close_port_if_open(port)
 end

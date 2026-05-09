@@ -4,12 +4,82 @@ Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
 only.
 
+## Default posture (WORKFLOW)
+
+- Start by determining the ticket’s **current status**, then follow the matching flow.
+- **Workpad-first:** open the tracking **`## Codex Workpad`** and bring it up to date **before** new implementation work (every task / continuation).
+- Invest up front in **planning** and **verification design**.
+- **Reproduce first:** confirm the current behavior or issue signal **before** changing code so the fix target is explicit.
+- Keep **ticket metadata** current: **state**, **checklist**, **acceptance criteria**, and **links**—while keeping **all** planning and progress in the workpad, **not** the issue description (Guardrails).
+- Mirror ticket-authored **`Validation`**, **`Test Plan`**, or **`Testing`** sections into the workpad and treat them as non-negotiable acceptance input (Default posture).
+
 ## Step 0 — branch and PR hygiene
 
 - If a PR already exists for the current branch and GitHub reports it as
   **`CLOSED`** or **`MERGED`**, treat prior branch work as **non-reusable** for
   this run: create a **fresh branch** from `origin/develop` and restart kickoff
   (pull, workpad, plan) as a new attempt.
+
+## Todo kickoff sequencing (WORKFLOW Step 0)
+
+For issues arriving in **`Todo`**, run startup in this **exact** order before
+substantive analysis or implementation:
+
+1. Transition the issue to **`In Progress`** (`issueUpdate` / equivalent).
+2. Find or bootstrap the single **`## Codex Workpad`** comment (ignore resolved
+   comments when searching).
+3. Only then begin planning, reproduction, or code work.
+
+If a **`Todo`** ticket already has a PR attached at kickoff, treat it as a
+feedback loop: run the **PR feedback sweep** early (see below and WORKFLOW
+Status map / Step 2) before new feature work.
+
+## Continuation / retry attempts
+
+When the orchestrator injects **continuation** context (retry attempt number,
+“resume from current workspace,” do not repeat completed work), honor it:
+resume from the live workpad and branch state, avoid redoing finished
+investigation or validation unless a new change invalidates it, and do not stop
+while the issue is still in an **active** workflow state except for true
+blockers (missing required auth/secrets)—per WORKFLOW default posture.
+
+## Step 0 — inconsistent state vs issue content (WORKFLOW Step 0 §6)
+
+When Linear **workflow state** and **issue content or attachments** look inconsistent,
+post a **short** Linear comment documenting the mismatch, then pick the **safest**
+Step 0 routing branch from WORKFLOW—do not silently assume one interpretation.
+
+## Unattended session output (WORKFLOW Instructions)
+
+- Final agent message must report **completed actions** and **blockers only**.
+- Do **not** include open-ended “next steps for user” prompts.
+- **`commit` / `pull` / `land` skills** include Symphony-specific overrides: no interactive confirmation loops—document decisions in `## Codex Workpad` and follow blocked-access / state rules instead.
+
+## Single workpad — no extra completion comments (WORKFLOW Default posture)
+
+- Use the one **`## Codex Workpad`** comment for **all** progress and handoff notes.
+- Do **not** post separate “done” or summary comments outside that workpad.
+
+## Ticket metadata vs issue description (WORKFLOW Default posture + Guardrails)
+
+- Keep **ticket metadata** current during execution: **state**, **checklist**, **acceptance criteria**, **links** (including PR attachments), and labels when required.
+- Do **not** edit the issue **body/description** for planning or progress tracking; use **`## Codex Workpad`** for that (Guardrails).
+
+## Execution checklist hygiene (WORKFLOW Step 2)
+
+- Never leave **completed** work unchecked in the workpad plan—keep checkboxes aligned with reality after each milestone.
+
+## `In Review` — freeze (WORKFLOW Step 3)
+
+While **`In Review`**: do **not** write implementation code and do **not** change
+**ticket content** (WORKFLOW wording—covers issue fields and any edits used for
+planning/progress outside the permitted workpad pattern). Wait and poll GitHub/Linear for review outcomes;
+follow WORKFLOW-permitted transitions only (for example human approval → `Merging`,
+or required fixes → `Rework`).
+
+## Blocked before workpad exists (WORKFLOW Guardrails)
+
+If blocked and **no** workpad exists yet, add **one** concise blocker comment on the issue describing the blocker, impact, and the next unblock action (then follow blocked-access rules when moving states).
 
 ## Workpad environment stamp
 

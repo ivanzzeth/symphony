@@ -15,8 +15,10 @@ Use this skill for raw Linear GraphQL work during Symphony app-server sessions.
 
 `elixir/WORKFLOW.md` requires talking to Linear via a configured **Linear MCP**
 server or the injected **`linear_graphql`** tool. If neither is available, that
-is the **documented** exception to unattended runs: stop and surface **operator
-configuration** (and record the blocker in the workpad when one already exists).
+is the **documented** exception to unattended runs: **stop and ask the user to
+configure Linear** (WORKFLOW Prerequisite). When a workpad already exists, also
+record the blocker there; if there is no workpad yet, add a short blocker
+comment per WORKFLOW Guardrails.
 
 ## Primary tool
 
@@ -427,15 +429,33 @@ mutation FileUpload(
 }
 ```
 
+## Todo kickoff order (`Todo` → `In Progress`)
+
+`elixir/WORKFLOW.md` **Step 0** requires this **exact** startup sequence when
+the ticket is in **`Todo`** (before analysis, reproduction, or implementation):
+
+1. Move the issue to **`In Progress`** (`issueUpdate` with the correct
+   `stateId`).
+2. Find or create the single persistent **`## Codex Workpad`** comment (when
+   searching, ignore **resolved** comments—only active/unresolved comments
+   qualify).
+3. Only then proceed with planning, `pull`, code changes, or validation.
+
+If **`Todo`** already has a PR linked, treat kickoff as a **feedback/rework
+loop**: run the full **PR feedback sweep** protocol from WORKFLOW before new
+feature work.
+
 ## Symphony Issue Lifecycle
 
 In the Symphony project, issue states determine whether the orchestrator
 dispatches agents:
 
-- `Backlog` — out of scope. Symphony ignores these issues entirely. Create
-  Backlog issues for future work or follow-up items you discover.
-- `Todo` — queued. Symphony polls and dispatches an agent team. The first action
-  of a Todo issue is to move itself to `In Progress`.
+- `Backlog` — out of scope for dispatch. Do **not** modify issue state or body;
+  wait until a human moves the ticket to `Todo`. Create new `Backlog` issues for
+  future work or follow-up items you discover.
+- `Todo` — queued. Symphony polls and dispatches an agent run. The first actions
+  are the **Todo kickoff order** above (→ `In Progress`, then workpad, then
+  work).
 - `In Progress` — agent actively working.
 - `In Review` — PR attached, waiting on human approval.
 - `Merging` — approved by human, the agent executes the `land` flow.
@@ -500,6 +520,7 @@ Symphony expects these states on the team workflow:
 | Rework | started | Reviewer requested changes |
 | Done | completed | Terminal success |
 | Canceled | canceled | Terminal cancel |
+| Duplicate | canceled | Terminal duplicate (treat as terminal; no further dispatch) |
 
 ### Create a missing workflow state
 

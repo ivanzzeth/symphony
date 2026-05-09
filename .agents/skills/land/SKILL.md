@@ -25,10 +25,12 @@ through the checks/review handling this document defines. The sample
 green checks and addressed feedback, not a shortcut around the land flow.
 
 For **Symphony issue-execution** runs (unattended), treat WORKFLOW as overriding
-generic “wait for the human” wording in **Steps** 12–14 where it would block
-completion: resolve ambiguity via inline/`[codex]` replies, PR metadata, and the
-Linear `## Codex Workpad` blocker brief; only stop the loop for true external
-blockers (auth, missing required secrets) documented in the workpad.
+generic “wait for the human” / “ask the user” wording in **Steps** 10–14 where it
+would block completion: resolve ambiguity via inline review replies, PR metadata,
+and the Linear `## Codex Workpad` blocker brief; do **not** open interactive
+clarification waits or rely on the human as the default gate. Only stop the loop
+for true external blockers (auth, missing required secrets) documented in the
+workpad per WORKFLOW Instructions and blocked-access rules.
 
 ## Goals
 

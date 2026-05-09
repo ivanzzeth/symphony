@@ -35,6 +35,7 @@ agent:
   kind: cursor
   max_concurrent_agents: 10
   max_turns: 20
+  stream_timeout_ms: 600000
 codex:
   command: cursor --model auto
   approval_policy: never

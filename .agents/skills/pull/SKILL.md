@@ -88,7 +88,9 @@ When this skill runs inside the Linear issue-execution flow (`elixir/WORKFLOW.md
 - After resolving, ensure no conflict markers remain:
   - `git diff --check`
 - When unsure, note assumptions and ask for confirmation before finalizing the
-  merge.
+  merge—**except** in **Symphony issue-execution** runs: document assumptions in
+  `## Codex Workpad`, favor a reversible merge resolution, and use WORKFLOW
+  blocked-access rules instead of interactive confirmation (see below).
 
 ## When To Ask The User (Keep To A Minimum)
 

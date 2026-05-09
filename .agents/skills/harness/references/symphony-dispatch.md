@@ -35,10 +35,14 @@ When running under Symphony, these platform-level details are available:
 - Symphony's agent pool state (agents currently running, queued, completed)
 - Available SSH worker hosts and their capacity
 - Current turn number and remaining turn budget
+- Per-turn stream wait budget from WORKFLOW YAML: `agent.stream_timeout_ms` (orchestrator/adapters surface this as `turn_timeout` / stall-style events in logs when exceeded)
 
 ### Execution Contract
 - `WORKFLOW.md` defines what Symphony expects from this harness run
-- The file has two layers: YAML config (tracker, polling, workspace, hooks, agent, `codex`) **and** the Markdown prompt after the second `---` (status routing, workpad rules, PR feedback sweep, completion bar). Harness reconfiguration must keep **AGENTS.md** and issue-execution skills (`pull`, `push`, `land`, `linear`, …) aligned with **both** layers.
+- The file has two layers: YAML config (tracker, polling, workspace, hooks, `agent` pool limits including **`stream_timeout_ms`**, `codex` runner) **and** the Markdown prompt after the second `---` (status routing, Default posture, workpad rules, PR feedback sweep, completion bar). Harness reconfiguration must keep **AGENTS.md** and issue-execution skills (`pull`, `push`, `land`, `linear`, …) aligned with **both** layers.
+- The Markdown template may include a **`{% if attempt %}` continuation block**: retry attempt number, resume-from-current-workspace instructions, and constraints on repeating completed work. Issue-execution agents must treat that as **continuation semantics**, not a cold start—see `issue-execution-checklist.md` → *Continuation / retry attempts*.
+- **Unattended Instructions block:** final agent output must list **completed actions** and **blockers only**—no open-ended “next steps for user” (see WORKFLOW `Instructions`).
+- **Ticket metadata vs issue body:** Default posture asks to keep ticket metadata current (**state**, **checklist**, **acceptance criteria**, **links**); Guardrails forbid using the issue **description/body** for planning/progress—that belongs in **`## Codex Workpad`** (see `issue-execution-checklist.md`).
 - For a short operator checklist (PR sweep commands, merge→Done), see `issue-execution-checklist.md` in the same directory—still subordinate to the loaded workflow file.
 - May specify: target files, acceptance criteria, constraints, artifact paths
 
@@ -71,11 +75,18 @@ When Symphony dispatch is detected:
 harness dispatch. After the first turn, follow-up prompts are worded like:
 “Continue the harness configuration. Resume from the current workspace and
 `.agents/` state.” Treat that as **continuation**, not a new harness build:
-re-read Phase 0 audit outputs, finish incomplete edits, sync `AGENTS.md` and
-keep `.agents/` consistent with the loaded workflow contract. If the repo maps
-`.cursor/` to `.agents/` via symlink, edits under `.agents/` are sufficient—do
-not maintain a second harness copy. Avoid duplicating work already landed in
-the tree.
+re-read `elixir/WORKFLOW.md`, re-audit `.agents/` and `AGENTS.md`, finish
+incomplete edits only, and append **Change History** rather than replaying a
+greenfield Phase 1–3 design. If the repo maps `.cursor/` to `.agents/` via
+symlink, edits under `.agents/` are sufficient—do not maintain a second harness
+copy. When `CLAUDE.md` is a symlink to `AGENTS.md` (this monorepo), updating
+`AGENTS.md` covers both entrypoints.
+
+**Distinction — do not conflate with issue execution:** the Markdown template’s
+`{% if attempt %}` block governs **Linear ticket / Cursor CLI continuation**
+(resume workspace + workpad; see `issue-execution-checklist.md`). **Harness**
+multi-turn resume governs **meta-configuration** of `.agents/` and `AGENTS.md`
+only—different prompt, different goal.
 
 ## Non-Symphony (Standalone) Mode
 

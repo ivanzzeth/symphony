@@ -84,6 +84,7 @@ rg -n "Issue stalled|scheduling retry|turn_timeout|turn_failed|Codex session fai
     - App-server startup (Codex): `Codex session failed ...`.
     - Turn execution failure: `turn_failed`, `turn_cancelled`, `turn_timeout`, or
       `ended with error`.
+    - Stream/stall timeout: Cursor/Claude adapters honor `agent.stream_timeout_ms` from `elixir/WORKFLOW.md` (see **AGENTS.md** execution rules for the mirrored value). Correlate `turn_timeout` / stall / stream-idle log lines with that setting.
     - Worker crash: `Agent task exited ... reason=...`.
 4. Validate scope:
     - Check whether failures are isolated to one issue/session or repeating across
