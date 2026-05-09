@@ -738,7 +738,7 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   defp remote_orchestrator_running_count(pid) when is_pid(pid) do
-    GenServer.call(pid, :running_sessions_count)
+    GenServer.call(pid, :running_sessions_count, 500)
   catch
     :exit, _ -> 0
   end
