@@ -1,5 +1,5 @@
 defmodule SymphonyElixir.CLITest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias SymphonyElixir.CLI
 
@@ -216,5 +216,206 @@ defmodule SymphonyElixir.CLITest do
     }
 
     assert :ok = CLI.evaluate([@ack_flag, "WORKFLOW.md"], deps)
+  end
+
+  test "errors when --project is missing value" do
+    deps = %{
+      file_regular?: fn _path -> true end,
+      set_workflow_file_path: fn _path -> :ok end,
+      set_logs_root: fn _path -> :ok end,
+      set_server_port_override: fn _port -> :ok end,
+      set_server_host_override: fn _host -> :ok end,
+      set_config_arg: fn _config -> :ok end,
+      ensure_all_started: fn -> {:ok, [:symphony_elixir]} end
+    }
+
+    assert {:error, msg} = CLI.evaluate([@ack_flag, "--project"], deps)
+    assert msg =~ "--project requires"
+  end
+
+  test "positional workflow wins over symphony.yaml projects" do
+    parent = self()
+
+    dir =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-cli-legacy-#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(dir)
+    yaml = Path.join(dir, "symphony.yaml")
+    wf_primary = Path.join(dir, "PRIMARY.md")
+    wf_positional = Path.join(dir, "POS.md")
+    ws = Path.join(dir, "ws")
+    File.mkdir_p!(ws)
+
+    Enum.each([wf_primary, wf_positional], fn p ->
+      File.write!(p, """
+      ---
+      workspace:
+        root: \"#{String.replace(ws, "\\", "/")}\"
+      agent:
+        command: cursor --model auto
+      tracker:
+        kind: memory
+      ---
+
+      p
+      """)
+    end)
+
+    File.write!(yaml, """
+    projects:
+      only:
+        workflow: PRIMARY.md
+    """)
+
+    expanded_pos = Path.expand(wf_positional)
+
+    deps = %{
+      file_regular?: fn path ->
+        send(parent, {:checked, path})
+        path == expanded_pos
+      end,
+      set_workflow_file_path: fn path ->
+        send(parent, {:set_wf, path})
+        :ok
+      end,
+      set_logs_root: fn _path -> :ok end,
+      set_server_port_override: fn _port -> :ok end,
+      set_server_host_override: fn _host -> :ok end,
+      set_config_arg: fn config ->
+        Application.put_env(:symphony_elixir, :config_arg, config)
+        :ok
+      end,
+      ensure_all_started: fn -> {:ok, [:symphony_elixir]} end
+    }
+
+    on_exit(fn ->
+      Application.delete_env(:symphony_elixir, :config_arg)
+      File.rm_rf(dir)
+    end)
+
+    assert :ok =
+             CLI.evaluate(
+               [@ack_flag, "--config", yaml, wf_positional],
+               deps
+             )
+
+    assert_received {:checked, ^expanded_pos}
+    assert_received {:set_wf, ^expanded_pos}
+    expanded_primary = Path.expand(wf_primary)
+    refute_received {:checked, ^expanded_primary}
+  end
+
+  test "no positional with projects uses first enabled project workflow" do
+    parent = self()
+
+    dir =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-cli-mp-#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(dir)
+    yaml = Path.join(dir, "symphony.yaml")
+    wf_a = Path.join(dir, "A.md")
+    wf_b = Path.join(dir, "B.md")
+    ws = Path.join(dir, "ws")
+    File.mkdir_p!(ws)
+
+    Enum.each([wf_a, wf_b], fn p ->
+      File.write!(p, """
+      ---
+      workspace:
+        root: \"#{String.replace(ws, "\\", "/")}\"
+      agent:
+        command: cursor --model auto
+      tracker:
+        kind: memory
+      ---
+
+      p
+      """)
+    end)
+
+    File.write!(yaml, """
+    projects:
+      zzz:
+        workflow: B.md
+        enabled: false
+      aaa:
+        workflow: A.md
+    """)
+
+    on_exit(fn ->
+      Application.delete_env(:symphony_elixir, :config_arg)
+      File.rm_rf(dir)
+    end)
+
+    expanded_a = Path.expand(wf_a)
+
+    deps = %{
+      file_regular?: fn path ->
+        send(parent, {:checked, path})
+        path == expanded_a
+      end,
+      set_workflow_file_path: fn path ->
+        send(parent, {:set_wf, path})
+        :ok
+      end,
+      set_logs_root: fn _path -> :ok end,
+      set_server_port_override: fn _port -> :ok end,
+      set_server_host_override: fn _host -> :ok end,
+      set_config_arg: fn config ->
+        Application.put_env(:symphony_elixir, :config_arg, config)
+        :ok
+      end,
+      ensure_all_started: fn -> {:ok, [:symphony_elixir]} end
+    }
+
+    assert :ok = CLI.evaluate([@ack_flag, "--config", yaml], deps)
+    assert_received {:checked, ^expanded_a}
+    assert_received {:set_wf, ^expanded_a}
+  end
+
+  test "help_text lists projects when --config points at a valid symphony.yaml" do
+    dir =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-cli-help-#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(dir)
+    yaml = Path.join(dir, "symphony.yaml")
+    wf = Path.join(dir, "W.md")
+    ws = Path.join(dir, "ws")
+    File.mkdir_p!(ws)
+
+    File.write!(wf, """
+    ---
+    workspace:
+      root: \"#{String.replace(ws, "\\", "/")}\"
+    agent:
+      command: cursor --model auto
+    tracker:
+      kind: memory
+    ---
+
+    p
+    """)
+
+    File.write!(yaml, """
+    projects:
+      svc:
+        workflow: W.md
+    """)
+
+    on_exit(fn -> File.rm_rf(dir) end)
+
+    out = CLI.help_text(["--config", yaml, "--help"])
+    assert out =~ "Effective projects"
+    assert out =~ "svc"
+    assert out =~ Path.expand(wf)
   end
 end
