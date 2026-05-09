@@ -197,7 +197,11 @@ defmodule SymphonyElixir.Cursor.Adapter do
   defp handle_line(line, on_message, session, usage) do
     case Jason.decode(line) do
       {:ok, %{"type" => "system", "subtype" => "init"} = payload} ->
-        sid = Map.get(payload, "session_id", session.session_id)
+        # Match Claude adapter: real CLI stream-json may use camelCase `sessionId`.
+        sid =
+          Map.get(payload, "session_id") ||
+            Map.get(payload, "sessionId") ||
+            session.session_id
 
         emit_message(on_message, :session_started, %{
           session_id: sid

@@ -36,6 +36,30 @@ defmodule SymphonyElixir.CursorAdapterTest do
     assert CursorAdapter.stop_session(%{}) == :ok
   end
 
+  test "Turn 1 — reads sessionId (camelCase) from init for resume_id" do
+    root = Path.join(System.tmp_dir!(), "symphony-elixir-cursor-camel-#{System.unique_integer([:positive])}")
+    File.mkdir_p!(root)
+    ws = Path.join(root, "workspace")
+    File.mkdir_p!(ws)
+    trace = Path.join(root, "trace")
+    bin = Path.join(root, "cursor")
+
+    File.write!(bin, camel_session_init_script(trace))
+    File.chmod!(bin, 0o755)
+    write_cursor_config(bin, root)
+
+    on_exit(fn -> File.rm_rf(root) end)
+
+    session = %{session_id: "cs-camel", workspace: ws, resume_id: nil}
+    test_pid = self()
+    on_msg = fn m -> send(test_pid, {:m, m}) end
+
+    assert {:ok, result} = CursorAdapter.run_turn(session, "Fix bug", issue(), on_message: on_msg)
+    assert result.resume_id == "from-camel-case"
+    assert_received {:m, %{event: :session_started, session_id: "from-camel-case"}}
+    assert_received {:m, %{event: :turn_completed}}
+  end
+
   test "Turn 1 — completes successfully with --workspace flag, no --resume, resumes with real session_id" do
     %{binary: bin, trace: trace, workspace: ws, test_root: root} = setup_cursor_env("OK")
 
@@ -407,6 +431,16 @@ printf 'ARGS:%s\\n' "$*" >> "#{trace}"
 printf '%s\\n' '{"type":"system","subtype":"init","session_id":"ok","tools":["bash","read","write"]}'
 printf '%s\\n' '{"type":"assistant","message":{"model":"gpt-5","content":[{"type":"text","text":"fixed"}],"usage":{"inputTokens":42,"outputTokens":17}}}'
 printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"done","usage":{"inputTokens":42,"outputTokens":17}}'
+exit 0
+)
+  end
+
+  defp camel_session_init_script(trace) do
+    ~s(#!/bin/sh
+printf 'ARGS:%s\\n' "$*" >> "#{trace}"
+printf '%s\\n' '{"type":"system","subtype":"init","sessionId":"from-camel-case","tools":["bash"]}'
+printf '%s\\n' '{"type":"assistant","message":{"model":"gpt-5","content":[{"type":"text","text":"fixed"}],"usage":{"inputTokens":1,"outputTokens":1}}}'
+printf '%s\\n' '{"type":"result","subtype":"success","is_error":false,"result":"done","usage":{"inputTokens":1,"outputTokens":1}}'
 exit 0
 )
   end
