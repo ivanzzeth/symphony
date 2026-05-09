@@ -3,6 +3,19 @@ defmodule SymphonyElixir.ProjectSupervisorTest do
 
   alias SymphonyElixir.{ProjectNaming, ProjectRegistry, ProjectSupervisor}
 
+  defp wait_until(fun, attempts \\ 80)
+
+  defp wait_until(_fun, 0), do: {:error, :timeout}
+
+  defp wait_until(fun, n) do
+    if fun.() do
+      :ok
+    else
+      Process.sleep(25)
+      wait_until(fun, n - 1)
+    end
+  end
+
   defp isolation_project(label) do
     root =
       Path.join(
@@ -72,8 +85,9 @@ defmodule SymphonyElixir.ProjectSupervisorTest do
     Process.exit(orch_a, :kill)
     Process.sleep(200)
 
-    refute Process.alive?(orch_a)
-    assert Process.alive?(orch_b)
+    assert {:ok, orch_b_after} = ProjectRegistry.lookup("iso-b")
+    assert orch_b_after == orch_b
+    assert Process.alive?(orch_b_after)
   end
 
   test "stop_project unregisters from ProjectRegistry" do
@@ -127,7 +141,7 @@ defmodule SymphonyElixir.ProjectSupervisorTest do
     Process.exit(tree_pid, :kill)
 
     assert :ok =
-             wait_until(fn ->
+             poll_until(fn ->
                case SymphonyElixir.ProjectSupervisor.Meta.fetch(id) do
                  %{status: s} when s in [:error, :stopped] -> true
                  _ -> false
@@ -138,5 +152,18 @@ defmodule SymphonyElixir.ProjectSupervisorTest do
     assert {:ok, _} = ProjectRegistry.lookup("default")
 
     on_exit(fn -> File.rm_rf(root) end)
+  end
+
+  defp poll_until(fun), do: poll_until(fun, 50)
+
+  defp poll_until(_fun, 0), do: {:error, :timeout}
+
+  defp poll_until(fun, n) when n > 0 do
+    if fun.() do
+      :ok
+    else
+      Process.sleep(20)
+      poll_until(fun, n - 1)
+    end
   end
 end
