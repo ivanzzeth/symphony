@@ -46,6 +46,11 @@ defmodule SymphonyElixir.Linear.Adapter do
   @spec fetch_issue_states_by_ids([String.t()]) :: {:ok, [term()]} | {:error, term()}
   def fetch_issue_states_by_ids(issue_ids), do: client_module().fetch_issue_states_by_ids(issue_ids)
 
+  @spec fetch_issue_by_identifier(String.t(), keyword()) :: {:ok, term()} | {:error, term()}
+  def fetch_issue_by_identifier(identifier, opts \\ []) when is_binary(identifier) and is_list(opts) do
+    client_module().fetch_issue_by_identifier(identifier, opts)
+  end
+
   @spec create_comment(String.t(), String.t()) :: :ok | {:error, term()}
   def create_comment(issue_id, body) when is_binary(issue_id) and is_binary(body) do
     with {:ok, response} <- client_module().graphql(@create_comment_mutation, %{issueId: issue_id, body: body}),

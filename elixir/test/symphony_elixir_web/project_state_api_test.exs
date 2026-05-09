@@ -2,6 +2,7 @@ defmodule SymphonyElixirWeb.ProjectStateApiTest do
   use SymphonyElixir.TestSupport, async: false
 
   import Phoenix.ConnTest
+  import Plug.Conn, only: [put_req_header: 3]
 
   alias SymphonyElixir.Orchestrator
 
@@ -43,5 +44,76 @@ defmodule SymphonyElixirWeb.ProjectStateApiTest do
     body = json_response(conn, 200)
     assert body["project_id"] == "default"
     assert body["counts"]["completed"] >= 0
+  end
+
+  test "GET /api/v1/projects lists default project with agent counts" do
+    conn = get(build_conn(), "/api/v1/projects")
+    body = json_response(conn, 200)
+    assert is_list(body["projects"])
+
+    default =
+      Enum.find(body["projects"], &(&1["project_id"] == "default")) ||
+        flunk("expected default project in listing")
+
+    assert default["status"] in ["running", "starting", "stopped", "error"]
+    assert default["counts"]["running"] >= 0
+    assert default["counts"]["retrying"] >= 0
+    assert default["counts"]["completed"] >= 0
+  end
+
+  test "POST /api/v1/projects/:id/refresh returns 404 for unknown project" do
+    id = "missing-project-#{System.unique_integer([:positive])}"
+    conn = post(build_conn(), "/api/v1/projects/#{id}/refresh", %{})
+    assert json_response(conn, 404)["error"]["code"] == "project_not_found"
+  end
+
+  test "DELETE /api/v1/projects/:id/issues/:identifier returns 404 when issue is not active" do
+    ident = "NOT-ACTIVE-#{System.unique_integer([:positive])}"
+    conn = delete(build_conn(), "/api/v1/projects/default/issues/#{ident}")
+    assert json_response(conn, 404)["error"]["code"] == "issue_not_found"
+  end
+
+  test "PUT /api/v1/projects/:id/issues/:identifier returns 400 when state is missing" do
+    conn =
+      build_conn()
+      |> put_req_header("content-type", "application/json")
+      |> put("/api/v1/projects/default/issues/WEB-1", Jason.encode!(%{}))
+
+    assert json_response(conn, 400)["error"]["code"] == "invalid_body"
+  end
+
+  test "POST /api/v1/projects rejects non-GET with 405" do
+    conn = post(build_conn(), "/api/v1/projects", %{})
+    assert json_response(conn, 405)["error"]["code"] == "method_not_allowed"
+  end
+
+  test "POST /api/v1/projects/:id/issues/:identifier returns 404 for unknown project" do
+    id = "missing-project-#{System.unique_integer([:positive])}"
+    conn = post(build_conn(), "/api/v1/projects/#{id}/issues/WEB-1", %{})
+    assert json_response(conn, 404)["error"]["code"] == "project_not_found"
+  end
+
+  test "PUT /api/v1/projects/:id/issues/:identifier returns 404 for unknown project" do
+    id = "missing-project-#{System.unique_integer([:positive])}"
+
+    conn =
+      build_conn()
+      |> put_req_header("content-type", "application/json")
+      |> put("/api/v1/projects/#{id}/issues/WEB-1", Jason.encode!(%{"state" => "Todo"}))
+
+    assert json_response(conn, 404)["error"]["code"] == "project_not_found"
+  end
+
+  test "DELETE /api/v1/projects/:id/issues/:identifier returns 404 for unknown project" do
+    id = "missing-project-#{System.unique_integer([:positive])}"
+    conn = delete(build_conn(), "/api/v1/projects/#{id}/issues/WEB-1")
+    assert json_response(conn, 404)["error"]["code"] == "project_not_found"
+  end
+
+  test "legacy GET /api/v1/state still returns 200 in single-project test setup" do
+    conn = get(build_conn(), "/api/v1/state")
+    assert conn.status == 200
+    body = json_response(conn, 200)
+    assert Map.has_key?(body, "counts") or Map.has_key?(body, "error")
   end
 end
