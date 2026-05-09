@@ -454,8 +454,13 @@ defmodule SymphonyElixir.Config.Schema do
   end
 
   defp resolve_agent_command(agent, codex) do
-    %{agent | command: agent.command || Map.get(codex, :command) || "codex app-server"}
+    %{agent | command: agent.command || Map.get(codex, :command) || default_command_for_kind(agent.kind)}
   end
+
+  defp default_command_for_kind("claude"), do: "claude"
+  defp default_command_for_kind("cursor"), do: "cursor"
+  defp default_command_for_kind("codex"), do: "codex app-server"
+  defp default_command_for_kind(_), do: "codex app-server"
 
   defp normalize_keys(value) when is_map(value) do
     Enum.reduce(value, %{}, fn {key, raw_value}, normalized ->

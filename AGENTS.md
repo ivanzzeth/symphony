@@ -205,13 +205,16 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 - Workspace hooks: after_create (shallow `git clone` of `base_branch`, `git checkout` that branch, then conditional `mise trust` + `mise exec -- mix deps.get` in `elixir/`), before_remove (`mise exec -- mix workspace.before_remove`)
 - Issue-execution prompt is **unattended**: do not ask the human for follow-ups; final agent message reports completed actions and blockers only (see WORKFLOW instructions)
 - Single Linear workpad per issue: marker `## Codex Workpad`; when searching for an existing workpad, **ignore resolved comments**—only active/unresolved comments qualify
+- **Step 0 branch hygiene:** if a PR for the current branch is `CLOSED` or `MERGED` on GitHub, do not reuse that branch or prior implementation state—branch fresh from `origin/develop` and restart kickoff
+- Workpad top: one fenced `text` environment stamp `<hostname>:<abs-path>@<short-sha>` (WORKFLOW Step 1); omit issue metadata redundant with Linear fields
+- **Temporary proof edits** (local tweaks to validate behavior) are allowed only when **fully reverted** before commit/push; document attempts in workpad `Validation`/`Notes`
 - After each mandated `pull` sync, record **`pull skill evidence`** in the workpad (merge source(s), `clean` vs `conflicts resolved`, resulting `HEAD` short SHA)—see `pull` skill
 - PRs must target `origin/develop`, carry the **`symphony`** GitHub label, and link on the issue; do **not** paste the PR URL into the workpad body
 - Before `In Review`, run the full **PR feedback sweep** (top-level, inline via GitHub API, review summaries); read **Manual QA Plan** on the PR when present; keep workpad `Plan` / `Acceptance Criteria` / `Validation` aligned with reality; add `### Confusions` only when execution was unclear
 - **`Rework`**: treat as full reset—close the existing PR, remove the prior `## Codex Workpad` comment, branch fresh from `origin/develop`, create a new workpad, re-execute end-to-end (see WORKFLOW Step 4)
-- Prompt requires Linear access (Linear MCP or `linear_graphql` tool). WORKFLOW’s prerequisite block still applies: if neither is available, stop for operator configuration—that is the intentional exception to otherwise-unattended issue runs. Blocked-access protocol: missing **non-GitHub** tools/auth is the primary escape hatch; GitHub is not a default blocker (try fallbacks first, document in workpad)
+- Prompt requires Linear access (Linear MCP or `linear_graphql` tool). WORKFLOW’s prerequisite block still applies: if neither is available, stop for operator configuration—that is the intentional exception to otherwise-unattended issue runs. Blocked-access protocol: missing **non-GitHub** tools/auth is the primary escape hatch; GitHub is not a default blocker (try fallbacks first, document in workpad). If using the escape hatch to move to `In Review`, the workpad must state what is missing, why it blocks acceptance/validation, and exact human unblock actions
 - PR / review / completion-bar reminders: `.agents/skills/harness/references/issue-execution-checklist.md` (checklist only; `elixir/WORKFLOW.md` remains authoritative)
-- App-touching changes: follow WORKFLOW completion bar (`launch-app`, `github-pr-media` when required; see **App runtime validation** in WORKFLOW)
+- App-touching changes: follow WORKFLOW Step 2 and the **Completion bar before In Review** (`launch-app`, `github-pr-media` when the change touches app files or behavior)
 - Daemon-level config (server port/host, observability) lives in `~/.config/symphony/symphony.yaml` — NOT in WORKFLOW.md
   - `server` and `observability` keys in WORKFLOW.md are disallowed and silently stripped with a warning
   - CLI flags `--config`, `--port`, `--host` override YAML values for single-instance multi-project management
@@ -280,7 +283,8 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 | 2026-05-07 | Harness docs: WORKFLOW contract path | harness/SKILL.md, symphony-dispatch.md, AGENTS.md | Phase 0 + AGENTS template: Symphony dispatch tied to platform/heuristics, not `.agents/WORKFLOW.md`; contract canonical at `elixir/WORKFLOW.md` |
 | 2026-05-08 | Harness sync to updated WORKFLOW.md | AGENTS.md, pull/push/commit/elixir-planner skills | `codex.command` → `cursor --model auto`; after_create checkout; unattended + workpad/PR/Rework/completion-bar alignment |
 | 2026-05-08 | Harness continuation | linear/land/debug skills, symphony-dev ref, harness SKILL | Workpad GraphQL notes; WORKFLOW `Merging`/unattended land; debug CLI note; orchestrator-workflow cross-link; harness test scenarios |
-| 2026-05-08 | Harness continuation (PR gates + Linear) | linear skill, harness refs, AGENTS.md | `commentDelete` example; `issue-execution-checklist.md`; Linear prerequisite vs unattended; merge→`Done` state note |
+| 2026-05-09 | Harness sync to WORKFLOW.md (Step 0 PR reuse, workpad stamp, proof edits, blocked-access brief, GitHub fallback posture, resume/symlink notes) | AGENTS.md, harness-agent, symphony-dispatch, issue-execution-checklist, commit/push skills, orchestrator-workflow ref | `elixir/WORKFLOW.md` contract alignment |
+| 2026-05-09 | Harness continuation (AGENTS app validation wording; linear prerequisite; harness Phase 0 multi-turn resume) | AGENTS.md, linear/SKILL.md, harness/SKILL.md | Resume pass after prior sync |
 
 ## Harness: Symphony Development
 

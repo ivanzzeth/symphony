@@ -40,6 +40,8 @@ When the harness skill triggers, first assess the current harness state and dete
 4. Cross-reference existing agent/skill lists against AGENTS.md records to detect drift
 5. Summarize audit findings for the user and confirm the execution plan
 
+**Multi-turn resume (Symphony harness):** Prompts like “Continue the harness configuration…” mean **continuation**, not a greenfield rebuild: re-read the workflow file (`elixir/WORKFLOW.md` for this monorepo), re-audit `.agents/` and `AGENTS.md`, finish only incomplete edits, keep `AGENTS.md` aligned with `.agents/`, and append the change history. See `references/symphony-dispatch.md` → *Harness multi-turn resume*.
+
 ### Phase 1: Domain Analysis
 1. Identify domain/project from the user's request
 2. Identify core task types (generation, validation, editing, analysis, etc.)

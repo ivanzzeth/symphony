@@ -11,6 +11,13 @@ description: |
 
 Use this skill for raw Linear GraphQL work during Symphony app-server sessions.
 
+## Symphony issue execution — Linear access
+
+`elixir/WORKFLOW.md` requires talking to Linear via a configured **Linear MCP**
+server or the injected **`linear_graphql`** tool. If neither is available, that
+is the **documented** exception to unattended runs: stop and surface **operator
+configuration** (and record the blocker in the workpad when one already exists).
+
 ## Primary tool
 
 Use the `linear_graphql` client tool exposed by Symphony's app-server session.

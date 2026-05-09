@@ -119,7 +119,9 @@ Important boundary:
    - Owns the in-memory runtime state.
    - Decides which issues to dispatch, retry, stop, or release.
    - Tracks session metrics and retry queue state.
-   - On `WORKFLOW.md` change: dispatches a harness agent before the next issue dispatch.
+   - On `WORKFLOW.md` change: notifies the Harness Manager, which dispatches a harness agent
+     asynchronously. Issue dispatch is NOT blocked while the harness runs; the harness agent
+     works in a dedicated session and does not consume dispatch slots.
 
 6. `Workspace Manager`
    - Maps issue identifiers to workspace paths.
@@ -567,6 +569,11 @@ Fields:
   - Default: `3600000` (1 hour). Total turn stream timeout for all backends.
 - `read_timeout_ms` (integer)
   - Default: `5000`. Per-request/response timeout during startup and sync calls.
+- `stream_timeout_ms` (integer)
+  - Default: `120000` (2 minutes). Per-stream read timeout for coding-agent CLI output. If the agent
+    produces no output within this window during an active turn, the turn is treated as failed.
+    Distinct from `turn_timeout_ms` (total turn wall-clock timeout) and `stall_timeout_ms`
+    (orchestrator-enforced event inactivity timeout).
 - `stall_timeout_ms` (integer)
   - Default: `300000` (5 minutes). Event inactivity timeout. If `<= 0`, stall detection disabled.
 
@@ -603,6 +610,13 @@ Template input variables:
 - `attempt` (integer or null)
   - `null`/absent on first attempt.
   - Integer on retry or continuation run.
+- `workspace` (object)
+  - Available fields:
+    - `root` (string) — normalized absolute workspace root path.
+    - `base_branch` (string) — configured PR target branch.
+- `tracker` (object)
+  - Available fields:
+    - `repo` (string or null) — configured tracker repository name/git remote, if available.
 
 Fallback prompt behavior:
 
@@ -729,6 +743,7 @@ not in `WORKFLOW.md` front matter.
 - `agent.max_concurrent_agents_by_state`: map of positive integers, default `{}`
 - `agent.turn_timeout_ms`: integer, default `3600000` (1h)
 - `agent.read_timeout_ms`: integer, default `5000`
+- `agent.stream_timeout_ms`: integer, default `120000` (2m)
 - `agent.stall_timeout_ms`: integer, default `300000` (5m)
 - `codex.approval_policy`: Codex `AskForApproval` value, default implementation-defined (only when `agent.kind == "codex"`)
 - `codex.thread_sandbox`: Codex `SandboxMode` value, default implementation-defined (only when `agent.kind == "codex"`)

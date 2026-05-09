@@ -72,7 +72,10 @@ harness dispatch. After the first turn, follow-up prompts are worded like:
 “Continue the harness configuration. Resume from the current workspace and
 `.agents/` state.” Treat that as **continuation**, not a new harness build:
 re-read Phase 0 audit outputs, finish incomplete edits, sync `AGENTS.md` and
-`.cursor/` mirrors, and avoid duplicating work already landed in the tree.
+keep `.agents/` consistent with the loaded workflow contract. If the repo maps
+`.cursor/` to `.agents/` via symlink, edits under `.agents/` are sufficient—do
+not maintain a second harness copy. Avoid duplicating work already landed in
+the tree.
 
 ## Non-Symphony (Standalone) Mode
 

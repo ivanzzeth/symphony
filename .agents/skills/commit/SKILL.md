@@ -52,6 +52,13 @@ description:
     includes unrelated files or the message describes work that isn't staged,
     fix the index or revise the message before committing.
 
+## Symphony issue execution (`elixir/WORKFLOW.md`)
+
+Unattended Linear runs may use **temporary local proof edits** to validate
+assumptions (WORKFLOW Step 2). **Revert every proof edit** before staging or
+committing. Document what you tried and observed in the workpad `Validation` /
+`Notes` sections. Never leave proof-only changes in commits.
+
 ## Output
 
 - A single commit created with `git commit` whose message reflects the session.

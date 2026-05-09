@@ -1237,11 +1237,19 @@ defmodule SymphonyElixir.Orchestrator do
 
     agent_kind = state.coding_agent_kind || Config.settings!().agent.kind
 
+    codex_totals =
+      update_in(state.codex_totals.seconds_running, fn completed_seconds ->
+        completed_seconds +
+          Enum.reduce(state.running, 0, fn {_id, metadata}, total ->
+            total + running_seconds(metadata.started_at, now)
+          end)
+      end)
+
     {:reply,
      %{
        running: running,
        retrying: retrying,
-       codex_totals: state.codex_totals,
+       codex_totals: codex_totals,
        rate_limits: Map.get(state, :codex_rate_limits),
        coding_agent: %{kind: agent_kind, label: CodingAgent.kind_display_label(agent_kind)},
        polling: %{

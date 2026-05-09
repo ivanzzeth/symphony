@@ -5,8 +5,9 @@ Load this file when the orchestrator needs detailed workflow guidance beyond the
 **Related contract:** Linear issue execution (orchestrator-dispatched tickets) is
 governed by `elixir/WORKFLOW.md` and the **Symphony Issue Execution** section of
 `AGENTS.md`—not this dev pipeline. When a change touches dispatch, hooks, or
-issue-agent behavior, read that file; never edit it from harness work unless the
-human explicitly owns that change.
+issue-agent behavior, read that file. Harness and dev agents **must not** edit
+`elixir/WORKFLOW.md` unless a human explicitly performs that change outside
+automated harness runs.
 
 ## Phase Execution Order
 

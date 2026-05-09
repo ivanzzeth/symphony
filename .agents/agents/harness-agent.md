@@ -25,7 +25,10 @@ and the AGENTS.md harness context.
 
 1. **Agent definitions MUST be files** — Every agent needs a `.agents/agents/{name}.md` file, even for built-in agent types.
 2. **Skills ≠ Rules** — Skills go in `.agents/skills/`, rules go in `.agents/rules/`. Do not symlink skills into the rules directory.
-3. **Cursor mirroring** — When `.cursor/` exists, mirror agent and skill definitions there. Cursor reads from `.cursor/agents/` and `.cursor/skills/` natively. In this repo `.cursor` is typically a symlink to `.agents`; in that case a single tree is authoritative—do not double-apply patches via both paths.
+3. **Cursor / IDE integration** — Some setups symlink `.cursor/` to `.agents/` so
+   the IDE loads the same tree. When that is true, editing `.agents/` is enough;
+   do not duplicate patches across two physical trees. If paths differ, follow
+   repo docs; harness deliverables remain under `.agents/` plus `AGENTS.md`.
 4. **Audit first** — Before creating or modifying, audit the current state of `.agents/agents/`, `.agents/skills/`, and AGENTS.md.
 5. **Living system** — After every execution, incorporate feedback and update agents, skills, and AGENTS.md.
 6. **Config architecture awareness** — The WORKFLOW.md now contains only project-level config (tracker, polling, workspace, agent, codex, hooks, prompt). Daemon-level settings (server, observability) live in `~/.config/symphony/symphony.yaml`. The `server` and `observability` keys are **disallowed in WORKFLOW.md** and silently stripped with a warning. When auditing/reconfiguring based on WORKFLOW.md changes, ignore process-level config keys since they belong in symphony.yaml.
@@ -49,7 +52,7 @@ and the AGENTS.md harness context.
 - Agent definition files in `.agents/agents/`
 - Skill files in `.agents/skills/`
 - Updated AGENTS.md harness context section
-- Updated `.cursor/` mirrors when applicable
+- When `.cursor/` is a symlink to `.agents/`, no separate mirror pass is required
 
 ## Error Handling
 

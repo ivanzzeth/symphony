@@ -9,7 +9,7 @@ description:
 
 ## Symphony issue execution (unattended)
 
-When this skill runs inside the Linear issue-execution flow (`elixir/WORKFLOW.md`), the session is **unattended**: do not ask the human for follow-ups. Surface blockers in the `## Codex Workpad` per WORKFLOW. Every PR must **target `develop`** and include the **`symphony`** label (`gh pr create ... -l symphony` or `gh pr edit --add-label symphony`).
+When this skill runs inside the Linear issue-execution flow (`elixir/WORKFLOW.md`), the session is **unattended**: do not ask the human for follow-ups. Surface blockers in the `## Codex Workpad` per WORKFLOW. Every PR must **target `develop`** and include the **`symphony`** label (`gh pr create ... -l symphony` or `gh pr edit --add-label symphony`). For GitHub auth/push failures, WORKFLOW treats GitHub as **not** a default blocker: try reasonable fallbacks (alternate credential helper, re-auth flow, documented remote variants), document each attempt in the workpad, then only stop as a true blocker if nothing works.
 
 ## Prerequisites
 
@@ -38,8 +38,10 @@ When this skill runs inside the Linear issue-execution flow (`elixir/WORKFLOW.md
      skill to merge `origin/develop`, resolve conflicts, and rerun validation.
    - Push again; use `--force-with-lease` only when history was rewritten.
    - If the failure is due to auth, permissions, or workflow restrictions on
-     the configured remote, stop and surface the exact error instead of
-     rewriting remotes or switching protocols as a workaround.
+     the configured remote, try **documented fallbacks** first (WORKFLOW
+     blocked-access posture for GitHub), log each attempt in the workpad, then
+     stop with the exact error only if no safe path remains—do not silently
+     rewrite remotes or weaken security without recording rationale.
 
 5. Ensure a PR exists for the branch:
    - If no PR exists, create one with `--base develop` (or the repo’s configured
