@@ -1,6 +1,11 @@
 defmodule SymphonyElixir.AgentRunner do
   @moduledoc """
-  Executes a single Linear issue in its workspace with Codex.
+  Executes a single Linear issue in its workspace with the configured coding agent.
+
+  Multi-turn runs continue only while the refreshed tracker state is both listed in
+  `tracker.active_states` and allowed for follow-up turns. Handoff states such as
+  **In Review** and **Merging** remain active for orchestrator polling but do not
+  receive another agent turn in the same run.
   """
 
   require Logger
@@ -171,6 +176,8 @@ defmodule SymphonyElixir.AgentRunner do
         {:continue, refreshed_issue} ->
           Logger.info("Reached agent.max_turns for #{issue_context(refreshed_issue)} with issue still active; returning control to orchestrator")
 
+          notify_run_stopped_at_max_turns(codex_update_recipient, refreshed_issue)
+
           :ok
 
         {:done, _refreshed_issue} ->
@@ -200,7 +207,7 @@ defmodule SymphonyElixir.AgentRunner do
        when is_binary(issue_id) do
     case issue_state_fetcher.([issue_id]) do
       {:ok, [%Issue{} = refreshed_issue | _]} ->
-        if active_issue_state?(refreshed_issue.state, opts) do
+        if active_issue_state?(refreshed_issue.state, opts) and follow_up_turn_allowed?(refreshed_issue.state) do
           {:continue, refreshed_issue}
         else
           {:done, refreshed_issue}
@@ -229,6 +236,16 @@ defmodule SymphonyElixir.AgentRunner do
     ws = Keyword.get(opts, :workflow_store)
     Config.settings!(workflow_store: ws)
   end
+
+  # `tracker.active_states` includes handoff states such as In Review and Merging so the
+  # orchestrator keeps polling them, but those states mean the coding agent must not run
+  # another turn in the same run (human review / land loop owns the ticket).
+  defp follow_up_turn_allowed?(state_name) when is_binary(state_name) do
+    normalized = normalize_issue_state(state_name)
+    normalized not in ["in review", "merging"]
+  end
+
+  defp follow_up_turn_allowed?(_state_name), do: false
 
   defp selected_worker_host(nil, []), do: nil
 
@@ -263,4 +280,14 @@ defmodule SymphonyElixir.AgentRunner do
   defp issue_context(%Issue{id: issue_id, identifier: identifier}) do
     "issue_id=#{issue_id} issue_identifier=#{identifier}"
   end
+
+  defp notify_run_stopped_at_max_turns(nil, _issue), do: :ok
+
+  defp notify_run_stopped_at_max_turns(recipient, %Issue{id: issue_id})
+       when is_pid(recipient) and is_binary(issue_id) do
+    send(recipient, {:symphony_agent_run_outcome, issue_id, :max_turns_reached})
+    :ok
+  end
+
+  defp notify_run_stopped_at_max_turns(_recipient, _issue), do: :ok
 end

@@ -96,8 +96,8 @@ defmodule SymphonyElixir.WorkflowStore do
         try do
           GenServer.call(pid, :current)
         catch
-          :exit, _reason ->
-            Workflow.load()
+          :exit, reason ->
+            if call_exit_recoverable?(reason), do: Workflow.load(), else: :erlang.raise(:exit, reason, __STACKTRACE__)
         end
 
       _ ->
@@ -112,10 +112,14 @@ defmodule SymphonyElixir.WorkflowStore do
         try do
           GenServer.call(pid, :force_reload)
         catch
-          :exit, _reason ->
-            case Workflow.load() do
-              {:ok, _workflow} -> :ok
-              {:error, err} -> {:error, err}
+          :exit, reason ->
+            if call_exit_recoverable?(reason) do
+              case Workflow.load() do
+                {:ok, _workflow} -> :ok
+                {:error, err} -> {:error, err}
+              end
+            else
+              :erlang.raise(:exit, reason, __STACKTRACE__)
             end
         end
 
@@ -126,6 +130,14 @@ defmodule SymphonyElixir.WorkflowStore do
         end
     end
   end
+
+  defp call_exit_recoverable?(:noproc), do: true
+  defp call_exit_recoverable?({:noproc, _}), do: true
+  defp call_exit_recoverable?(:normal), do: true
+  defp call_exit_recoverable?({:normal, _}), do: true
+  defp call_exit_recoverable?(:shutdown), do: true
+  defp call_exit_recoverable?({:shutdown, _}), do: true
+  defp call_exit_recoverable?(_), do: false
 
   @impl true
   def init(opts) do

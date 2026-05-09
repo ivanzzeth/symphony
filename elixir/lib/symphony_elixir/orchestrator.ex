@@ -34,6 +34,8 @@ defmodule SymphonyElixir.Orchestrator do
       retry_attempts: %{},
       codex_totals: %{input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0},
       codex_rate_limits: nil,
+      pending_agent_outcomes: %{},
+      max_turns_halted_at: %{},
       workflow_store: nil,
       task_supervisor: nil,
       project_id: nil
@@ -216,22 +218,44 @@ defmodule SymphonyElixir.Orchestrator do
 
       issue_id ->
         {running_entry, state} = pop_running_entry(state, issue_id)
+        {pending_outcome, state} = pop_pending_agent_outcome(state, issue_id)
         state = record_session_completion_totals(state, running_entry)
         session_id = running_entry_session_id(running_entry)
+
+        run_outcome =
+          case {Map.get(running_entry, :run_outcome), pending_outcome} do
+            {:max_turns_reached, _} -> :max_turns_reached
+            {_, :max_turns_reached} -> :max_turns_reached
+            {ro, po} -> ro || po || :normal
+          end
 
         state =
           case reason do
             :normal ->
-              Logger.info("Agent task completed for issue_id=#{issue_id} session_id=#{session_id}; scheduling active-state continuation check")
+              state = complete_issue(state, issue_id)
 
-              state
-              |> complete_issue(issue_id)
-              |> schedule_issue_retry(issue_id, 1, %{
-                identifier: running_entry.identifier,
-                delay_type: :continuation,
-                worker_host: Map.get(running_entry, :worker_host),
-                workspace_path: Map.get(running_entry, :workspace_path)
-              })
+              case run_outcome do
+                :max_turns_reached ->
+                  Logger.info(
+                    "Agent task completed at agent.max_turns for issue_id=#{issue_id} session_id=#{session_id}; releasing claim without continuation retry"
+                  )
+
+                  state
+                  |> release_issue_claim(issue_id)
+                  |> mark_max_turns_halted_at(issue_id)
+
+                _ ->
+                  Logger.info(
+                    "Agent task completed for issue_id=#{issue_id} session_id=#{session_id}; scheduling active-state continuation check"
+                  )
+
+                  schedule_issue_retry(state, issue_id, 1, %{
+                    identifier: running_entry.identifier,
+                    delay_type: :continuation,
+                    worker_host: Map.get(running_entry, :worker_host),
+                    workspace_path: Map.get(running_entry, :workspace_path)
+                  })
+              end
 
             _ ->
               Logger.warning("Agent task exited for issue_id=#{issue_id} session_id=#{session_id} reason=#{inspect(reason)}; scheduling retry")
@@ -305,6 +329,21 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   def handle_info({:retry_issue, _issue_id}, state), do: {:noreply, state}
+
+  def handle_info({:symphony_agent_run_outcome, issue_id, :max_turns_reached}, state)
+      when is_binary(issue_id) do
+    running = Map.get(state, :running) || %{}
+
+    case Map.get(running, issue_id) do
+      nil ->
+        pending = Map.get(state, :pending_agent_outcomes) || %{}
+        {:noreply, %{state | pending_agent_outcomes: Map.put(pending, issue_id, :max_turns_reached)}}
+
+      running_entry ->
+        updated_entry = Map.put(running_entry, :run_outcome, :max_turns_reached)
+        {:noreply, %{state | running: Map.put(running, issue_id, updated_entry)}}
+    end
+  end
 
   def handle_info(msg, state) do
     Logger.debug("Orchestrator ignored message: #{inspect(msg)}")
@@ -662,7 +701,10 @@ defmodule SymphonyElixir.Orchestrator do
          active_states,
          terminal_states
        ) do
+    halted_at_by_issue = Map.get(state, :max_turns_halted_at) || %{}
+
     candidate_issue?(issue, active_states, terminal_states) and
+      max_turns_dispatch_allowed?(issue, halted_at_by_issue) and
       !todo_issue_blocked_by_non_terminal?(issue, terminal_states) and
       !MapSet.member?(claimed, issue.id) and
       !Map.has_key?(running, issue.id) and
@@ -672,6 +714,31 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   defp should_dispatch_issue?(_issue, _state, _active_states, _terminal_states), do: false
+
+  defp max_turns_dispatch_allowed?(%Issue{id: issue_id, updated_at: updated_at}, halted_at_by_issue)
+       when is_binary(issue_id) and is_map(halted_at_by_issue) do
+    case Map.fetch(halted_at_by_issue, issue_id) do
+      :error ->
+        true
+
+      {:ok, halted_at} ->
+        match?(%DateTime{}, updated_at) and DateTime.compare(updated_at, halted_at) == :gt
+    end
+  end
+
+  defp max_turns_dispatch_allowed?(_issue, _halted_at_by_issue), do: true
+
+  defp pop_pending_agent_outcome(%State{} = state, issue_id) when is_binary(issue_id) do
+    pending = Map.get(state, :pending_agent_outcomes) || %{}
+
+    {Map.get(pending, issue_id),
+     %{state | pending_agent_outcomes: Map.delete(pending, issue_id)}}
+  end
+
+  defp mark_max_turns_halted_at(%State{} = state, issue_id) when is_binary(issue_id) do
+    halted = Map.get(state, :max_turns_halted_at) || %{}
+    %{state | max_turns_halted_at: Map.put(halted, issue_id, DateTime.utc_now())}
+  end
 
   defp state_slots_available?(%Issue{state: issue_state}, %State{} = state) do
     limit = Config.max_concurrent_agents_for_state(issue_state, state.workflow_store)
@@ -856,11 +923,14 @@ defmodule SymphonyElixir.Orchestrator do
             started_at: DateTime.utc_now()
           })
 
+        halted = Map.get(state, :max_turns_halted_at) || %{}
+
         %{
           state
           | running: running,
             claimed: MapSet.put(state.claimed, issue.id),
-            retry_attempts: Map.delete(state.retry_attempts, issue.id)
+            retry_attempts: Map.delete(state.retry_attempts, issue.id),
+            max_turns_halted_at: Map.delete(halted, issue.id)
         }
 
       {:error, reason} ->

@@ -1,3 +1,6 @@
 
 # OMC session state (private, must not be committed)
 .omc/
+
+# Erlang VM crash dumps (often land in repo root when running escript/tests)
+erl_crash.dump

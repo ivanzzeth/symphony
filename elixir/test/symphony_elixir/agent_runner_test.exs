@@ -120,6 +120,76 @@ defmodule SymphonyElixir.AgentRunnerTest do
     end
   end
 
+  test "does not schedule a follow-up turn when refreshed state is In Review" do
+    test_root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-agent-runner-in-review-#{System.unique_integer([:positive])}"
+      )
+
+    try do
+      with_minimal_workspace(
+        test_root,
+        [
+          max_turns: 5,
+          tracker_active_states: ["Todo", "In Progress", "In Review", "Merging", "Rework"]
+        ],
+        fn _workspace_root ->
+          issue = issue("issue-in-review", "AR-INREVIEW")
+
+          state_fetcher = fn [_issue_id] ->
+            {:ok, [Map.put(issue, :state, "In Review")]}
+          end
+
+          assert :ok =
+                   AgentRunner.run(issue, nil,
+                     coding_agent_adapter: FakeCodingAgent,
+                     issue_state_fetcher: state_fetcher
+                   )
+
+          assert Process.get(:agent_runner_fake_turn_n, 0) == 1
+        end
+      )
+    after
+      File.rm_rf(test_root)
+    end
+  end
+
+  test "does not schedule a follow-up turn when refreshed state is Merging" do
+    test_root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-agent-runner-merging-#{System.unique_integer([:positive])}"
+      )
+
+    try do
+      with_minimal_workspace(
+        test_root,
+        [
+          max_turns: 5,
+          tracker_active_states: ["Todo", "In Progress", "In Review", "Merging", "Rework"]
+        ],
+        fn _workspace_root ->
+          issue = issue("issue-merging", "AR-MERGING")
+
+          state_fetcher = fn [_issue_id] ->
+            {:ok, [Map.put(issue, :state, "Merging")]}
+          end
+
+          assert :ok =
+                   AgentRunner.run(issue, nil,
+                     coding_agent_adapter: FakeCodingAgent,
+                     issue_state_fetcher: state_fetcher
+                   )
+
+          assert Process.get(:agent_runner_fake_turn_n, 0) == 1
+        end
+      )
+    after
+      File.rm_rf(test_root)
+    end
+  end
+
   test "does not schedule another turn once max_turns is reached while issue stays active" do
     test_root =
       Path.join(
@@ -147,6 +217,41 @@ defmodule SymphonyElixir.AgentRunnerTest do
 
           n_turns = Process.get(:agent_runner_fake_turn_n, 0)
           assert n_turns == 3
+        end
+      )
+    after
+      File.rm_rf(test_root)
+    end
+  end
+
+  test "notifies recipient pid when run stops at max_turns while issue stays active" do
+    test_root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-agent-runner-max-notify-#{System.unique_integer([:positive])}"
+      )
+
+    try do
+      with_minimal_workspace(
+        test_root,
+        [max_turns: 2],
+        fn _workspace_root ->
+          issue = issue("issue-max-notify", "AR-MAX-NOTIFY")
+
+          state_fetcher = fn [_issue_id] ->
+            {:ok, [Map.put(issue, :state, "In Progress")]}
+          end
+
+          orchestrator = self()
+
+          assert :ok =
+                   AgentRunner.run(issue, orchestrator,
+                     coding_agent_adapter: FakeCodingAgent,
+                     max_turns: 2,
+                     issue_state_fetcher: state_fetcher
+                   )
+
+          assert_receive {:symphony_agent_run_outcome, "issue-max-notify", :max_turns_reached}
         end
       )
     after
