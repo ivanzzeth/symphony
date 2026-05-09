@@ -194,16 +194,24 @@ defmodule SymphonyElixir.ProjectSupervisor do
 
   @doc """
   Returns metadata for projects that are not stopped (`:running`, `:starting`, or `:error`).
+
+  Omits synthetic `:error` rows with no `workflow_path` (for example `startup_failure/2` on an id
+  that never called `begin_start/2`).
   """
   @spec list_projects() :: [Meta.row()]
   def list_projects do
     Meta.list_rows()
-    |> Enum.reject(&(&1.status == :stopped))
+    |> Enum.reject(fn
+      %{status: :stopped} -> true
+      %{status: :error, workflow_path: nil} -> true
+      _ -> false
+    end)
   end
 
   @doc """
   Marks a project as failed during startup or bootstrap without affecting other projects.
   """
+  @spec startup_failure(binary()) :: :ok
   @spec startup_failure(binary(), term()) :: :ok
   def startup_failure(project_id, reason \\ :startup_failure) when is_binary(project_id) do
     :ok = Meta.mark_error(project_id, reason)
