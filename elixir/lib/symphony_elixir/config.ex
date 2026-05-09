@@ -210,7 +210,8 @@ defmodule SymphonyElixir.Config do
   @spec observability() :: %{
           dashboard_enabled: boolean(),
           refresh_ms: pos_integer(),
-          render_interval_ms: pos_integer()
+          render_interval_ms: pos_integer(),
+          per_project_log_files: boolean()
         }
   def observability do
     process_config().observability

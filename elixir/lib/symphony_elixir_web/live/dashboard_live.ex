@@ -18,7 +18,7 @@ defmodule SymphonyElixirWeb.DashboardLive do
       |> assign(:now, DateTime.utc_now())
 
     if connected?(socket) do
-      :ok = ObservabilityPubSub.subscribe()
+      :ok = ObservabilityPubSub.subscribe(dashboard_observability_project_id())
       schedule_runtime_tick()
     end
 
@@ -293,6 +293,10 @@ defmodule SymphonyElixirWeb.DashboardLive do
             socket
         end
     end
+  end
+
+  defp dashboard_observability_project_id do
+    Application.get_env(:symphony_elixir, :primary_project_id) || "default"
   end
 
   defp orchestrator do

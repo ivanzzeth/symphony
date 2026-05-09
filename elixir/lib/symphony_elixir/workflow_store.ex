@@ -50,13 +50,6 @@ defmodule SymphonyElixir.WorkflowStore do
     alive_pid(pid)
   end
 
-  defp registry_alive? do
-    case Process.whereis(SymphonyElixir.ProjectProcessRegistry) do
-      pid when is_pid(pid) -> Process.alive?(pid)
-      _ -> false
-    end
-  end
-
   def whereis(name) when is_pid(name), do: alive_pid(name)
 
   def whereis({:via, Registry, _} = via) do
@@ -74,6 +67,13 @@ defmodule SymphonyElixir.WorkflowStore do
   def whereis(name) when is_atom(name) and name == __MODULE__, do: whereis(:auto)
 
   def whereis(name) when is_atom(name), do: alive_pid(Process.whereis(name))
+
+  defp registry_alive? do
+    case Process.whereis(SymphonyElixir.ProjectProcessRegistry) do
+      pid when is_pid(pid) -> Process.alive?(pid)
+      _ -> false
+    end
+  end
 
   defp alive_pid(pid) when is_pid(pid) do
     if node(pid) == node() and Process.alive?(pid), do: pid, else: nil
@@ -163,6 +163,10 @@ defmodule SymphonyElixir.WorkflowStore do
     path = effective_workflow_path_on_init(opts, opts_path)
     project_id = Keyword.get(opts, :project_id)
 
+    if is_binary(project_id) do
+      Logger.metadata(project_id: project_id)
+    end
+
     case load_state(path) do
       {:ok, state} ->
         state = %{state | project_id: project_id}
@@ -186,7 +190,7 @@ defmodule SymphonyElixir.WorkflowStore do
 
     case reload_state(state) do
       {:ok, new_state} ->
-        maybe_notify_workflow_changed(old_stamp, new_state.stamp)
+        maybe_notify_workflow_changed(old_stamp, new_state.stamp, new_state)
         {:reply, :ok, new_state}
 
       {:error, reason, new_state} ->
@@ -225,7 +229,7 @@ defmodule SymphonyElixir.WorkflowStore do
 
     case reload_state(state) do
       {:ok, new_state} ->
-        maybe_notify_workflow_changed(old_stamp, new_state.stamp)
+        maybe_notify_workflow_changed(old_stamp, new_state.stamp, new_state)
         {:noreply, new_state}
 
       {:error, _reason, new_state} ->
@@ -260,10 +264,20 @@ defmodule SymphonyElixir.WorkflowStore do
     end
   end
 
-  defp maybe_notify_workflow_changed(stamp, stamp), do: :ok
+  defp maybe_notify_workflow_changed(stamp, stamp, _state), do: :ok
 
-  defp maybe_notify_workflow_changed(_old_stamp, _new_stamp) do
-    _ = spawn(fn -> StatusDashboard.notify_update() end)
+  defp maybe_notify_workflow_changed(_old_stamp, _new_stamp, state) do
+    project_id =
+      case state.project_id do
+        id when is_binary(id) -> id
+        _ -> Application.get_env(:symphony_elixir, :primary_project_id) || "default"
+      end
+
+    _ =
+      spawn(fn ->
+        StatusDashboard.notify_update(SymphonyElixir.StatusDashboard, project_id: project_id)
+      end)
+
     :ok
   end
 

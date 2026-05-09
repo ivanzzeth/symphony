@@ -29,7 +29,8 @@ defmodule SymphonyElixir.ProcessConfig do
             observability: %{
               dashboard_enabled: @default_dashboard_enabled,
               refresh_ms: @default_refresh_ms,
-              render_interval_ms: @default_render_interval_ms
+              render_interval_ms: @default_render_interval_ms,
+              per_project_log_files: false
             },
             daemon: %{max_global_agents: nil},
             projects: []
@@ -39,7 +40,8 @@ defmodule SymphonyElixir.ProcessConfig do
           observability: %{
             dashboard_enabled: boolean(),
             refresh_ms: pos_integer(),
-            render_interval_ms: pos_integer()
+            render_interval_ms: pos_integer(),
+            per_project_log_files: boolean()
           },
           daemon: %{max_global_agents: pos_integer() | nil},
           projects: [Schema.DaemonProject.t()]
@@ -221,7 +223,8 @@ defmodule SymphonyElixir.ProcessConfig do
       observability: %{
         dashboard_enabled: resolve_dashboard_enabled(yaml_config),
         refresh_ms: resolve_refresh_ms(yaml_config),
-        render_interval_ms: resolve_render_interval_ms(yaml_config)
+        render_interval_ms: resolve_render_interval_ms(yaml_config),
+        per_project_log_files: resolve_per_project_log_files(yaml_config)
       },
       daemon: %{
         max_global_agents: resolve_daemon_max_global_agents(yaml_config)
@@ -280,6 +283,13 @@ defmodule SymphonyElixir.ProcessConfig do
     case get_in(yaml_config, ["observability", "render_interval_ms"]) do
       val when is_integer(val) and val > 0 -> val
       _ -> @default_render_interval_ms
+    end
+  end
+
+  defp resolve_per_project_log_files(yaml_config) when is_map(yaml_config) do
+    case get_in(yaml_config, ["observability", "per_project_log_files"]) do
+      val when is_boolean(val) -> val
+      _ -> false
     end
   end
 

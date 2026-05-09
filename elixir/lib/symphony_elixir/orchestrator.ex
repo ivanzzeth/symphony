@@ -118,6 +118,10 @@ defmodule SymphonyElixir.Orchestrator do
         Workspace.reconcile_all_symlinks()
         state = schedule_tick(state, 0)
 
+        if is_binary(state.project_id) do
+          Logger.metadata(project_id: state.project_id)
+        end
+
         {:ok, state}
 
       {:error, reason} ->
@@ -175,7 +179,7 @@ defmodule SymphonyElixir.Orchestrator do
         tick_token: nil
     }
 
-    notify_dashboard()
+    notify_dashboard(state)
     :ok = schedule_poll_cycle_start()
     {:noreply, state}
   end
@@ -193,7 +197,7 @@ defmodule SymphonyElixir.Orchestrator do
         tick_token: nil
     }
 
-    notify_dashboard()
+    notify_dashboard(state)
     :ok = schedule_poll_cycle_start()
     {:noreply, state}
   end
@@ -204,7 +208,7 @@ defmodule SymphonyElixir.Orchestrator do
     state = schedule_tick(state, state.poll_interval_ms)
     state = %{state | poll_check_in_progress: false}
 
-    notify_dashboard()
+    notify_dashboard(state)
     {:noreply, state}
   end
 
@@ -268,7 +272,7 @@ defmodule SymphonyElixir.Orchestrator do
 
         Logger.info("Agent task finished for issue_id=#{issue_id} session_id=#{session_id} reason=#{inspect(reason)}")
 
-        notify_dashboard()
+        notify_dashboard(state)
         {:noreply, state}
     end
   end
@@ -285,7 +289,7 @@ defmodule SymphonyElixir.Orchestrator do
           |> maybe_put_runtime_value(:worker_host, runtime_info[:worker_host])
           |> maybe_put_runtime_value(:workspace_path, runtime_info[:workspace_path])
 
-        notify_dashboard()
+        notify_dashboard(state)
         {:noreply, %{state | running: Map.put(running, issue_id, updated_running_entry)}}
     end
   end
@@ -306,7 +310,7 @@ defmodule SymphonyElixir.Orchestrator do
           |> apply_codex_token_delta(token_delta)
           |> apply_codex_rate_limits(update)
 
-        notify_dashboard()
+        notify_dashboard(state)
         {:noreply, %{state | running: Map.put(running, issue_id, updated_running_entry)}}
     end
   end
@@ -320,7 +324,7 @@ defmodule SymphonyElixir.Orchestrator do
         :missing -> {:noreply, state}
       end
 
-    notify_dashboard()
+    notify_dashboard(state)
     result
   end
 
@@ -1158,8 +1162,14 @@ defmodule SymphonyElixir.Orchestrator do
   defp restore_workflow_context(store),
     do: SymphonyElixir.Config.Context.put_workflow_store(store)
 
-  defp notify_dashboard do
-    StatusDashboard.notify_update()
+  defp notify_dashboard(%State{} = state) do
+    topic_id =
+      case state.project_id do
+        id when is_binary(id) -> id
+        _ -> Application.get_env(:symphony_elixir, :primary_project_id) || "default"
+      end
+
+    StatusDashboard.notify_update(__MODULE__, project_id: topic_id)
   end
 
   defp handle_active_retry(state, issue, attempt, metadata) do
