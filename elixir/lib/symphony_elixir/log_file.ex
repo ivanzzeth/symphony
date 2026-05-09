@@ -134,10 +134,11 @@ defmodule SymphonyElixir.LogFile do
 
   defp disk_log_handler_config(path, max_bytes, max_files) do
     # `Logger.Formatter.new/1` returns `{Logger.Formatter, %Logger.Formatter{}}` for OTP handlers.
-    formatter = Logger.Formatter.new(
-      format: "$time $metadata[$level] $message\n",
-      metadata: [:project_id]
-    )
+    formatter =
+      Logger.Formatter.new(
+        format: "$time $metadata[$level] $message\n",
+        metadata: [:project_id]
+      )
 
     %{
       level: :all,

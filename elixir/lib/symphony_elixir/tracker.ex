@@ -8,6 +8,7 @@ defmodule SymphonyElixir.Tracker do
   @callback fetch_candidate_issues() :: {:ok, [term()]} | {:error, term()}
   @callback fetch_issues_by_states([String.t()]) :: {:ok, [term()]} | {:error, term()}
   @callback fetch_issue_states_by_ids([String.t()]) :: {:ok, [term()]} | {:error, term()}
+  @callback fetch_issue_by_identifier(String.t(), keyword()) :: {:ok, term()} | {:error, term()}
   @callback create_comment(String.t(), String.t()) :: :ok | {:error, term()}
   @callback update_issue_state(String.t(), String.t()) :: :ok | {:error, term()}
 
@@ -24,6 +25,11 @@ defmodule SymphonyElixir.Tracker do
   @spec fetch_issue_states_by_ids([String.t()], keyword()) :: {:ok, [term()]} | {:error, term()}
   def fetch_issue_states_by_ids(issue_ids, opts \\ []) when is_list(issue_ids) and is_list(opts) do
     adapter(opts).fetch_issue_states_by_ids(issue_ids)
+  end
+
+  @spec fetch_issue_by_identifier(String.t(), keyword()) :: {:ok, term()} | {:error, term()}
+  def fetch_issue_by_identifier(identifier, opts \\ []) when is_binary(identifier) and is_list(opts) do
+    adapter(opts).fetch_issue_by_identifier(identifier, opts)
   end
 
   @spec create_comment(String.t(), String.t(), keyword()) :: :ok | {:error, term()}

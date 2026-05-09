@@ -3,7 +3,7 @@ defmodule SymphonyElixirWeb.Presenter do
   Shared projections for the observability API and dashboard.
   """
 
-  alias SymphonyElixir.{CodingAgent, Config, Orchestrator, StatusDashboard}
+  alias SymphonyElixir.{CodingAgent, Config, Orchestrator, ProjectSupervisor.Meta, StatusDashboard}
 
   @spec state_payload(GenServer.name(), timeout()) :: map()
   def state_payload(orchestrator, snapshot_timeout_ms) do
@@ -45,6 +45,65 @@ defmodule SymphonyElixirWeb.Presenter do
         %{generated_at: generated_at, error: %{code: "snapshot_unavailable", message: "Snapshot unavailable"}}
     end
   end
+
+  @spec projects_payload(timeout()) :: map()
+  def projects_payload(snapshot_timeout_ms) do
+    generated_at = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+    rows = Meta.list_rows()
+    rows = if rows == [], do: fallback_projects_rows(), else: rows
+
+    projects =
+      Enum.map(rows, fn row ->
+        %{
+          project_id: row.project_id,
+          status: row.status,
+          workflow_path: row.workflow_path,
+          counts: project_agent_counts(row.orchestrator_pid, snapshot_timeout_ms)
+        }
+      end)
+
+    %{generated_at: generated_at, projects: projects}
+  end
+
+  defp fallback_projects_rows do
+    case Orchestrator.whereis() do
+      pid when is_pid(pid) ->
+        id = Application.get_env(:symphony_elixir, :primary_project_id) || "default"
+
+        [
+          %{
+            project_id: id,
+            status: :running,
+            workflow_path: nil,
+            tree_pid: nil,
+            orchestrator_pid: pid,
+            error_reason: nil,
+            updated_at: DateTime.utc_now(:microsecond)
+          }
+        ]
+
+      _ ->
+        []
+    end
+  end
+
+  defp project_agent_counts(pid, timeout) when is_pid(pid) do
+    case Orchestrator.snapshot(pid, timeout) do
+      %{} = snap ->
+        %{
+          running: length(snap.running),
+          retrying: length(snap.retrying),
+          completed: Map.get(snap, :completed, 0)
+        }
+
+      _ ->
+        zero_agent_counts()
+    end
+  end
+
+  defp project_agent_counts(_, _), do: zero_agent_counts()
+
+  defp zero_agent_counts, do: %{running: 0, retrying: 0, completed: 0}
 
   @spec project_state_payload(String.t(), GenServer.name(), timeout()) :: map()
   def project_state_payload(project_id, orchestrator, snapshot_timeout_ms)
