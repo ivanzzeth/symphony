@@ -15,7 +15,7 @@ defmodule SymphonyElixir.Config.Schema do
 
   require Logger
 
-  alias SymphonyElixir.{PathSafety, Rescue}
+  alias SymphonyElixir.{PathSafety, Rescue, Workflow}
 
   @primary_key false
 
@@ -283,6 +283,18 @@ defmodule SymphonyElixir.Config.Schema do
       |> cast(attrs, [:port, :host], empty_values: [])
       |> validate_number(:port, greater_than_or_equal_to: 0)
     end
+  end
+
+  defmodule DaemonProject do
+    @moduledoc false
+    @enforce_keys [:id, :workflow_path, :enabled]
+    defstruct @enforce_keys
+
+    @type t :: %__MODULE__{
+            id: String.t(),
+            workflow_path: String.t(),
+            enabled: boolean()
+          }
   end
 
   embedded_schema do
@@ -669,4 +681,179 @@ defmodule SymphonyElixir.Config.Schema do
 
   defp error_value_to_string(value) when is_atom(value), do: Atom.to_string(value)
   defp error_value_to_string(value), do: inspect(value)
+
+  @doc """
+  Parses and validates optional `projects` from daemon-level `symphony.yaml`
+  (SPEC V1.2 Appendix B.2).
+
+  Each map entry uses the YAML key as `project_id` and expects `workflow` (path
+  to `WORKFLOW.md`) and optional `enabled` (default `true`).
+
+  Returns `{:ok, []}` when `projects` is absent or empty. Emits a warning when
+  multiple projects resolve to the same workspace root.
+  """
+  @spec parse_symphony_projects(map(), keyword()) ::
+          {:ok, [DaemonProject.t()]} | {:error, String.t()}
+  def parse_symphony_projects(yaml_config, opts \\ []) when is_map(yaml_config) do
+    base_dir = Keyword.get(opts, :config_base_dir) || File.cwd!()
+    projects_raw = Map.get(yaml_config, "projects") || Map.get(yaml_config, :projects)
+
+    cond do
+      is_nil(projects_raw) ->
+        {:ok, []}
+
+      projects_raw == %{} ->
+        {:ok, []}
+
+      not is_map(projects_raw) ->
+        {:error, "projects must be a mapping of project_id -> {workflow, enabled}"}
+
+      true ->
+        projects_raw
+        |> Enum.sort_by(fn {k, _} -> to_string(k) end)
+        |> project_rows_from_entries(base_dir)
+        |> case do
+          {:ok, rows} ->
+            warn_workspace_root_collisions(rows)
+
+            {:ok,
+             Enum.map(rows, fn row ->
+               %DaemonProject{
+                 id: row.id,
+                 workflow_path: row.workflow_path,
+                 enabled: row.enabled
+               }
+             end)}
+
+          {:error, _} = err ->
+            err
+        end
+    end
+  end
+
+  defp project_rows_from_entries(entries, base_dir) do
+    Enum.reduce_while(entries, {:ok, []}, fn {raw_id, entry}, {:ok, acc} ->
+      project_id = to_string(raw_id)
+
+      cond do
+        String.trim(project_id) == "" ->
+          {:halt, {:error, "projects contains an empty project_id key"}}
+
+        not is_map(entry) ->
+          {:halt, {:error, "project #{inspect(project_id)}: entry must be a mapping with workflow (and optional enabled)"}}
+
+        true ->
+          workflow_rel = Map.get(entry, "workflow") || Map.get(entry, :workflow)
+
+          if not is_binary(workflow_rel) or String.trim(workflow_rel) == "" do
+            {:halt, {:error, "project #{project_id}: workflow must be a non-empty string path"}}
+          else
+            case parse_symphony_project_enabled(entry, project_id) do
+              {:error, msg} ->
+                {:halt, {:error, msg}}
+
+              {:ok, enabled} ->
+                workflow_abs = Path.expand(String.trim(workflow_rel), base_dir)
+
+                cond do
+                  not File.regular?(workflow_abs) ->
+                    {:halt, {:error, "project #{project_id}: workflow file not found at #{workflow_abs}"}}
+
+                  true ->
+                    case Workflow.load(workflow_abs) do
+                      {:ok, %{config: wf_config}} ->
+                        workflow_dir = Path.dirname(workflow_abs)
+                        root = resolve_collision_workspace_root(wf_config, workflow_dir)
+
+                        canon =
+                          case PathSafety.canonicalize(root) do
+                            {:ok, c} -> c
+                            {:error, _} -> root
+                          end
+
+                        row = %{
+                          id: project_id,
+                          workflow_path: workflow_abs,
+                          enabled: enabled,
+                          canonical_workspace_root: canon
+                        }
+
+                        {:cont, {:ok, [row | acc]}}
+
+                      {:error, reason} ->
+                        {:halt, {:error, "project #{project_id}: #{format_workflow_load_error(reason)}"}}
+                    end
+                end
+            end
+          end
+      end
+    end)
+    |> case do
+      {:ok, rows} -> {:ok, Enum.reverse(rows)}
+      {:error, _} = err -> err
+    end
+  end
+
+  defp parse_symphony_project_enabled(entry, project_id) do
+    key_result =
+      case Map.fetch(entry, "enabled") do
+        {:ok, val} -> {:ok, val}
+        :error -> Map.fetch(entry, :enabled)
+      end
+
+    case key_result do
+      :error ->
+        {:ok, true}
+
+      {:ok, val} ->
+        case val do
+          true -> {:ok, true}
+          false -> {:ok, false}
+          other -> {:error, "project #{project_id}: enabled must be a boolean, got: #{inspect(other)}"}
+        end
+    end
+  end
+
+  defp resolve_collision_workspace_root(wf_config, workflow_dir) do
+    ws = Map.get(wf_config, "workspace") || Map.get(wf_config, :workspace) || %{}
+    root = Map.get(ws, "root") || Map.get(ws, :root)
+
+    default_root = Path.join(System.tmp_dir!(), "symphony_workspaces")
+
+    cond do
+      is_binary(root) and String.trim(root) != "" ->
+        Path.expand(String.trim(root), workflow_dir)
+
+      true ->
+        Path.expand(default_root)
+    end
+  end
+
+  defp format_workflow_load_error({:missing_workflow_file, path, reason}) do
+    "failed to read workflow #{path}: #{inspect(reason)}"
+  end
+
+  defp format_workflow_load_error(:workflow_front_matter_not_a_map) do
+    "workflow front matter must decode to a YAML mapping"
+  end
+
+  defp format_workflow_load_error({:workflow_parse_error, reason}) do
+    "failed to parse workflow YAML front matter: #{inspect(reason)}"
+  end
+
+  defp format_workflow_load_error(other) do
+    "failed to load workflow: #{inspect(other)}"
+  end
+
+  defp warn_workspace_root_collisions(rows) do
+    rows
+    |> Enum.group_by(& &1.canonical_workspace_root)
+    |> Enum.each(fn {root, group} ->
+      if length(group) > 1 do
+        ids = group |> Enum.map(& &1.id) |> Enum.sort() |> Enum.join(", ")
+
+        Logger.warning("[symphony.yaml] workspace.root collision: multiple projects share root #{inspect(root)} (#{ids})")
+      end
+    end)
+  end
 end

@@ -22,8 +22,14 @@ defmodule SymphonyElixir.ProcessConfig.Store do
   @impl true
   def init(opts) do
     cli_config_arg = Keyword.get(opts, :config_arg) || Application.get_env(:symphony_elixir, :config_arg)
-    {:ok, config} = ProcessConfig.load(cli_config_arg, skip_overrides: true)
-    {:ok, config}
+
+    case ProcessConfig.load(cli_config_arg, skip_overrides: true) do
+      {:ok, config} ->
+        {:ok, config}
+
+      {:error, reason} ->
+        {:stop, reason}
+    end
   end
 
   @impl true

@@ -18,6 +18,8 @@ defmodule SymphonyElixir.ProcessConfig do
 
   require Logger
 
+  alias SymphonyElixir.Config.Schema
+
   @default_host "127.0.0.1"
   @default_dashboard_enabled true
   @default_refresh_ms 1_000
@@ -28,7 +30,8 @@ defmodule SymphonyElixir.ProcessConfig do
               dashboard_enabled: @default_dashboard_enabled,
               refresh_ms: @default_refresh_ms,
               render_interval_ms: @default_render_interval_ms
-            }
+            },
+            projects: []
 
   @type t :: %__MODULE__{
           server: %{port: non_neg_integer() | nil, host: String.t()},
@@ -36,7 +39,8 @@ defmodule SymphonyElixir.ProcessConfig do
             dashboard_enabled: boolean(),
             refresh_ms: pos_integer(),
             render_interval_ms: pos_integer()
-          }
+          },
+          projects: [Schema.DaemonProject.t()]
         }
 
   @doc """
@@ -59,7 +63,21 @@ defmodule SymphonyElixir.ProcessConfig do
   def load(cli_config_arg \\ nil, opts \\ []) do
     path = config_path(cli_config_arg)
     yaml_config = load_yaml_config(path)
-    {:ok, merge_with_defaults(yaml_config, opts)}
+    base_dir = config_base_dir_for_projects(path)
+
+    case Schema.parse_symphony_projects(yaml_config, config_base_dir: base_dir) do
+      {:error, message} ->
+        {:error, {:invalid_symphony_yaml, message}}
+
+      {:ok, projects} ->
+        {:ok, merge_with_defaults(yaml_config, opts, projects)}
+    end
+  end
+
+  defp config_base_dir_for_projects(nil), do: File.cwd!()
+
+  defp config_base_dir_for_projects(path) when is_binary(path) do
+    path |> Path.expand() |> Path.dirname()
   end
 
   @doc false
@@ -84,7 +102,7 @@ defmodule SymphonyElixir.ProcessConfig do
     end
   end
 
-  defp merge_with_defaults(yaml_config, opts) when is_map(yaml_config) do
+  defp merge_with_defaults(yaml_config, opts, projects) when is_map(yaml_config) do
     %__MODULE__{
       server: %{
         port: resolve_port(yaml_config, opts),
@@ -94,7 +112,8 @@ defmodule SymphonyElixir.ProcessConfig do
         dashboard_enabled: resolve_dashboard_enabled(yaml_config),
         refresh_ms: resolve_refresh_ms(yaml_config),
         render_interval_ms: resolve_render_interval_ms(yaml_config)
-      }
+      },
+      projects: projects
     }
   end
 

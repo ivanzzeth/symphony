@@ -1,6 +1,8 @@
 defmodule SymphonyElixir.ProcessConfigTest do
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
+
   alias SymphonyElixir.ProcessConfig
 
   setup do
@@ -30,11 +32,13 @@ defmodule SymphonyElixir.ProcessConfigTest do
       assert config.observability.dashboard_enabled == true
       assert config.observability.refresh_ms == 1_000
       assert config.observability.render_interval_ms == 16
+      assert config.projects == []
     end
 
     test "returns defaults when nil path is given" do
       assert {:ok, config} = ProcessConfig.load(nil)
       assert config.server.host == "127.0.0.1"
+      assert config.projects == []
     end
   end
 
@@ -81,6 +85,7 @@ defmodule SymphonyElixir.ProcessConfigTest do
 
       assert {:ok, config} = ProcessConfig.load(tmp_yaml)
       assert config.server.host == "127.0.0.1"
+      assert config.projects == []
     end
   end
 
@@ -182,10 +187,12 @@ defmodule SymphonyElixir.ProcessConfigTest do
       previous_cfg = System.get_env("SYMPHONY_CONFIG_PATH")
       System.put_env("SYMPHONY_CONFIG_PATH", "/nonexistent/symphony-for-test.yaml")
       original_store_state = save_and_replace_store_with_defaults()
+
       on_exit(fn ->
         restore_env("SYMPHONY_CONFIG_PATH", previous_cfg)
         restore_store_state(original_store_state)
       end)
+
       :ok
     end
 
@@ -229,10 +236,12 @@ defmodule SymphonyElixir.ProcessConfigTest do
       previous_cfg = System.get_env("SYMPHONY_CONFIG_PATH")
       System.put_env("SYMPHONY_CONFIG_PATH", "/nonexistent/symphony-for-test.yaml")
       original_store_state = save_and_replace_store_with_defaults()
+
       on_exit(fn ->
         restore_env("SYMPHONY_CONFIG_PATH", previous_cfg)
         restore_store_state(original_store_state)
       end)
+
       :ok
     end
 
@@ -272,20 +281,26 @@ defmodule SymphonyElixir.ProcessConfigTest do
 
   defp save_and_replace_store_with_defaults do
     store_pid = Process.whereis(SymphonyElixir.ProcessConfig.Store)
+
     if store_pid do
       original = :sys.get_state(store_pid)
+
       defaults = %SymphonyElixir.ProcessConfig{
         server: %{port: nil, host: "127.0.0.1"},
-        observability: %{dashboard_enabled: true, refresh_ms: 1_000, render_interval_ms: 16}
+        observability: %{dashboard_enabled: true, refresh_ms: 1_000, render_interval_ms: 16},
+        projects: []
       }
+
       :sys.replace_state(store_pid, fn _state -> defaults end)
       original
     end
   end
 
   defp restore_store_state(nil), do: :ok
+
   defp restore_store_state(%{} = state) do
     store_pid = Process.whereis(SymphonyElixir.ProcessConfig.Store)
+
     if store_pid do
       :sys.replace_state(store_pid, fn _state -> state end)
     end
@@ -293,4 +308,165 @@ defmodule SymphonyElixir.ProcessConfigTest do
 
   defp restore_env(key, nil), do: System.delete_env(key)
   defp restore_env(key, value), do: System.put_env(key, value)
+
+  defp yaml_trim(heredoc) when is_binary(heredoc), do: String.trim_leading(heredoc)
+
+  describe "load/1 projects (multi-project symphony.yaml)" do
+    test "parses enabled projects with workflow paths relative to config file" do
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "symphony-mp-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(dir)
+
+      wf_a = Path.join(dir, "WORKFLOW_A.md")
+      wf_b = Path.join(dir, "WORKFLOW_B.md")
+      ws_a = Path.join(dir, "workspace_a")
+      ws_b = Path.join(dir, "workspace_b")
+      File.mkdir_p!(ws_a)
+      File.mkdir_p!(ws_b)
+
+      write_min_workflow!(wf_a, ws_a)
+      write_min_workflow!(wf_b, ws_b)
+
+      yaml_path = Path.join(dir, "symphony.yaml")
+
+      File.write!(
+        yaml_path,
+        yaml_trim("""
+        projects:
+          alpha:
+            workflow: WORKFLOW_A.md
+          beta:
+            workflow: WORKFLOW_B.md
+            enabled: false
+        """)
+      )
+
+      on_exit(fn -> File.rm_rf(dir) end)
+
+      assert {:ok, config} = ProcessConfig.load(yaml_path)
+      assert [p1, p2] = Enum.sort_by(config.projects, & &1.id)
+      assert p1.id == "alpha"
+      assert p1.workflow_path == wf_a
+      assert p1.enabled == true
+      assert p2.id == "beta"
+      assert p2.workflow_path == wf_b
+      assert p2.enabled == false
+    end
+
+    test "returns error when workflow file is missing" do
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "symphony-mp-missing-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(dir)
+      yaml_path = Path.join(dir, "symphony.yaml")
+
+      File.write!(
+        yaml_path,
+        yaml_trim("""
+        projects:
+          only:
+            workflow: ./nope.md
+        """)
+      )
+
+      on_exit(fn -> File.rm_rf(dir) end)
+
+      assert {:error, {:invalid_symphony_yaml, msg}} = ProcessConfig.load(yaml_path)
+      assert msg =~ "workflow file not found"
+    end
+
+    test "returns error when enabled has wrong type" do
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "symphony-mp-bool-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(dir)
+      wf = Path.join(dir, "W.md")
+      write_min_workflow!(wf, Path.join(dir, "ws"))
+      yaml_path = Path.join(dir, "symphony.yaml")
+
+      File.write!(
+        yaml_path,
+        yaml_trim("""
+        projects:
+          bad:
+            workflow: W.md
+            enabled: "yes"
+        """)
+      )
+
+      on_exit(fn -> File.rm_rf(dir) end)
+
+      assert {:error, {:invalid_symphony_yaml, msg}} = ProcessConfig.load(yaml_path)
+      assert msg =~ "enabled must be a boolean"
+    end
+
+    test "warns when two projects share the same resolved workspace.root" do
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "symphony-mp-coll-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(dir)
+      shared = Path.join(dir, "same_ws")
+      File.mkdir_p!(shared)
+
+      wf1 = Path.join(dir, "WF1.md")
+      wf2 = Path.join(dir, "WF2.md")
+      write_min_workflow!(wf1, shared)
+      write_min_workflow!(wf2, shared)
+
+      yaml_path = Path.join(dir, "symphony.yaml")
+
+      File.write!(
+        yaml_path,
+        yaml_trim("""
+        projects:
+          one:
+            workflow: WF1.md
+          two:
+            workflow: WF2.md
+        """)
+      )
+
+      on_exit(fn -> File.rm_rf(dir) end)
+
+      log =
+        capture_log(fn ->
+          assert {:ok, config} = ProcessConfig.load(yaml_path)
+          assert length(config.projects) == 2
+        end)
+
+      assert log =~ "workspace.root collision"
+      assert log =~ "one"
+      assert log =~ "two"
+    end
+  end
+
+  defp write_min_workflow!(path, workspace_root) when is_binary(workspace_root) do
+    root_esc = String.replace(workspace_root, "\\", "/")
+
+    File.write!(path, """
+    ---
+    workspace:
+      root: "#{root_esc}"
+    agent:
+      command: cursor --model auto
+    tracker:
+      kind: memory
+    ---
+
+    test prompt
+    """)
+  end
 end
