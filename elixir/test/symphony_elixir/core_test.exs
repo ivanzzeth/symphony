@@ -113,6 +113,7 @@ defmodule SymphonyElixir.CoreTest do
 
     before_remove = Map.get(hooks, "before_remove")
     assert is_binary(before_remove)
+    assert String.trim(before_remove) =~ "if [ -d elixir ]"
     assert String.trim(before_remove) =~ "mix workspace.before_remove"
 
     refute Map.has_key?(hooks, "before_run")

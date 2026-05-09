@@ -270,20 +270,26 @@ defmodule SymphonyElixirWeb.DashboardLive do
   defp maybe_refresh_coding_agent(socket) do
     payload = socket.assigns.payload
 
-    cond do
-      match?(%{error: _}, payload) ->
+    case match?(%{error: _}, payload) do
+      true ->
         socket
 
-      true ->
-        kind = Config.settings!().agent.kind
-        label = CodingAgent.kind_display_label(kind)
+      false ->
+        case Config.settings() do
+          {:ok, config} ->
+            kind = config.agent.kind
+            label = CodingAgent.kind_display_label(kind)
 
-        case Map.get(payload, :agent) do
-          %{kind: ^kind, kind_label: ^label} ->
+            case Map.get(payload, :agent) do
+              %{kind: ^kind, kind_label: ^label} ->
+                socket
+
+              _ ->
+                assign(socket, :payload, Map.put(payload, :agent, %{kind: kind, kind_label: label}))
+            end
+
+          {:error, _} ->
             socket
-
-          _ ->
-            assign(socket, :payload, Map.put(payload, :agent, %{kind: kind, kind_label: label}))
         end
     end
   end

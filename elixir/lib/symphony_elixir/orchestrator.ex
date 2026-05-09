@@ -33,6 +33,7 @@ defmodule SymphonyElixir.Orchestrator do
       :poll_check_in_progress,
       :tick_timer_ref,
       :tick_token,
+      :coding_agent_kind,
       running: %{},
       completed: MapSet.new(),
       claimed: MapSet.new(),
@@ -62,7 +63,8 @@ defmodule SymphonyElixir.Orchestrator do
           tick_timer_ref: nil,
           tick_token: nil,
           codex_totals: @empty_codex_totals,
-          codex_rate_limits: nil
+          codex_rate_limits: nil,
+          coding_agent_kind: config.agent.kind
         }
 
         run_terminal_workspace_cleanup()
@@ -1233,7 +1235,7 @@ defmodule SymphonyElixir.Orchestrator do
         }
       end)
 
-    agent_kind = Config.settings!().agent.kind
+    agent_kind = state.coding_agent_kind || Config.settings!().agent.kind
 
     {:reply,
      %{
@@ -1395,7 +1397,8 @@ defmodule SymphonyElixir.Orchestrator do
         %{
           state
           | poll_interval_ms: config.polling.interval_ms,
-            max_concurrent_agents: config.agent.max_concurrent_agents
+            max_concurrent_agents: config.agent.max_concurrent_agents,
+            coding_agent_kind: config.agent.kind
         }
 
       {:error, reason} ->

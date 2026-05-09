@@ -1677,6 +1677,40 @@ defmodule SymphonyElixir.OrchestratorStatusTest do
     refute rendered =~ "Timestamp:"
   end
 
+  test "orchestrator snapshot includes coding_agent_kind from state" do
+    orchestrator_name = Module.concat(__MODULE__, :CodingAgentKindOrchestrator)
+    {:ok, pid} = Orchestrator.start_link(name: orchestrator_name)
+
+    on_exit(fn ->
+      if Process.alive?(pid) do
+        Process.exit(pid, :normal)
+      end
+    end)
+
+    snapshot = GenServer.call(pid, :snapshot)
+
+    assert %{coding_agent: %{kind: kind}} = snapshot
+    assert is_binary(kind)
+  end
+
+  test "orchestrator snapshot coding_agent fallback when state.coding_agent_kind is nil" do
+    orchestrator_name = Module.concat(__MODULE__, :CodingAgentFallbackOrch)
+    {:ok, pid} = Orchestrator.start_link(name: orchestrator_name)
+
+    on_exit(fn ->
+      if Process.alive?(pid) do
+        Process.exit(pid, :normal)
+      end
+    end)
+
+    initial_state = :sys.get_state(pid)
+    :sys.replace_state(pid, fn _ -> %{initial_state | coding_agent_kind: nil} end)
+
+    snapshot = GenServer.call(pid, :snapshot)
+    assert %{coding_agent: %{kind: kind}} = snapshot
+    assert is_binary(kind)
+  end
+
   defp wait_for_snapshot(pid, predicate, timeout_ms \\ 200) when is_function(predicate, 1) do
     deadline_ms = System.monotonic_time(:millisecond) + timeout_ms
     do_wait_for_snapshot(pid, predicate, deadline_ms)

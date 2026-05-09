@@ -26,7 +26,11 @@ hooks:
       cd elixir && mise trust && mise exec -- mix deps.get
     fi
   before_remove: |
-    cd elixir && mise exec -- mix workspace.before_remove
+    if [ -d elixir ]; then
+      cd elixir && mise exec -- mix workspace.before_remove
+    else
+      echo "elixir/ directory not found; skipping before_remove hook"
+    fi
 agent:
   kind: cursor
   max_concurrent_agents: 10
