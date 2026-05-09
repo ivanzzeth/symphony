@@ -52,27 +52,136 @@ defmodule SymphonyElixir.ProcessConfig do
   end
 
   @doc """
+  Merges repeated CLI `--project <project-id>.<field> <value>` overrides into a
+  raw `symphony.yaml` map (string keys under `projects`).
+  """
+  @spec apply_symphony_project_cli_overrides(map(), [{String.t(), String.t()}]) ::
+          {:ok, map()} | {:error, String.t()}
+  def apply_symphony_project_cli_overrides(yaml_config, pairs)
+      when is_map(yaml_config) and is_list(pairs) do
+    Enum.reduce_while(pairs, yaml_config, fn {dot_path, raw_value}, acc ->
+      case apply_symphony_project_cli_override(acc, dot_path, raw_value) do
+        {:ok, next} -> {:cont, next}
+        {:error, _} = err -> {:halt, err}
+      end
+    end)
+    |> case do
+      {:error, _} = err -> err
+      updated when is_map(updated) -> {:ok, updated}
+    end
+  end
+
+  @doc """
   Load and resolve the effective process config.
 
   ## Options
 
     * `:skip_overrides` — when `true`, skip Application env overrides for
       port/host (used by Store.init to keep state clean). Default: `false`.
+    * `:symphony_project_cli_overrides` — explicit `[{dot_path, value}]` list;
+      when omitted, uses `Application.get_env(:symphony_elixir, :symphony_project_overrides)`.
   """
   @spec load(String.t() | nil, keyword()) :: {:ok, t()} | {:error, term()}
   def load(cli_config_arg \\ nil, opts \\ []) do
     path = config_path(cli_config_arg)
     yaml_config = load_yaml_config(path)
-    base_dir = config_base_dir_for_projects(path)
 
-    case Schema.parse_symphony_projects(yaml_config, config_base_dir: base_dir) do
-      {:error, message} ->
-        {:error, {:invalid_symphony_yaml, message}}
+    overrides =
+      case Keyword.fetch(opts, :symphony_project_cli_overrides) do
+        {:ok, list} when is_list(list) -> list
+        :error -> Application.get_env(:symphony_elixir, :symphony_project_overrides) || []
+      end
 
-      {:ok, projects} ->
-        {:ok, merge_with_defaults(yaml_config, opts, projects)}
+    yaml_config =
+      case apply_symphony_project_cli_overrides(yaml_config, overrides) do
+        {:ok, merged} ->
+          merged
+
+        {:error, message} ->
+          {:error, {:invalid_symphony_yaml, "CLI --project: #{message}"}}
+      end
+
+    case yaml_config do
+      {:error, _} = err ->
+        err
+
+      yaml_config when is_map(yaml_config) ->
+        base_dir = config_base_dir_for_projects(path)
+
+        case Schema.parse_symphony_projects(yaml_config, config_base_dir: base_dir) do
+          {:error, message} ->
+            {:error, {:invalid_symphony_yaml, message}}
+
+          {:ok, projects} ->
+            {:ok, merge_with_defaults(yaml_config, opts, projects)}
+        end
     end
   end
+
+  defp apply_symphony_project_cli_override(yaml, dot_path, raw_value)
+       when is_map(yaml) and is_binary(dot_path) and is_binary(raw_value) do
+    segments =
+      dot_path
+      |> String.split(".")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    cond do
+      length(segments) != 2 ->
+        {:error,
+         "invalid path #{inspect(dot_path)}: expected <project-id>.<field> (example: service-a.workflow)"}
+
+      true ->
+        [project_id, field] = segments
+
+        if field not in ["workflow", "enabled"] do
+          {:error, "unknown field #{inspect(field)} in #{inspect(dot_path)}: use workflow or enabled"}
+        else
+          with {:ok, coerced} <- coerce_project_override_value(field, raw_value) do
+            projects_raw = Map.get(yaml, "projects") || Map.get(yaml, :projects)
+
+            projects =
+              cond do
+                is_nil(projects_raw) -> %{}
+                is_map(projects_raw) -> stringify_yaml_map_keys(projects_raw)
+                true -> %{}
+              end
+
+            entry = Map.get(projects, project_id, %{})
+            entry = if is_map(entry), do: stringify_yaml_map_keys(entry), else: %{}
+            entry = Map.put(entry, field, coerced)
+            projects = Map.put(projects, project_id, entry)
+            {:ok, Map.put(yaml, "projects", projects)}
+          end
+        end
+    end
+  end
+
+  defp stringify_yaml_map_keys(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {to_string(k), v} end)
+  end
+
+  defp coerce_project_override_value("workflow", raw) do
+    path = String.trim(raw)
+
+    if path == "" do
+      {:error, "workflow value must be a non-empty path"}
+    else
+      {:ok, path}
+    end
+  end
+
+  defp coerce_project_override_value("enabled", raw) do
+    t = String.trim(raw)
+
+    cond do
+      t in ["true", "True", "TRUE"] -> {:ok, true}
+      t in ["false", "False", "FALSE"] -> {:ok, false}
+      true -> {:error, "enabled must be true or false (got #{inspect(t)})"}
+    end
+  end
+
+  defp coerce_project_override_value(_, _), do: {:error, "internal: unknown field"}
 
   defp config_base_dir_for_projects(nil), do: File.cwd!()
 
