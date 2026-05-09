@@ -29,6 +29,7 @@ defmodule SymphonyElixir.Application do
       SymphonyElixir.ProcessConfig.Store,
       SymphonyElixir.WorkflowStore,
       SymphonyElixir.Harness.Manager,
+      SymphonyElixir.ProjectRegistry,
       SymphonyElixir.Orchestrator,
       SymphonyElixir.HttpServer,
       SymphonyElixir.StatusDashboard
