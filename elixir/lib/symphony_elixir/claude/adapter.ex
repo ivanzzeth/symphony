@@ -54,8 +54,7 @@ defmodule SymphonyElixir.Claude.Adapter do
     d_variant = (d &&& 0x3FFF) ||| 0x8000
     hex = Base.encode16(<<a::32, b::16, c_v4::16, d_variant::16, e::48>>, case: :lower)
 
-    <<p0::binary-size(8), p1::binary-size(4), p2::binary-size(4), p3::binary-size(4),
-      p4::binary-size(12)>> = hex
+    <<p0::binary-size(8), p1::binary-size(4), p2::binary-size(4), p3::binary-size(4), p4::binary-size(12)>> = hex
 
     "#{p0}-#{p1}-#{p2}-#{p3}-#{p4}"
   end

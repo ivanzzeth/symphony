@@ -7,7 +7,7 @@ defmodule SymphonyElixir.StatusDashboard do
   require Logger
 
   alias SymphonyElixir.{CodingAgent, Config, HttpServer, Rescue, TestEnv}
-  alias SymphonyElixir.Orchestrator
+  alias SymphonyElixir.{Orchestrator, ProjectAliases}
   alias SymphonyElixirWeb.ObservabilityPubSub
 
   @minimum_idle_rerender_ms 1_000
@@ -324,7 +324,7 @@ defmodule SymphonyElixir.StatusDashboard do
       {:ok, snapshot} ->
         %{running: running, retrying: retrying, codex_totals: codex_totals} = snapshot
         total_tokens = Map.get(codex_totals, :total_tokens, 0)
-        kind = Config.settings!().agent.kind
+        kind = Config.dashboard_settings!().agent.kind
 
         coding_agent =
           Map.get(snapshot, :coding_agent) ||
@@ -362,7 +362,7 @@ defmodule SymphonyElixir.StatusDashboard do
         codex_total_tokens = Map.get(codex_totals, :total_tokens, 0)
         codex_seconds_running = Map.get(codex_totals, :seconds_running, 0)
         agent_count = length(running)
-        max_agents = Config.settings!().agent.max_concurrent_agents
+        max_agents = Config.dashboard_settings!().agent.max_concurrent_agents
         coding_agent_label = coding_agent_label_for_snapshot(snapshot)
         running_event_width = running_event_width(terminal_columns_override)
         running_rows = format_running_rows(running, running_event_width)
@@ -403,7 +403,7 @@ defmodule SymphonyElixir.StatusDashboard do
 
       :error ->
         offline_label =
-          case Config.settings() do
+          case Config.dashboard_settings() do
             {:ok, settings} -> CodingAgent.kind_display_label(settings.agent.kind)
             {:error, _} -> "n/a"
           end
@@ -424,7 +424,7 @@ defmodule SymphonyElixir.StatusDashboard do
 
   defp format_project_link_lines do
     project_part =
-      case Config.settings!().tracker.project_slug do
+      case Config.dashboard_settings!().tracker.project_slug do
         project_slug when is_binary(project_slug) and project_slug != "" ->
           colorize(linear_project_url(project_slug), @ansi_cyan)
 
@@ -594,21 +594,23 @@ defmodule SymphonyElixir.StatusDashboard do
       _ ->
         case Map.get(snapshot, :coding_agent_kind) do
           kind when is_binary(kind) -> CodingAgent.kind_display_label(kind)
-          _ -> CodingAgent.kind_display_label(Config.settings!().agent.kind)
+          _ -> CodingAgent.kind_display_label(Config.dashboard_settings!().agent.kind)
         end
     end
   end
 
   defp snapshot_payload do
-    if Process.whereis(Orchestrator) do
-      case Orchestrator.snapshot() do
+    server = ProjectAliases.primary_orchestrator_name()
+
+    if orchestrator_registered?(server) do
+      case Orchestrator.snapshot(server, 15_000) do
         %{
           running: running,
           retrying: retrying,
           codex_totals: codex_totals
         } = snapshot
         when is_list(running) and is_list(retrying) ->
-          kind = Config.settings!().agent.kind
+          kind = Config.dashboard_settings!().agent.kind
 
           coding_agent =
             Map.get(snapshot, :coding_agent) ||
@@ -629,6 +631,19 @@ defmodule SymphonyElixir.StatusDashboard do
       end
     else
       :error
+    end
+  end
+
+  defp orchestrator_registered?(server) do
+    case server do
+      {:via, Registry, {reg, key}} ->
+        Registry.lookup(reg, key) != []
+
+      pid when is_pid(pid) ->
+        Process.alive?(pid)
+
+      mod when is_atom(mod) ->
+        Process.whereis(mod) != nil
     end
   end
 

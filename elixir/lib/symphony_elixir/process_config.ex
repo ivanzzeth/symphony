@@ -128,8 +128,7 @@ defmodule SymphonyElixir.ProcessConfig do
 
     cond do
       length(segments) != 2 ->
-        {:error,
-         "invalid path #{inspect(dot_path)}: expected <project-id>.<field> (example: service-a.workflow)"}
+        {:error, "invalid path #{inspect(dot_path)}: expected <project-id>.<field> (example: service-a.workflow)"}
 
       true ->
         [project_id, field] = segments
