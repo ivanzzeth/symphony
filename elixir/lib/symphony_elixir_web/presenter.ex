@@ -112,6 +112,31 @@ defmodule SymphonyElixirWeb.Presenter do
     |> Map.put(:project_id, project_id)
   end
 
+  @doc """
+  Sums running / retrying / completed counts across per-project dashboard payloads.
+
+  Ignores entries that are not successful state snapshots (missing `:counts`).
+  """
+  @spec global_agent_totals_from_project_states(%{optional(String.t()) => map()}) :: %{
+          running: non_neg_integer(),
+          retrying: non_neg_integer(),
+          completed: non_neg_integer()
+        }
+  def global_agent_totals_from_project_states(states) when is_map(states) do
+    Enum.reduce(states, %{running: 0, retrying: 0, completed: 0}, fn
+      {_id, %{counts: %{running: r, retrying: rt, completed: c}}}, acc
+      when is_integer(r) and is_integer(rt) and is_integer(c) ->
+        %{
+          running: acc.running + r,
+          retrying: acc.retrying + rt,
+          completed: acc.completed + c
+        }
+
+      _, acc ->
+        acc
+    end)
+  end
+
   @spec issue_payload(String.t(), GenServer.name(), timeout()) :: {:ok, map()} | {:error, :issue_not_found}
   def issue_payload(issue_identifier, orchestrator, snapshot_timeout_ms) when is_binary(issue_identifier) do
     case Orchestrator.snapshot(orchestrator, snapshot_timeout_ms) do
