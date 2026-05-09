@@ -103,6 +103,7 @@ defmodule SymphonyElixir.ProjectSupervisor do
       {:ok, tree_pid} ->
         case await_orchestrator_pid(project_id, @orch_poll_attempts, @orch_poll_interval_ms) do
           {:ok, orch_pid} ->
+            :ok = ProjectRegistry.register(project_id, orch_pid)
             :ok = Meta.mark_running(project_id, tree_pid, orch_pid)
             :ok = Meta.monitor_tree(project_id, tree_pid)
             maybe_register_primary(project_id)
@@ -203,7 +204,6 @@ defmodule SymphonyElixir.ProjectSupervisor do
   @doc """
   Marks a project as failed during startup or bootstrap without affecting other projects.
   """
-  @spec startup_failure(binary()) :: :ok
   @spec startup_failure(binary(), term()) :: :ok
   def startup_failure(project_id, reason \\ :startup_failure) when is_binary(project_id) do
     :ok = Meta.mark_error(project_id, reason)
