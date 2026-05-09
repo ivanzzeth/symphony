@@ -1,7 +1,9 @@
 defmodule SymphonyElixir.ProjectRegistry do
   @moduledoc """
-  Registry mapping `project_id` (binary) to the project’s root process pid
-  (the `SymphonyElixir.Project.Tree` supervisor, registered by `ProjectSupervisor` on successful `start_project/1`).
+  Registry mapping `project_id` (binary) to the **orchestrator** pid for that project.
+
+  The orchestrator is registered on tree start (`ProjectSupervisor.start_project/1` and
+  `Orchestrator.init/1` when `project_id` is set).
 
   Backed by a protected ETS `:set` table owned by this GenServer so inserts/deletes
   are serialized while lookups remain fast via `GenServer.call/3`.

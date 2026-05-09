@@ -192,19 +192,12 @@ defmodule SymphonyElixir.ProjectSupervisor do
   end
 
   @doc """
-  Returns metadata for active projects (not `:stopped`): `:running`, `:starting`, or `:error`.
-
-  Rows with `:error` and no `workflow_path` are omitted — they represent synthetic failures
-  (for example `startup_failure/2` on an id that never began startup).
+  Returns metadata for projects that are not stopped (`:running`, `:starting`, or `:error`).
   """
   @spec list_projects() :: [Meta.row()]
   def list_projects do
     Meta.list_rows()
-    |> Enum.reject(fn
-      %{status: :stopped} -> true
-      %{status: :error, workflow_path: nil} -> true
-      _ -> false
-    end)
+    |> Enum.reject(&(&1.status == :stopped))
   end
 
   @doc """
