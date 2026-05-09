@@ -42,8 +42,21 @@ defmodule SymphonyElixir.Project.Tree do
     orch_via = {:via, Registry, {reg, {project_id, :orchestrator}}}
     tracker_via = {:via, Registry, {reg, {project_id, :tracker}}}
 
+    # When this tree's workflow file is exactly the application-resolved path, omit
+    # `:workflow_file_path` so `WorkflowStore` follows `Workflow.workflow_file_path/0`
+    # across `Supervisor.restart_child/2` (tests and CLI move the canonical path via env).
+    app_wf = SymphonyElixir.Workflow.workflow_file_path() |> Path.expand()
+
+    ws_opts =
+      [name: ws_via, project_id: project_id] ++
+        if wf_path == app_wf do
+          []
+        else
+          [workflow_file_path: wf_path]
+        end
+
     children = [
-      {SymphonyElixir.WorkflowStore, name: ws_via, workflow_file_path: wf_path, project_id: project_id},
+      Supervisor.child_spec({SymphonyElixir.WorkflowStore, ws_opts}, restart: :transient),
       {SymphonyElixir.Harness.Manager, name: hm_via, project_dir: project_root, workflow_file_path: wf_path, workflow_store: ws_via},
       {Task.Supervisor, name: task_via},
       {SymphonyElixir.Orchestrator, name: orch_via, workflow_store: ws_via, task_supervisor: task_via, workflow_path: wf_path, project_id: project_id},

@@ -2,11 +2,11 @@ defmodule SymphonyElixir.ProjectSupervisor do
   @moduledoc """
   Per-project process supervision (SPEC V1.2 Appendix B.4 / WEB-79).
 
-  Registered `DynamicSupervisor` (`:one_for_one`) for all project trees plus the public API
-  for `start_project/1`, `stop_project/1`, `list_projects/0`, and `startup_failure/1`.
+  This module is the named `DynamicSupervisor` (`:one_for_one`) for all project trees, and exposes
+  `start_project/1`, `stop_project/1`, `list_projects/0`, and `startup_failure/1`.
 
   Each child is `SymphonyElixir.Project.Tree`: `WorkflowStore`, `Harness.Manager`,
-  `Task.Supervisor`, `Agent.Supervisor`, `Project.Tracker`, and `Orchestrator`.
+  `Task.Supervisor`, `Orchestrator`, `SymphonyElixir.Agent.Supervisor`, and `Project.Tracker`.
 
   On success, the orchestrator pid is registered in `ProjectRegistry` under `project_id`.
   """
@@ -194,11 +194,18 @@ defmodule SymphonyElixir.ProjectSupervisor do
 
   @doc """
   Returns metadata for projects that are not stopped (`:running`, `:starting`, or `:error`).
+
+  Omits synthetic `:error` rows with no `workflow_path` (for example `startup_failure/2` on an id
+  that never called `begin_start/2`).
   """
   @spec list_projects() :: [Meta.row()]
   def list_projects do
     Meta.list_rows()
-    |> Enum.reject(&(&1.status == :stopped))
+    |> Enum.reject(fn
+      %{status: :stopped} -> true
+      %{status: :error, workflow_path: nil} -> true
+      _ -> false
+    end)
   end
 
   @doc """
@@ -244,9 +251,7 @@ defmodule SymphonyElixir.ProjectSupervisor do
               :ok
 
             {:error, reason} ->
-              Logger.warning(
-                "symphony project bootstrap failed project_id=#{p.id} reason=#{inspect(reason)}"
-              )
+              Logger.warning("symphony project bootstrap failed project_id=#{p.id} reason=#{inspect(reason)}")
 
               startup_failure(p.id, reason)
           end
