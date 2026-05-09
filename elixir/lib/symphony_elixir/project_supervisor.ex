@@ -1,17 +1,20 @@
 defmodule SymphonyElixir.ProjectSupervisor do
   @moduledoc """
-  API for per-project process trees (SPEC V1.2 Appendix B.4 / WEB-79).
+  Per-project process supervision (SPEC V1.2 Appendix B.4 / WEB-79).
 
-  Children are started under `SymphonyElixir.ProjectDynamicSupervisor` (`:one_for_one`).
-  Each tree is `SymphonyElixir.Project.Tree`: `WorkflowStore`, `Harness.Manager`,
+  Registered `DynamicSupervisor` (`:one_for_one`) for all project trees plus the public API
+  for `start_project/1`, `stop_project/1`, `list_projects/0`, and `startup_failure/1`.
+
+  Each child is `SymphonyElixir.Project.Tree`: `WorkflowStore`, `Harness.Manager`,
   `Task.Supervisor`, `Agent.Supervisor`, `Project.Tracker`, `Orchestrator`.
 
-  On success, the **orchestrator** pid is registered in `ProjectRegistry` under `project_id`.
+  On success, the orchestrator pid is registered in `ProjectRegistry` under `project_id`.
   """
+
+  use DynamicSupervisor
 
   alias SymphonyElixir.Project.Tree
   alias SymphonyElixir.ProjectAliases
-  alias SymphonyElixir.ProjectDynamicSupervisor
   alias SymphonyElixir.ProjectNaming
   alias SymphonyElixir.ProjectRegistry
   alias SymphonyElixir.ProjectSupervisor.Meta
@@ -27,9 +30,32 @@ defmodule SymphonyElixir.ProjectSupervisor do
   @orch_poll_attempts 50
   @orch_poll_interval_ms 10
 
+  @spec child_spec(keyword()) :: Supervisor.child_spec()
+  def child_spec(opts \\ []) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [opts]},
+      type: :supervisor,
+      restart: :permanent,
+      shutdown: :infinity
+    }
+  end
+
+  @doc false
+  @spec start_link(keyword()) :: Supervisor.on_start()
+  def start_link(opts \\ []) do
+    DynamicSupervisor.start_link(__MODULE__, :ok, Keyword.merge([name: __MODULE__], opts))
+  end
+
+  @impl true
+  def init(:ok) do
+    DynamicSupervisor.init(strategy: :one_for_one)
+  end
+
   @doc """
-  Starts a project tree under `ProjectDynamicSupervisor`.
-  Registers the orchestrator pid in `ProjectRegistry` when it appears in the process registry.
+  Starts a project tree under this `DynamicSupervisor`.
+
+  Registers the orchestrator pid in `ProjectRegistry` once it joins the process registry.
   """
   @spec start_project(start_opts() | keyword()) :: {:ok, pid()} | {:error, term()}
   def start_project(%{} = opts) do
@@ -73,7 +99,7 @@ defmodule SymphonyElixir.ProjectSupervisor do
         config_base_dir: config_base_dir
       )
 
-    case DynamicSupervisor.start_child(ProjectDynamicSupervisor, spec) do
+    case DynamicSupervisor.start_child(__MODULE__, spec) do
       {:ok, tree_pid} ->
         case await_orchestrator_pid(project_id, @orch_poll_attempts, @orch_poll_interval_ms) do
           {:ok, orch_pid} ->
@@ -85,7 +111,7 @@ defmodule SymphonyElixir.ProjectSupervisor do
 
           :timeout ->
             reason = :orchestrator_not_registered
-            _ = DynamicSupervisor.terminate_child(ProjectDynamicSupervisor, tree_pid)
+            _ = Supervisor.stop(tree_pid, :shutdown)
             :ok = Meta.mark_error(project_id, reason)
             {:error, reason}
         end
@@ -106,21 +132,6 @@ defmodule SymphonyElixir.ProjectSupervisor do
     end
   end
 
-  defp await_orchestrator_pid(project_id, attempts, interval_ms) do
-    if attempts <= 0 do
-      :timeout
-    else
-      case lookup_orchestrator_pid(project_id) do
-        pid when is_pid(pid) ->
-          {:ok, pid}
-
-        nil ->
-          Process.sleep(interval_ms)
-          await_orchestrator_pid(project_id, attempts - 1, interval_ms)
-      end
-    end
-  end
-
   defp lookup_orchestrator_pid(project_id) do
     case Registry.lookup(ProjectNaming.registry(), {project_id, :orchestrator}) do
       [{pid, _}] -> pid
@@ -128,16 +139,17 @@ defmodule SymphonyElixir.ProjectSupervisor do
     end
   end
 
-  defp await_orchestrator_pid(_project_id, 0, _), do: :timeout
+  defp await_orchestrator_pid(_project_id, attempts, _) when attempts <= 0, do: :timeout
 
-  defp await_orchestrator_pid(project_id, attempts, delay_ms) do
+  defp await_orchestrator_pid(project_id, attempts, interval_ms)
+       when is_integer(attempts) and attempts > 0 do
     case lookup_orchestrator_pid(project_id) do
       pid when is_pid(pid) ->
         {:ok, pid}
 
       _ ->
-        Process.sleep(delay_ms)
-        await_orchestrator_pid(project_id, attempts - 1, delay_ms)
+        Process.sleep(interval_ms)
+        await_orchestrator_pid(project_id, attempts - 1, interval_ms)
     end
   end
 
@@ -189,14 +201,12 @@ defmodule SymphonyElixir.ProjectSupervisor do
     |> Enum.reject(&(&1.status == :stopped))
   end
 
+  @doc """
+  Marks a project as failed during startup or bootstrap without affecting other projects.
+  """
   @spec startup_failure(binary()) :: :ok
-  def startup_failure(project_id) when is_binary(project_id) do
-    :ok = Meta.mark_error(project_id, :startup_failure)
-    :ok
-  end
-
   @spec startup_failure(binary(), term()) :: :ok
-  def startup_failure(project_id, reason) when is_binary(project_id) do
+  def startup_failure(project_id, reason \\ :startup_failure) when is_binary(project_id) do
     :ok = Meta.mark_error(project_id, reason)
     :ok
   end
@@ -228,6 +238,12 @@ defmodule SymphonyElixir.ProjectSupervisor do
             {:ok, _} ->
               :ok
 
+            {:error, :already_started} ->
+              :ok
+
+            {:error, {:already_started, _}} ->
+              :ok
+
             {:error, reason} ->
               Logger.warning(
                 "symphony project bootstrap failed project_id=#{p.id} reason=#{inspect(reason)}"
@@ -246,6 +262,12 @@ defmodule SymphonyElixir.ProjectSupervisor do
                config_base_dir: File.cwd!()
              }) do
           {:ok, _} ->
+            :ok
+
+          {:error, :already_started} ->
+            :ok
+
+          {:error, {:already_started, _}} ->
             :ok
 
           {:error, reason} ->

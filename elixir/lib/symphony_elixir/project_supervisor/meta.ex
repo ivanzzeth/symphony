@@ -3,7 +3,7 @@ defmodule SymphonyElixir.ProjectSupervisor.Meta do
 
   use GenServer
 
-  alias SymphonyElixir.ProjectRegistry
+  alias SymphonyElixir.{ProjectAliases, ProjectRegistry}
 
   @type status :: :starting | :running | :stopped | :error
 
@@ -259,6 +259,15 @@ defmodule SymphonyElixir.ProjectSupervisor.Meta do
       [] ->
         row = base_row(project_id, status, nil, nil, nil, err)
         :ets.insert(tid, {project_id, row})
+    end
+
+    maybe_clear_primary_alias(project_id)
+  end
+
+  defp maybe_clear_primary_alias(project_id) when is_binary(project_id) do
+    case Application.get_env(:symphony_elixir, :primary_project_id) do
+      ^project_id -> ProjectAliases.clear_aliases()
+      _ -> :ok
     end
   end
 

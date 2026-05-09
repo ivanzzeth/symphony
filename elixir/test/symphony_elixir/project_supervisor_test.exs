@@ -3,6 +3,19 @@ defmodule SymphonyElixir.ProjectSupervisorTest do
 
   alias SymphonyElixir.{ProjectNaming, ProjectRegistry, ProjectSupervisor}
 
+  defp isolation_project(label) do
+    root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-iso-#{label}-#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(root)
+    wf = Path.join(root, "WORKFLOW.md")
+    SymphonyElixir.TestSupport.write_workflow_file!(wf)
+    {root, wf}
+  end
+
   test "start_project registers orchestrator pid in ProjectRegistry" do
     orch_via = ProjectNaming.via("default", :orchestrator)
     {:ok, pid} = ProjectRegistry.lookup("default")
@@ -22,9 +35,45 @@ defmodule SymphonyElixir.ProjectSupervisorTest do
   test "startup_failure marks meta without killing other projects" do
     assert :ok = ProjectSupervisor.startup_failure("ghost-project")
 
-    entry = SymphonyElixir.ProjectSupervisor.Meta.fetch("ghost-project")
-    assert entry.status == :error
+    assert %{status: :error} = SymphonyElixir.ProjectSupervisor.Meta.fetch("ghost-project")
     assert {:ok, _} = ProjectRegistry.lookup("default")
+  end
+
+  test "killing one project's orchestrator does not kill another project's orchestrator" do
+    {root_a, wf_a} = isolation_project("a")
+    {root_b, wf_b} = isolation_project("b")
+
+    on_exit(fn ->
+      _ = ProjectSupervisor.stop_project("iso-a")
+      _ = ProjectSupervisor.stop_project("iso-b")
+      File.rm_rf(root_a)
+      File.rm_rf(root_b)
+    end)
+
+    assert {:ok, _} =
+             ProjectSupervisor.start_project(%{
+               project_id: "iso-a",
+               workflow_path: wf_a,
+               config_base_dir: root_a
+             })
+
+    assert {:ok, _} =
+             ProjectSupervisor.start_project(%{
+               project_id: "iso-b",
+               workflow_path: wf_b,
+               config_base_dir: root_b
+             })
+
+    [{orch_a, _}] =
+      Registry.lookup(ProjectNaming.registry(), {"iso-a", :orchestrator})
+
+    {:ok, orch_b} = ProjectRegistry.lookup("iso-b")
+
+    Process.exit(orch_a, :kill)
+    Process.sleep(200)
+
+    refute Process.alive?(orch_a)
+    assert Process.alive?(orch_b)
   end
 
   test "stop_project unregisters from ProjectRegistry" do
@@ -49,6 +98,45 @@ defmodule SymphonyElixir.ProjectSupervisorTest do
     assert :ok = ProjectSupervisor.stop_project("stop-test")
     assert :error = ProjectRegistry.lookup("stop-test")
 
-    File.rm_rf(root)
+    on_exit(fn -> File.rm_rf(root) end)
+  end
+
+  test "crashing a peer project tree does not stop the default orchestrator" do
+    root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-ps-iso-#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(root)
+    wf = Path.join(root, "WORKFLOW.md")
+    SymphonyElixir.TestSupport.write_workflow_file!(wf)
+
+    id = "iso-peer-#{System.unique_integer([:positive])}"
+
+    assert {:ok, tree_pid} =
+             ProjectSupervisor.start_project(%{
+               project_id: id,
+               workflow_path: wf,
+               config_base_dir: root
+             })
+
+    default_orch_before = GenServer.whereis(ProjectNaming.via("default", :orchestrator))
+    assert is_pid(default_orch_before)
+
+    Process.exit(tree_pid, :kill)
+
+    assert :ok =
+             wait_until(fn ->
+               case SymphonyElixir.ProjectSupervisor.Meta.fetch(id) do
+                 %{status: s} when s in [:error, :stopped] -> true
+                 _ -> false
+               end
+             end)
+
+    assert Process.alive?(default_orch_before)
+    assert {:ok, _} = ProjectRegistry.lookup("default")
+
+    on_exit(fn -> File.rm_rf(root) end)
   end
 end

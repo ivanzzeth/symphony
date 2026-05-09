@@ -31,7 +31,7 @@ defmodule SymphonyElixir.Application do
       SymphonyElixir.ProcessConfig.Store,
       {Registry, keys: :unique, name: SymphonyElixir.ProjectProcessRegistry},
       SymphonyElixir.ProjectSupervisor.Meta,
-      SymphonyElixir.ProjectDynamicSupervisor,
+      SymphonyElixir.ProjectSupervisor,
       SymphonyElixir.ProjectRegistry
     ]
 
