@@ -1,5 +1,6 @@
 defmodule SymphonyElixir.ExtensionsTest do
-  use SymphonyElixir.TestSupport
+  # Serial: mutates global workflow path, WorkflowStore, and tmp workflow files.
+  use SymphonyElixir.TestSupport, async: false
 
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
@@ -127,6 +128,13 @@ defmodule SymphonyElixir.ExtensionsTest do
     assert :ok = TestProjectRuntime.terminate_workflow_store!()
     assert {:ok, %{prompt: "Third prompt"}} = WorkflowStore.current()
     assert :ok = WorkflowStore.force_reload()
+
+    # `WorkflowStore` under the project tree still watches the original bootstrap path
+    # (`WORKFLOW.md`), while `Workflow.workflow_file_path/0` may point at `THIRD_WORKFLOW.md`.
+    # Repair the corrupted original file so `restart_child` can `init` successfully.
+    original_workflow = Path.join(Path.dirname(third_workflow), "WORKFLOW.md")
+    write_workflow_file!(original_workflow, prompt: "Third prompt")
+
     assert {:ok, _pid} = TestProjectRuntime.restart_workflow_store!()
   end
 
@@ -173,13 +181,21 @@ defmodule SymphonyElixir.ExtensionsTest do
     assert removed_state.workflow.prompt == "Manual workflow prompt"
     assert_receive :poll, 3_000
 
-    Process.exit(manual_pid, :normal)
-    restart_result = TestProjectRuntime.restart_workflow_store!()
-
-    assert match?({:ok, _pid}, restart_result) or
-             match?({:error, {:already_started, _pid}}, restart_result)
-
     Workflow.set_workflow_file_path(existing_path)
+
+    Process.exit(manual_pid, :normal)
+
+    # `Supervisor.restart_child/2` can briefly return `:not_found` while the tree
+    # supervisor is still reconciling the `WorkflowStore` child after the manual
+    # `start_link/0` process exits.
+    assert_eventually(
+      fn ->
+        r = TestProjectRuntime.restart_workflow_store!()
+        match?({:ok, _pid}, r) or match?({:error, {:already_started, _pid}}, r)
+      end,
+      40
+    )
+
     WorkflowStore.force_reload()
   end
 

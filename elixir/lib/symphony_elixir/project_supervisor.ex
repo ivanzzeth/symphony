@@ -252,9 +252,7 @@ defmodule SymphonyElixir.ProjectSupervisor do
               :ok
 
             {:error, reason} ->
-              Logger.warning(
-                "symphony project bootstrap failed project_id=#{p.id} reason=#{inspect(reason)}"
-              )
+              Logger.warning("symphony project bootstrap failed project_id=#{p.id} reason=#{inspect(reason)}")
 
               startup_failure(p.id, reason)
           end
