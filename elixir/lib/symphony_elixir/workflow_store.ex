@@ -27,21 +27,34 @@ defmodule SymphonyElixir.WorkflowStore do
 
   def whereis(:auto) do
     pid =
-      case Application.get_env(:symphony_elixir, :primary_project_id) do
-        id when is_binary(id) ->
-          case Registry.lookup(SymphonyElixir.ProjectProcessRegistry, {id, :workflow_store}) do
-            [{p, _}] -> p
-            [] -> Process.whereis(__MODULE__)
+      case registry_alive?() do
+        true ->
+          case Application.get_env(:symphony_elixir, :primary_project_id) do
+            id when is_binary(id) ->
+              case Registry.lookup(SymphonyElixir.ProjectProcessRegistry, {id, :workflow_store}) do
+                [{p, _}] -> p
+                [] -> Process.whereis(__MODULE__)
+              end
+
+            _ ->
+              case Registry.lookup(SymphonyElixir.ProjectProcessRegistry, {"default", :workflow_store}) do
+                [{p, _}] -> p
+                [] -> Process.whereis(__MODULE__)
+              end
           end
 
-        _ ->
-          case Registry.lookup(SymphonyElixir.ProjectProcessRegistry, {"default", :workflow_store}) do
-            [{p, _}] -> p
-            [] -> Process.whereis(__MODULE__)
-          end
+        false ->
+          Process.whereis(__MODULE__)
       end
 
     alive_pid(pid)
+  end
+
+  defp registry_alive? do
+    case Process.whereis(SymphonyElixir.ProjectProcessRegistry) do
+      pid when is_pid(pid) -> Process.alive?(pid)
+      _ -> false
+    end
   end
 
   def whereis(name) when is_pid(name), do: alive_pid(name)
