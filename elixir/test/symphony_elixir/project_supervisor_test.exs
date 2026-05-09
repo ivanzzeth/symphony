@@ -173,7 +173,7 @@ defmodule SymphonyElixir.ProjectSupervisorTest do
 
   defp assert_until(fun, attempts \\ 50)
 
-  defp assert_until(fun, 0), do: flunk("condition not met in time")
+  defp assert_until(_fun, 0), do: flunk("condition not met in time")
 
   defp assert_until(fun, attempts) do
     if fun.() do

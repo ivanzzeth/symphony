@@ -96,8 +96,8 @@ defmodule SymphonyElixir.WorkflowStore do
         try do
           GenServer.call(pid, :current)
         catch
-          :exit, reason ->
-            if call_exit_recoverable?(reason), do: Workflow.load(), else: :erlang.raise(:exit, reason, __STACKTRACE__)
+          :exit, _reason ->
+            Workflow.load()
         end
 
       _ ->
@@ -112,14 +112,10 @@ defmodule SymphonyElixir.WorkflowStore do
         try do
           GenServer.call(pid, :force_reload)
         catch
-          :exit, reason ->
-            if call_exit_recoverable?(reason) do
-              case Workflow.load() do
-                {:ok, _workflow} -> :ok
-                {:error, err} -> {:error, err}
-              end
-            else
-              :erlang.raise(:exit, reason, __STACKTRACE__)
+          :exit, _reason ->
+            case Workflow.load() do
+              {:ok, _workflow} -> :ok
+              {:error, err} -> {:error, err}
             end
         end
 
@@ -131,22 +127,15 @@ defmodule SymphonyElixir.WorkflowStore do
     end
   end
 
-  defp call_exit_recoverable?(:noproc), do: true
-  defp call_exit_recoverable?({:noproc, _}), do: true
-  defp call_exit_recoverable?(:normal), do: true
-  defp call_exit_recoverable?({:normal, _}), do: true
-  defp call_exit_recoverable?(:shutdown), do: true
-  defp call_exit_recoverable?({:shutdown, _}), do: true
-  defp call_exit_recoverable?(_), do: false
-
   @impl true
   def init(opts) do
-    path =
+    opts_path =
       case Keyword.get(opts, :workflow_file_path) do
         p when is_binary(p) -> Path.expand(p)
         _ -> Path.expand(Workflow.workflow_file_path())
       end
 
+    path = effective_workflow_path_on_init(opts, opts_path)
     project_id = Keyword.get(opts, :project_id)
 
     case load_state(path) do
@@ -228,6 +217,29 @@ defmodule SymphonyElixir.WorkflowStore do
 
   defp schedule_poll do
     Process.send_after(self(), :poll, @poll_interval_ms)
+  end
+
+  # `Supervisor.restart_child/2` reuses the tree's original `workflow_file_path` opt, but tests
+  # (and operators) may switch the active file via `Application` + `Workflow.set_workflow_file_path/1`
+  # for the primary project. Prefer the app path when it is an alternate file in the same directory.
+  defp effective_workflow_path_on_init(opts, opts_path) do
+    project_id = Keyword.get(opts, :project_id)
+    primary_id = Application.get_env(:symphony_elixir, :primary_project_id) || "default"
+    primary? = project_id == primary_id
+
+    app_raw = Application.get_env(:symphony_elixir, :workflow_file_path)
+
+    if primary? and is_binary(app_raw) do
+      app_path = Path.expand(app_raw)
+
+      if app_path != opts_path and Path.dirname(app_path) == Path.dirname(opts_path) do
+        app_path
+      else
+        opts_path
+      end
+    else
+      opts_path
+    end
   end
 
   defp maybe_notify_workflow_changed(stamp, stamp), do: :ok
