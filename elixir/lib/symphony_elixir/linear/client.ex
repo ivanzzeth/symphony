@@ -95,41 +95,44 @@ defmodule SymphonyElixir.Linear.Client do
   }
   """
 
-  @issue_by_ref_query """
-  query SymphonyIssueByRef($issueId: String!, $relationFirst: Int!) {
-    issue(id: $issueId) {
-      id
-      identifier
-      title
-      description
-      priority
-      state {
-        name
-      }
-      branchName
-      url
-      assignee {
+  # Resolves by human-readable identifier (e.g. "WEB-81"). Linear's `issue(id:)` expects an internal UUID.
+  @issue_by_human_identifier_query """
+  query SymphonyIssueByHumanIdentifier($identifier: String!, $relationFirst: Int!) {
+    issues(filter: {identifier: {eq: $identifier}}, first: 1) {
+      nodes {
         id
-      }
-      labels {
-        nodes {
+        identifier
+        title
+        description
+        priority
+        state {
           name
         }
-      }
-      inverseRelations(first: $relationFirst) {
-        nodes {
-          type
-          issue {
-            id
-            identifier
-            state {
-              name
+        branchName
+        url
+        assignee {
+          id
+        }
+        labels {
+          nodes {
+            name
+          }
+        }
+        inverseRelations(first: $relationFirst) {
+          nodes {
+            type
+            issue {
+              id
+              identifier
+              state {
+                name
+              }
             }
           }
         }
+        createdAt
+        updatedAt
       }
-      createdAt
-      updatedAt
     }
   }
   """
@@ -202,6 +205,7 @@ defmodule SymphonyElixir.Linear.Client do
   @spec fetch_issue_by_identifier(String.t(), keyword()) :: {:ok, Issue.t()} | {:error, term()}
   def fetch_issue_by_identifier(identifier, opts \\ []) when is_binary(identifier) and is_list(opts) do
     settings_opts = Keyword.take(opts, [:workflow_store])
+    graphql_opts = Keyword.merge(settings_opts, Keyword.take(opts, [:request_fun]))
 
     cond do
       is_nil(Config.settings!(settings_opts).tracker.api_key) ->
@@ -210,8 +214,12 @@ defmodule SymphonyElixir.Linear.Client do
       true ->
         with {:ok, assignee_filter} <- routing_assignee_filter(settings_opts),
              {:ok, body} <-
-               graphql(@issue_by_ref_query, %{issueId: identifier, relationFirst: @issue_page_size}, settings_opts),
-             {:ok, issue} <- decode_linear_single_issue(body, assignee_filter) do
+               graphql(
+                 @issue_by_human_identifier_query,
+                 %{identifier: identifier, relationFirst: @issue_page_size},
+                 graphql_opts
+               ),
+             {:ok, issue} <- first_issue_or_not_found(body, assignee_filter) do
           {:ok, issue}
         end
     end
@@ -464,23 +472,17 @@ defmodule SymphonyElixir.Linear.Client do
     )
   end
 
-  defp decode_linear_single_issue(%{"errors" => errors}, _assignee_filter) when is_list(errors) do
-    {:error, {:linear_graphql_errors, errors}}
-  end
+  defp first_issue_or_not_found(body, assignee_filter) do
+    case decode_linear_response(body, assignee_filter) do
+      {:ok, []} ->
+        {:error, :not_found}
 
-  defp decode_linear_single_issue(%{"data" => %{"issue" => issue}}, assignee_filter) when is_map(issue) do
-    case normalize_issue(issue, assignee_filter) do
-      nil -> {:error, :not_found}
-      %Issue{} = i -> {:ok, i}
+      {:ok, [%Issue{} = issue | _]} ->
+        {:ok, issue}
+
+      {:error, _} = err ->
+        err
     end
-  end
-
-  defp decode_linear_single_issue(%{"data" => %{"issue" => nil}}, _assignee_filter) do
-    {:error, :not_found}
-  end
-
-  defp decode_linear_single_issue(_unknown, _assignee_filter) do
-    {:error, :linear_unknown_payload}
   end
 
   defp decode_linear_response(%{"data" => %{"issues" => %{"nodes" => nodes}}}, assignee_filter) do
