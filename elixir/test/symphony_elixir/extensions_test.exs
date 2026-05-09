@@ -566,6 +566,7 @@ defmodule SymphonyElixir.ExtensionsTest do
     start_test_endpoint(orchestrator: orchestrator_name, snapshot_timeout_ms: 50)
 
     {:ok, view, html} = live(build_conn(), "/")
+    html = live_html(html)
     assert html =~ "Operations Dashboard"
     assert html =~ "Coding agent"
     assert html =~ CodingAgent.kind_display_label(Config.settings!().agent.kind)
@@ -621,7 +622,7 @@ defmodule SymphonyElixir.ExtensionsTest do
     StatusDashboard.notify_update()
 
     assert_eventually(fn ->
-      render(view) =~ "agent message content streaming: structured update"
+      live_html(render(view)) =~ "agent message content streaming: structured update"
     end)
   end
 
@@ -632,6 +633,7 @@ defmodule SymphonyElixir.ExtensionsTest do
     )
 
     {:ok, _view, html} = live(build_conn(), "/")
+    html = live_html(html)
     assert html =~ "Snapshot unavailable"
     assert html =~ "snapshot_unavailable"
   end
@@ -765,6 +767,9 @@ defmodule SymphonyElixir.ExtensionsTest do
   end
 
   defp assert_eventually(_fun, 0), do: flunk("condition not met in time")
+
+  defp live_html(%LazyHTML{} = h), do: LazyHTML.to_html(h)
+  defp live_html(h) when is_binary(h), do: h
 
   defp ensure_workflow_store_running do
     pid = TestProjectRuntime.workflow_store_pid()

@@ -2,11 +2,11 @@ defmodule SymphonyElixir.ProjectSupervisor do
   @moduledoc """
   Per-project process supervision (SPEC V1.2 Appendix B.4 / WEB-79).
 
-  Registered `DynamicSupervisor` (`:one_for_one`) for all project trees plus the public API
-  for `start_project/1`, `stop_project/1`, `list_projects/0`, and `startup_failure/1`.
+  This module is the named `DynamicSupervisor` (`:one_for_one`) for all project trees, and exposes
+  `start_project/1`, `stop_project/1`, `list_projects/0`, and `startup_failure/1`.
 
   Each child is `SymphonyElixir.Project.Tree`: `WorkflowStore`, `Harness.Manager`,
-  `Task.Supervisor`, `Agent.Supervisor`, `Project.Tracker`, and `Orchestrator`.
+  `Task.Supervisor`, `Orchestrator`, `SymphonyElixir.Agent.Supervisor`, and `Project.Tracker`.
 
   On success, the orchestrator pid is registered in `ProjectRegistry` under `project_id`.
   """
