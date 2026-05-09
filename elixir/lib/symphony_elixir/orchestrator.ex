@@ -15,12 +15,6 @@ defmodule SymphonyElixir.Orchestrator do
   @failure_retry_base_ms 10_000
   # Slightly above the dashboard render interval so "checking now…" can render.
   @poll_transition_render_delay_ms 20
-  @empty_codex_totals %{
-    input_tokens: 0,
-    output_tokens: 0,
-    total_tokens: 0,
-    seconds_running: 0
-  }
 
   defmodule State do
     @moduledoc """
@@ -39,7 +33,7 @@ defmodule SymphonyElixir.Orchestrator do
       completed: MapSet.new(),
       claimed: MapSet.new(),
       retry_attempts: %{},
-      codex_totals: nil,
+      codex_totals: %{input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0},
       codex_rate_limits: nil,
       workflow_store: nil,
       task_supervisor: nil,
@@ -101,7 +95,7 @@ defmodule SymphonyElixir.Orchestrator do
           poll_check_in_progress: false,
           tick_timer_ref: nil,
           tick_token: nil,
-          codex_totals: @empty_codex_totals,
+          codex_totals: %{input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0},
           codex_rate_limits: nil,
           coding_agent_kind: config.agent.kind,
           workflow_store: workflow_store,
