@@ -57,10 +57,22 @@ defmodule SymphonyElixir.Cursor.Adapter do
       Config.settings!().agent.command
       |> String.split(~r/\s+/, trim: true)
 
+    # Find the cursor/codex binary index so "agent" is inserted right after it.
+    # Remaining tokens (e.g. "--model auto") are flags for the "agent" subcommand.
+    binary_idx =
+      Enum.find_index(command_parts, fn part ->
+        part == "cursor" or part == "codex" or
+          String.ends_with?(part, "/cursor") or String.ends_with?(part, "/codex")
+      end) || 0
+
+    {before_binary, after_binary_incl} = Enum.split(command_parts, binary_idx)
+    [_binary | agent_flags] = after_binary_incl
+
     base =
-      command_parts ++
+      before_binary ++
+        [List.first(after_binary_incl), "agent"] ++
+        agent_flags ++
         [
-          "agent",
           "--print",
           "--output-format",
           "stream-json",
