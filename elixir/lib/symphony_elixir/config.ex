@@ -104,8 +104,16 @@ defmodule SymphonyElixir.Config do
         SymphonyElixir.ProcessConfig.Store.get()
 
       _ ->
-        {:ok, config} = SymphonyElixir.ProcessConfig.load()
-        config
+        case SymphonyElixir.ProcessConfig.load() do
+          {:ok, config} ->
+            config
+
+          {:error, {:invalid_symphony_yaml, message}} ->
+            raise ArgumentError, "Invalid symphony.yaml: #{message}"
+
+          {:error, reason} ->
+            raise ArgumentError, "Invalid process config: #{inspect(reason)}"
+        end
     end
   end
 
