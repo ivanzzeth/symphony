@@ -236,18 +236,14 @@ defmodule SymphonyElixir.Orchestrator do
 
               case run_outcome do
                 :max_turns_reached ->
-                  Logger.info(
-                    "Agent task completed at agent.max_turns for issue_id=#{issue_id} session_id=#{session_id}; releasing claim without continuation retry"
-                  )
+                  Logger.info("Agent task completed at agent.max_turns for issue_id=#{issue_id} session_id=#{session_id}; releasing claim without continuation retry")
 
                   state
                   |> release_issue_claim(issue_id)
                   |> mark_max_turns_halted_at(issue_id)
 
                 _ ->
-                  Logger.info(
-                    "Agent task completed for issue_id=#{issue_id} session_id=#{session_id}; scheduling active-state continuation check"
-                  )
+                  Logger.info("Agent task completed for issue_id=#{issue_id} session_id=#{session_id}; scheduling active-state continuation check")
 
                   schedule_issue_retry(state, issue_id, 1, %{
                     identifier: running_entry.identifier,
@@ -710,10 +706,42 @@ defmodule SymphonyElixir.Orchestrator do
       !Map.has_key?(running, issue.id) and
       available_slots(state) > 0 and
       state_slots_available?(issue, state) and
-      worker_slots_available?(state)
+      worker_slots_available?(state) and
+      global_dispatch_slot_available?(state)
   end
 
   defp should_dispatch_issue?(_issue, _state, _active_states, _terminal_states), do: false
+
+  defp global_dispatch_slot_available?(%State{running: running}) when is_map(running) do
+    case Config.process_config().daemon.max_global_agents do
+      nil ->
+        true
+
+      max when is_integer(max) and max > 0 ->
+        total_dispatch_sessions_across_projects(running) < max
+
+      _ ->
+        true
+    end
+  end
+
+  defp total_dispatch_sessions_across_projects(running) when is_map(running) do
+    self_pid = self()
+
+    others =
+      ProjectRegistry.list()
+      |> Enum.reject(fn %{pid: pid} -> pid == self_pid end)
+      |> Enum.map(fn %{pid: pid} -> remote_orchestrator_running_count(pid) end)
+      |> Enum.sum()
+
+    others + map_size(running)
+  end
+
+  defp remote_orchestrator_running_count(pid) when is_pid(pid) do
+    GenServer.call(pid, :running_sessions_count, 500)
+  catch
+    :exit, _ -> 0
+  end
 
   defp max_turns_dispatch_allowed?(%Issue{id: issue_id, updated_at: updated_at}, halted_at_by_issue)
        when is_binary(issue_id) and is_map(halted_at_by_issue) do
@@ -731,8 +759,7 @@ defmodule SymphonyElixir.Orchestrator do
   defp pop_pending_agent_outcome(%State{} = state, issue_id) when is_binary(issue_id) do
     pending = Map.get(state, :pending_agent_outcomes) || %{}
 
-    {Map.get(pending, issue_id),
-     %{state | pending_agent_outcomes: Map.delete(pending, issue_id)}}
+    {Map.get(pending, issue_id), %{state | pending_agent_outcomes: Map.delete(pending, issue_id)}}
   end
 
   defp mark_max_turns_halted_at(%State{} = state, issue_id) when is_binary(issue_id) do
@@ -1369,6 +1396,30 @@ defmodule SymphonyElixir.Orchestrator do
     end
   end
 
+  @doc """
+  Returns the number of concurrently dispatched agent tasks owned by this orchestrator.
+  """
+  @spec running_sessions_count(GenServer.server()) :: non_neg_integer()
+  def running_sessions_count(server \\ __MODULE__) do
+    case orchestrator_call_target(server) do
+      pid when is_pid(pid) ->
+        try do
+          GenServer.call(pid, :running_sessions_count)
+        catch
+          :exit, _ -> 0
+        end
+
+      _ ->
+        0
+    end
+  end
+
+  @doc false
+  @spec global_dispatch_slot_available_for_test?(term()) :: boolean()
+  def global_dispatch_slot_available_for_test?(%State{} = state) do
+    global_dispatch_slot_available?(state)
+  end
+
   defp orchestrator_call_target(pid) when is_pid(pid) do
     if Process.alive?(pid), do: pid, else: nil
   end
@@ -1461,6 +1512,7 @@ defmodule SymphonyElixir.Orchestrator do
      %{
        running: running,
        retrying: retrying,
+       completed: MapSet.size(state.completed),
        codex_totals: codex_totals,
        rate_limits: Map.get(state, :codex_rate_limits),
        coding_agent: %{kind: agent_kind, label: CodingAgent.kind_display_label(agent_kind)},
@@ -1470,6 +1522,10 @@ defmodule SymphonyElixir.Orchestrator do
          poll_interval_ms: state.poll_interval_ms
        }
      }, state}
+  end
+
+  def handle_call(:running_sessions_count, _from, state) do
+    {:reply, map_size(state.running), state}
   end
 
   def handle_call(:request_refresh, _from, state) do

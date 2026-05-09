@@ -6,12 +6,23 @@ defmodule SymphonyElixirWeb.ObservabilityApiController do
   use Phoenix.Controller, formats: [:json]
 
   alias Plug.Conn
-  alias SymphonyElixir.ProjectAliases
+  alias SymphonyElixir.{ProjectAliases, ProjectRegistry}
   alias SymphonyElixirWeb.{Endpoint, Presenter}
 
   @spec state(Conn.t(), map()) :: Conn.t()
   def state(conn, _params) do
     json(conn, Presenter.state_payload(orchestrator(), snapshot_timeout_ms()))
+  end
+
+  @spec project_state(Conn.t(), map()) :: Conn.t()
+  def project_state(conn, %{"project_id" => project_id}) when is_binary(project_id) do
+    case ProjectRegistry.lookup(project_id) do
+      {:ok, orch_pid} ->
+        json(conn, Presenter.project_state_payload(project_id, orch_pid, snapshot_timeout_ms()))
+
+      :error ->
+        error_response(conn, 404, "project_not_found", "Unknown project_id")
+    end
   end
 
   @spec issue(Conn.t(), map()) :: Conn.t()
