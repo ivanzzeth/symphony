@@ -29,7 +29,8 @@ defmodule SymphonyElixirWeb.Presenter do
           agent: agent,
           counts: %{
             running: length(snapshot.running),
-            retrying: length(snapshot.retrying)
+            retrying: length(snapshot.retrying),
+            completed: Map.get(snapshot, :completed, 0)
           },
           running: Enum.map(snapshot.running, &running_entry_payload/1),
           retrying: Enum.map(snapshot.retrying, &retry_entry_payload/1),
@@ -43,6 +44,13 @@ defmodule SymphonyElixirWeb.Presenter do
       :unavailable ->
         %{generated_at: generated_at, error: %{code: "snapshot_unavailable", message: "Snapshot unavailable"}}
     end
+  end
+
+  @spec project_state_payload(String.t(), GenServer.name(), timeout()) :: map()
+  def project_state_payload(project_id, orchestrator, snapshot_timeout_ms)
+      when is_binary(project_id) do
+    state_payload(orchestrator, snapshot_timeout_ms)
+    |> Map.put(:project_id, project_id)
   end
 
   @spec issue_payload(String.t(), GenServer.name(), timeout()) :: {:ok, map()} | {:error, :issue_not_found}

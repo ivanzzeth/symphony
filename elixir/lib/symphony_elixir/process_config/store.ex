@@ -52,9 +52,22 @@ defmodule SymphonyElixir.ProcessConfig.Store do
           config
       end
 
-    case Application.get_env(:symphony_elixir, :server_host_override) do
-      host when is_binary(host) and host != "" ->
-        put_in(config.server.host, host)
+    config =
+      case Application.get_env(:symphony_elixir, :server_host_override) do
+        host when is_binary(host) and host != "" ->
+          put_in(config.server.host, host)
+
+        _ ->
+          config
+      end
+
+    maybe_override_daemon_max_global_agents(config)
+  end
+
+  defp maybe_override_daemon_max_global_agents(config) do
+    case Application.get_env(:symphony_elixir, :daemon_max_global_agents_override) do
+      n when is_integer(n) and n > 0 ->
+        put_in(config.daemon.max_global_agents, n)
 
       _ ->
         config
