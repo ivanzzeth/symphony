@@ -1,8 +1,8 @@
 defmodule SymphonyElixir.Project.Tree do
   @moduledoc """
   Root `Supervisor` for one project's process tree — `WorkflowStore`, `Harness.Manager`,
-  `Task.Supervisor` (agent runs), `SymphonyElixir.Agent.Supervisor`, `SymphonyElixir.Project.Tracker`,
-  and `Orchestrator`.
+  `Task.Supervisor` (agent runs), `Orchestrator`, `SymphonyElixir.Agent.Supervisor`, and
+  `SymphonyElixir.Project.Tracker`.
   """
 
   use Supervisor
@@ -46,9 +46,9 @@ defmodule SymphonyElixir.Project.Tree do
       {SymphonyElixir.WorkflowStore, name: ws_via, workflow_file_path: wf_path, project_id: project_id},
       {SymphonyElixir.Harness.Manager, name: hm_via, project_dir: project_root, workflow_file_path: wf_path, workflow_store: ws_via},
       {Task.Supervisor, name: task_via},
+      {SymphonyElixir.Orchestrator, name: orch_via, workflow_store: ws_via, task_supervisor: task_via, workflow_path: wf_path, project_id: project_id},
       {SymphonyElixir.Agent.Supervisor, project_id: project_id},
-      {SymphonyElixir.Project.Tracker, name: tracker_via, project_id: project_id},
-      {SymphonyElixir.Orchestrator, name: orch_via, workflow_store: ws_via, task_supervisor: task_via, workflow_path: wf_path, project_id: project_id}
+      {SymphonyElixir.Project.Tracker, name: tracker_via, project_id: project_id}
     ]
 
     Supervisor.init(children, strategy: :one_for_one, max_restarts: 10, max_seconds: 60)

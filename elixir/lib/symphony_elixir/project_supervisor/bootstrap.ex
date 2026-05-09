@@ -1,6 +1,9 @@
 defmodule SymphonyElixir.ProjectSupervisor.Bootstrap do
   @moduledoc """
   Starts configured projects after the OTP application is up (unless disabled via opts).
+
+  Runs `ProjectSupervisor.bootstrap!/0` asynchronously so sibling workers (for example
+  `HttpServer`) can boot without waiting for every project tree.
   """
 
   use GenServer
@@ -26,10 +29,18 @@ defmodule SymphonyElixir.ProjectSupervisor.Bootstrap do
   @impl true
   def init(opts) do
     if Keyword.get(opts, :skip_bootstrap, false) do
-      {:ok, %{}}
+      {:ok, %{skipped: true}}
     else
-      :ok = ProjectSupervisor.bootstrap!()
-      {:ok, %{}}
+      send(self(), :bootstrap)
+      {:ok, %{skipped: false}}
     end
+  end
+
+  @impl true
+  def handle_info(:bootstrap, %{skipped: true} = state), do: {:noreply, state}
+
+  def handle_info(:bootstrap, state) do
+    _ = ProjectSupervisor.bootstrap!()
+    {:noreply, Map.put(state, :bootstrap_done, true)}
   end
 end

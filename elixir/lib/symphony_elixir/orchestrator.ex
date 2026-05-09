@@ -7,7 +7,8 @@ defmodule SymphonyElixir.Orchestrator do
   require Logger
   import Bitwise, only: [<<<: 2]
 
-  alias SymphonyElixir.{AgentRunner, CodingAgent, Config, StatusDashboard, Tracker, Workspace}
+  alias SymphonyElixir.{AgentRunner, CodingAgent, Config, ProjectRegistry, StatusDashboard, Tracker,
+                         Workspace}
   alias SymphonyElixir.Linear.Issue
 
   @continuation_retry_delay_ms 1_000
@@ -41,7 +42,8 @@ defmodule SymphonyElixir.Orchestrator do
       codex_totals: nil,
       codex_rate_limits: nil,
       workflow_store: nil,
-      task_supervisor: nil
+      task_supervisor: nil,
+      project_id: nil
     ]
   end
 
@@ -103,8 +105,11 @@ defmodule SymphonyElixir.Orchestrator do
           codex_rate_limits: nil,
           coding_agent_kind: config.agent.kind,
           workflow_store: workflow_store,
-          task_supervisor: task_supervisor
+          task_supervisor: task_supervisor,
+          project_id: Keyword.get(opts, :project_id)
         }
+
+        maybe_register_project_registry(state.project_id)
 
         if workflow_store do
           _ = SymphonyElixir.Config.Context.put_workflow_store(workflow_store)
@@ -126,7 +131,9 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   @impl true
-  def terminate(reason, %State{running: running}) do
+  def terminate(reason, %State{running: running} = state) do
+    _ = maybe_unregister_project_registry(state)
+
     _ = SymphonyElixir.Config.Context.delete_workflow_store()
 
     if map_size(running) == 0 do
@@ -147,6 +154,18 @@ defmodule SymphonyElixir.Orchestrator do
       :ok
     end
   end
+
+  defp maybe_register_project_registry(nil), do: :ok
+
+  defp maybe_register_project_registry(project_id) when is_binary(project_id) do
+    ProjectRegistry.register(project_id, self())
+  end
+
+  defp maybe_unregister_project_registry(%State{project_id: id}) when is_binary(id) do
+    ProjectRegistry.unregister(id)
+  end
+
+  defp maybe_unregister_project_registry(_), do: :ok
 
   @impl true
   def handle_info({:tick, tick_token}, %{tick_token: tick_token} = state)
