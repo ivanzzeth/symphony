@@ -9,24 +9,52 @@ defmodule SymphonyElixir.AgentRunner do
   """
 
   require Logger
-  alias SymphonyElixir.{CodingAgent, Config, Linear.Issue, PromptBuilder, SSH, Tracker, Workspace}
+
+  alias SymphonyElixir.{
+    CodingAgent,
+    Config,
+    Config.Context,
+    Linear.Issue,
+    PromptBuilder,
+    SSH,
+    Tracker,
+    Workspace
+  }
 
   @type worker_host :: String.t() | nil
 
   @spec run(map(), pid() | nil, keyword()) :: :ok | no_return()
   def run(issue, codex_update_recipient \\ nil, opts \\ []) do
-    # The orchestrator owns host retries so one worker lifetime never hops machines.
-    worker_host = selected_worker_host(Keyword.get(opts, :worker_host), Config.settings!().worker.ssh_hosts)
+    workflow_store = Keyword.get(opts, :workflow_store)
+    prev_ctx = Context.workflow_store()
 
-    Logger.info("Starting agent run for #{issue_context(issue)} worker_host=#{SSH.worker_host_for_log(worker_host)}")
+    if workflow_store do
+      Context.put_workflow_store(workflow_store)
+    end
 
-    case run_on_worker_host(issue, codex_update_recipient, opts, worker_host) do
-      :ok ->
-        :ok
+    try do
+      cfg = settings!(opts)
 
-      {:error, reason} ->
-        Logger.error("Agent run failed for #{issue_context(issue)}: #{inspect(reason)}")
-        raise RuntimeError, "Agent run failed for #{issue_context(issue)}: #{inspect(reason)}"
+      # The orchestrator owns host retries so one worker lifetime never hops machines.
+      worker_host = selected_worker_host(Keyword.get(opts, :worker_host), cfg.worker.ssh_hosts)
+
+      Logger.info("Starting agent run for #{issue_context(issue)} worker_host=#{SSH.worker_host_for_log(worker_host)}")
+
+      case run_on_worker_host(issue, codex_update_recipient, opts, worker_host) do
+        :ok ->
+          :ok
+
+        {:error, reason} ->
+          Logger.error("Agent run failed for #{issue_context(issue)}: #{inspect(reason)}")
+          raise RuntimeError, "Agent run failed for #{issue_context(issue)}: #{inspect(reason)}"
+      end
+    after
+      if workflow_store do
+        case prev_ctx do
+          nil -> Context.delete_workflow_store()
+          other -> Context.put_workflow_store(other)
+        end
+      end
     end
   end
 
@@ -81,7 +109,7 @@ defmodule SymphonyElixir.AgentRunner do
   defp send_worker_runtime_info(_recipient, _issue, _worker_host, _workspace), do: :ok
 
   defp run_codex_turns(workspace, issue, codex_update_recipient, opts, worker_host) do
-    max_turns = Keyword.get(opts, :max_turns, Config.settings!().agent.max_turns)
+    max_turns = Keyword.get(opts, :max_turns, settings!(opts).agent.max_turns)
     issue_state_fetcher = Keyword.get(opts, :issue_state_fetcher, &Tracker.fetch_issue_states_by_ids/1)
 
     adapter = Keyword.get(opts, :coding_agent_adapter) || CodingAgent.adapter()
@@ -129,7 +157,7 @@ defmodule SymphonyElixir.AgentRunner do
 
       Logger.info("Completed agent run for #{issue_context(issue)} session_id=#{turn_result[:session_id]} workspace=#{workspace} turn=#{turn_number}/#{max_turns}")
 
-      case continue_with_issue?(issue, issue_state_fetcher) do
+      case continue_with_issue?(issue, issue_state_fetcher, opts) do
         {:continue, refreshed_issue} when turn_number < max_turns ->
           Logger.info("Continuing agent run for #{issue_context(refreshed_issue)} after normal turn completion turn=#{turn_number}/#{max_turns}")
 
@@ -173,10 +201,11 @@ defmodule SymphonyElixir.AgentRunner do
     """
   end
 
-  defp continue_with_issue?(%Issue{id: issue_id} = issue, issue_state_fetcher) when is_binary(issue_id) do
+  defp continue_with_issue?(%Issue{id: issue_id} = issue, issue_state_fetcher, opts)
+       when is_binary(issue_id) do
     case issue_state_fetcher.([issue_id]) do
       {:ok, [%Issue{} = refreshed_issue | _]} ->
-        if active_issue_state?(refreshed_issue.state) and follow_up_turn_allowed?(refreshed_issue.state) do
+        if active_issue_state?(refreshed_issue.state, opts) and follow_up_turn_allowed?(refreshed_issue.state) do
           {:continue, refreshed_issue}
         else
           {:done, refreshed_issue}
@@ -190,16 +219,21 @@ defmodule SymphonyElixir.AgentRunner do
     end
   end
 
-  defp continue_with_issue?(issue, _issue_state_fetcher), do: {:done, issue}
+  defp continue_with_issue?(issue, _issue_state_fetcher, _opts), do: {:done, issue}
 
-  defp active_issue_state?(state_name) when is_binary(state_name) do
+  defp active_issue_state?(state_name, opts) when is_binary(state_name) do
     normalized_state = normalize_issue_state(state_name)
 
-    Config.settings!().tracker.active_states
+    settings!(opts).tracker.active_states
     |> Enum.any?(fn active_state -> normalize_issue_state(active_state) == normalized_state end)
   end
 
-  defp active_issue_state?(_state_name), do: false
+  defp active_issue_state?(_state_name, _opts), do: false
+
+  defp settings!(opts) when is_list(opts) do
+    ws = Keyword.get(opts, :workflow_store)
+    Config.settings!(workflow_store: ws)
+  end
 
   # `tracker.active_states` includes handoff states such as In Review and Merging so the
   # orchestrator keeps polling them, but those states mean the coding agent must not run

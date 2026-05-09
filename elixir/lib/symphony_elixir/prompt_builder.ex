@@ -3,15 +3,23 @@ defmodule SymphonyElixir.PromptBuilder do
   Builds agent prompts from Linear issue data.
   """
 
-  alias SymphonyElixir.{Config, Rescue, Workflow}
+  alias SymphonyElixir.{Config, Rescue, Workflow, WorkflowStore}
 
   @render_opts [strict_variables: true, strict_filters: true]
 
   @spec build_prompt(SymphonyElixir.Linear.Issue.t(), keyword()) :: String.t()
   def build_prompt(issue, opts \\ []) do
+    ws = Keyword.get(opts, :workflow_store)
+
+    wf_result =
+      case ws do
+        nil -> Workflow.current()
+        store -> WorkflowStore.current(store)
+      end
+
     template =
-      Workflow.current()
-      |> prompt_template!()
+      wf_result
+      |> prompt_template!(ws)
       |> parse_template!()
 
     template
@@ -19,27 +27,27 @@ defmodule SymphonyElixir.PromptBuilder do
       %{
         "attempt" => Keyword.get(opts, :attempt),
         "issue" => issue |> Map.from_struct() |> to_solid_map(),
-        "workspace" => workspace_template_vars(),
-        "tracker" => tracker_template_vars()
+        "workspace" => workspace_template_vars(ws),
+        "tracker" => tracker_template_vars(ws)
       },
       @render_opts
     )
     |> IO.iodata_to_binary()
   end
 
-  defp workspace_template_vars do
-    ws = Config.settings!().workspace
-    %{"root" => ws.root, "base_branch" => ws.base_branch}
+  defp workspace_template_vars(ws) do
+    cfg = Config.settings!(workflow_store: ws)
+    %{"root" => cfg.workspace.root, "base_branch" => cfg.workspace.base_branch}
   end
 
-  defp tracker_template_vars do
-    t = Config.settings!().tracker
+  defp tracker_template_vars(ws) do
+    t = Config.settings!(workflow_store: ws).tracker
     %{"repo" => t.repo}
   end
 
-  defp prompt_template!({:ok, %{prompt_template: prompt}}), do: default_prompt(prompt)
+  defp prompt_template!({:ok, %{prompt_template: prompt}}, ws), do: default_prompt(prompt, ws)
 
-  defp prompt_template!({:error, reason}) do
+  defp prompt_template!({:error, reason}, _ws) do
     raise RuntimeError, "workflow_unavailable: #{inspect(reason)}"
   end
 
@@ -68,9 +76,9 @@ defmodule SymphonyElixir.PromptBuilder do
   defp to_solid_value(value) when is_list(value), do: Enum.map(value, &to_solid_value/1)
   defp to_solid_value(value), do: value
 
-  defp default_prompt(prompt) when is_binary(prompt) do
+  defp default_prompt(prompt, ws) when is_binary(prompt) do
     if String.trim(prompt) == "" do
-      Config.workflow_prompt()
+      Config.workflow_prompt(workflow_store: ws)
     else
       prompt
     end

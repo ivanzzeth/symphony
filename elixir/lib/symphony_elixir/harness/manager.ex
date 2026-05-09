@@ -14,7 +14,7 @@ defmodule SymphonyElixir.Harness.Manager do
   use GenServer
   require Logger
 
-  alias SymphonyElixir.{CodingAgent, Rescue, Workflow}
+  alias SymphonyElixir.{CodingAgent, Config.Context, Rescue, Workflow}
 
   @harness_state_dir ".symphony"
   @harness_state_file "harness-state.json"
@@ -35,26 +35,29 @@ defmodule SymphonyElixir.Harness.Manager do
       :last_hash,
       :harness_running,
       :poll_timer_ref,
-      :workflow_file_path
+      :workflow_file_path,
+      :manager_pid,
+      :workflow_store
     ]
   end
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+    name = Keyword.get(opts, :name, __MODULE__)
+    GenServer.start_link(__MODULE__, opts, name: name)
   end
 
   @doc """
   Returns true when a harness agent is currently running in the project directory.
   """
-  @spec harness_running?() :: boolean()
-  def harness_running? do
-    case Process.whereis(__MODULE__) do
-      pid when is_pid(pid) ->
-        GenServer.call(__MODULE__, :harness_running?)
+  @spec harness_running?(GenServer.server() | :auto) :: boolean()
+  def harness_running?(server \\ :auto) do
+    resolved = resolve_harness_server(server)
 
-      _ ->
-        false
+    try do
+      if resolved, do: GenServer.call(resolved, :harness_running?), else: false
+    catch
+      :exit, _ -> false
     end
   end
 
@@ -62,10 +65,31 @@ defmodule SymphonyElixir.Harness.Manager do
   Synchronously check for WORKFLOW.md changes and dispatch if needed.
   Returns `:dispatched`, `:unchanged`, or `:harness_busy`.
   """
-  @spec check() :: :dispatched | :unchanged | :harness_busy
-  def check do
-    GenServer.call(__MODULE__, :check)
+  @spec check(GenServer.server() | :auto) :: :dispatched | :unchanged | :harness_busy
+  def check(server \\ :auto) do
+    case resolve_harness_server(server) do
+      nil ->
+        :unchanged
+
+      resolved ->
+        GenServer.call(resolved, :check)
+    end
   end
+
+  defp resolve_harness_server(:auto) do
+    case Application.get_env(:symphony_elixir, :primary_project_id) do
+      id when is_binary(id) ->
+        case Registry.lookup(SymphonyElixir.ProjectProcessRegistry, {id, :harness_manager}) do
+          [{pid, _}] -> pid
+          [] -> Process.whereis(__MODULE__)
+        end
+
+      _ ->
+        Process.whereis(__MODULE__)
+    end
+  end
+
+  defp resolve_harness_server(name), do: name
 
   @doc false
   @spec git_toplevel(Path.t()) :: Path.t()
@@ -91,12 +115,15 @@ defmodule SymphonyElixir.Harness.Manager do
         end
 
     harness_state_path = harness_state_path(project_dir)
+    workflow_store = Keyword.get(opts, :workflow_store)
 
     state = %State{
       project_dir: project_dir,
       harness_state_path: harness_state_path,
       last_hash: load_last_hash(harness_state_path),
-      harness_running: false
+      harness_running: false,
+      manager_pid: self(),
+      workflow_store: workflow_store
     }
 
     state =
@@ -209,17 +236,23 @@ defmodule SymphonyElixir.Harness.Manager do
   @harness_max_turns 3
 
   defp dispatch_harness_agent(state, current_hash) do
-    adapter = CodingAgent.adapter()
     prompt = build_harness_prompt(state.last_hash, current_hash, state.workflow_file_path)
 
     task_ref =
       Task.async(fn ->
         try do
+          if ws = state.workflow_store do
+            Context.put_workflow_store(ws)
+          end
+
+          adapter = CodingAgent.adapter()
           do_dispatch_harness(adapter, state, prompt)
         rescue
           e ->
             Rescue.log_error("Harness agent task crashed", e, __STACKTRACE__)
-            send(__MODULE__, {:harness_complete, {:error, e}})
+            send(state.manager_pid, {:harness_complete, {:error, e}})
+        after
+          _ = Context.delete_workflow_store()
         end
       end)
 
@@ -231,18 +264,20 @@ defmodule SymphonyElixir.Harness.Manager do
   end
 
   defp do_dispatch_harness(adapter, state, prompt) do
+    manager_pid = state.manager_pid
+
     case adapter.start_session(state.project_dir, []) do
       {:ok, session} ->
         try do
           result = run_harness_turns(adapter, session, prompt)
-          send(__MODULE__, {:harness_complete, result})
+          send(manager_pid, {:harness_complete, result})
         after
           adapter.stop_session(session)
         end
 
       {:error, reason} ->
         Logger.error("Failed to start harness agent session: #{inspect(reason)}")
-        send(__MODULE__, {:harness_complete, {:error, reason}})
+        send(manager_pid, {:harness_complete, {:error, reason}})
     end
   end
 

@@ -113,6 +113,7 @@ defmodule SymphonyElixir.Cursor.Adapter do
   end
 
   defp cleanup_prompt_file(nil), do: :ok
+
   defp cleanup_prompt_file(path) do
     File.rm_rf(path)
   end

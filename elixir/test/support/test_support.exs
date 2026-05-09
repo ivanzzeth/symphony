@@ -26,9 +26,20 @@ defmodule SymphonyElixir.TestSupport do
       alias SymphonyElixir.Workspace
 
       import SymphonyElixir.TestSupport,
-        only: [write_workflow_file!: 1, write_workflow_file!: 2, restore_env: 2, stop_default_http_server: 0]
+        only: [
+          write_workflow_file!: 1,
+          write_workflow_file!: 2,
+          restore_env: 2,
+          stop_default_http_server: 0,
+          primary_project_tree_pid: 0,
+          terminate_primary_project_child: 1,
+          restart_primary_project_child: 1
+        ]
 
       setup do
+        _ = SymphonyElixir.ProjectSupervisor.stop_project("default")
+        SymphonyElixir.ProjectAliases.clear_aliases()
+
         workflow_root =
           Path.join(
             System.tmp_dir!(),
@@ -39,10 +50,30 @@ defmodule SymphonyElixir.TestSupport do
         workflow_file = Path.join(workflow_root, "WORKFLOW.md")
         write_workflow_file!(workflow_file)
         Workflow.set_workflow_file_path(workflow_file)
-        if Process.whereis(SymphonyElixir.WorkflowStore), do: SymphonyElixir.WorkflowStore.force_reload()
+        SymphonyElixir.ProjectAliases.register_primary("default")
+
+        case SymphonyElixir.ProjectSupervisor.start_project(
+               project_id: "default",
+               workflow_path: workflow_file,
+               config_base_dir: workflow_root
+             ) do
+          {:ok, _} ->
+            :ok
+
+          {:error, :already_started} ->
+            :ok
+
+          other ->
+            flunk("could not start default test project: #{inspect(other)}")
+        end
+
+        if pid = SymphonyElixir.WorkflowStore.whereis(), do: SymphonyElixir.WorkflowStore.force_reload(pid)
+
         stop_default_http_server()
 
         on_exit(fn ->
+          _ = SymphonyElixir.ProjectSupervisor.stop_project("default")
+          SymphonyElixir.ProjectAliases.clear_aliases()
           Application.delete_env(:symphony_elixir, :workflow_file_path)
           # Do not clear :server_port_override here — global Application env; clearing it races
           # parallel tests (e.g. StatusDashboardSnapshotTest). Tests that set an override must
@@ -62,12 +93,28 @@ defmodule SymphonyElixir.TestSupport do
     workflow = workflow_content(overrides)
     File.write!(path, workflow)
 
-    if Process.whereis(SymphonyElixir.WorkflowStore) do
-      try do
-        SymphonyElixir.WorkflowStore.force_reload()
-      catch
-        :exit, _reason -> :ok
-      end
+    case SymphonyElixir.WorkflowStore.whereis() do
+      pid when is_pid(pid) ->
+        try do
+          SymphonyElixir.WorkflowStore.force_reload(pid)
+        catch
+          :exit, _reason -> :ok
+        end
+
+      _ ->
+        :ok
+    end
+
+    case SymphonyElixir.WorkflowStore.primary_server() do
+      nil ->
+        :ok
+
+      srv ->
+        try do
+          _ = GenServer.call(srv, :sync_application_workflow_path)
+        catch
+          :exit, _ -> :ok
+        end
     end
 
     :ok
@@ -75,6 +122,41 @@ defmodule SymphonyElixir.TestSupport do
 
   def restore_env(key, nil), do: System.delete_env(key)
   def restore_env(key, value), do: System.put_env(key, value)
+
+  @doc """
+  PID of the `"default"` test project's `SymphonyElixir.Project.Tree` supervisor, if running.
+  """
+  @spec primary_project_tree_pid() :: pid() | nil
+  def primary_project_tree_pid do
+    id = Application.get_env(:symphony_elixir, :primary_project_id) || "default"
+
+    case SymphonyElixir.ProjectSupervisor.Meta.fetch(id) do
+      %{tree_pid: pid} when is_pid(pid) -> pid
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Terminates a child under the default test project tree (for example `WorkflowStore`, `Orchestrator`).
+  """
+  @spec terminate_primary_project_child(module()) :: :ok | {:error, term()}
+  def terminate_primary_project_child(child_mod) when is_atom(child_mod) do
+    case primary_project_tree_pid() do
+      nil -> {:error, :no_primary_project_tree}
+      tree_pid -> Supervisor.terminate_child(tree_pid, child_mod)
+    end
+  end
+
+  @doc """
+  Restarts a child under the default test project tree.
+  """
+  @spec restart_primary_project_child(module()) :: {:ok, pid()} | {:error, term()}
+  def restart_primary_project_child(child_mod) when is_atom(child_mod) do
+    case primary_project_tree_pid() do
+      nil -> {:error, :no_primary_project_tree}
+      tree_pid -> Supervisor.restart_child(tree_pid, child_mod)
+    end
+  end
 
   def stop_default_http_server do
     case Enum.find(Supervisor.which_children(SymphonyElixir.Supervisor), fn

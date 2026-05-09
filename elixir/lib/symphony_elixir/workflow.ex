@@ -3,7 +3,7 @@ defmodule SymphonyElixir.Workflow do
   Loads workflow configuration and prompt from WORKFLOW.md.
   """
 
-  alias SymphonyElixir.WorkflowStore
+  alias SymphonyElixir.{Config.Context, WorkflowStore}
 
   @workflow_file_name "WORKFLOW.md"
 
@@ -35,12 +35,24 @@ defmodule SymphonyElixir.Workflow do
 
   @spec current() :: {:ok, loaded_workflow()} | {:error, term()}
   def current do
-    case Process.whereis(WorkflowStore) do
-      pid when is_pid(pid) ->
-        WorkflowStore.current()
+    case Context.workflow_store() do
+      nil ->
+        case WorkflowStore.whereis() do
+          pid when is_pid(pid) ->
+            WorkflowStore.current(pid)
 
-      _ ->
-        load()
+          _ ->
+            case Process.whereis(WorkflowStore) do
+              pid when is_pid(pid) ->
+                WorkflowStore.current(pid)
+
+              _ ->
+                load()
+            end
+        end
+
+      store ->
+        WorkflowStore.current(store)
     end
   end
 
@@ -114,9 +126,13 @@ defmodule SymphonyElixir.Workflow do
   end
 
   defp maybe_reload_store do
-    if Process.whereis(WorkflowStore) do
-      _ = WorkflowStore.force_reload()
-    end
+    pid =
+      case WorkflowStore.whereis() do
+        p when is_pid(p) -> p
+        _ -> Process.whereis(WorkflowStore)
+      end
+
+    if is_pid(pid), do: _ = GenServer.call(pid, :sync_application_workflow_path)
 
     :ok
   end
