@@ -153,4 +153,39 @@ defmodule SymphonyElixir.AgentRunnerTest do
       File.rm_rf(test_root)
     end
   end
+
+  test "notifies recipient pid when run stops at max_turns while issue stays active" do
+    test_root =
+      Path.join(
+        System.tmp_dir!(),
+        "symphony-agent-runner-max-notify-#{System.unique_integer([:positive])}"
+      )
+
+    try do
+      with_minimal_workspace(
+        test_root,
+        [max_turns: 2],
+        fn _workspace_root ->
+          issue = issue("issue-max-notify", "AR-MAX-NOTIFY")
+
+          state_fetcher = fn [_issue_id] ->
+            {:ok, [Map.put(issue, :state, "In Progress")]}
+          end
+
+          orchestrator = self()
+
+          assert :ok =
+                   AgentRunner.run(issue, orchestrator,
+                     coding_agent_adapter: FakeCodingAgent,
+                     max_turns: 2,
+                     issue_state_fetcher: state_fetcher
+                   )
+
+          assert_receive {:symphony_agent_run_outcome, "issue-max-notify", :max_turns_reached}
+        end
+      )
+    after
+      File.rm_rf(test_root)
+    end
+  end
 end
