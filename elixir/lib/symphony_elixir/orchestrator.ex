@@ -1208,7 +1208,7 @@ defmodule SymphonyElixir.Orchestrator do
           worker_host: Map.get(metadata, :worker_host),
           workspace_path: Map.get(metadata, :workspace_path),
           session_id: metadata.session_id,
-          codex_app_server_pid: metadata.codex_app_server_pid,
+          codex_app_server_pid: serialize_app_server_pid(metadata.codex_app_server_pid),
           codex_input_tokens: metadata.codex_input_tokens,
           codex_output_tokens: metadata.codex_output_tokens,
           codex_total_tokens: metadata.codex_total_tokens,
@@ -1237,13 +1237,15 @@ defmodule SymphonyElixir.Orchestrator do
 
     agent_kind = state.coding_agent_kind || Config.settings!().agent.kind
 
+    completed_seconds = Map.get(state.codex_totals, :seconds_running, 0)
+
     codex_totals =
-      update_in(state.codex_totals.seconds_running, fn completed_seconds ->
+      Map.put(state.codex_totals, :seconds_running,
         completed_seconds +
           Enum.reduce(state.running, 0, fn {_id, metadata}, total ->
             total + running_seconds(metadata.started_at, now)
           end)
-      end)
+      )
 
     {:reply,
      %{
@@ -1753,6 +1755,10 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   defp running_seconds(_started_at, _now), do: 0
+
+  defp serialize_app_server_pid(pid) when is_pid(pid), do: inspect(pid)
+  defp serialize_app_server_pid(pid) when is_binary(pid), do: pid
+  defp serialize_app_server_pid(_pid), do: nil
 
   defp integer_like(value) when is_integer(value) and value >= 0, do: value
 
