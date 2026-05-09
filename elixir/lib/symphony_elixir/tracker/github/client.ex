@@ -36,6 +36,28 @@ defmodule SymphonyElixir.Tracker.GitHub.Client do
     |> do_fetch_issues_by_states()
   end
 
+  @spec fetch_issue_by_identifier(String.t(), keyword()) :: {:ok, Issue.t()} | {:error, term()}
+  def fetch_issue_by_identifier(identifier, _opts \\ []) when is_binary(identifier) do
+    wanted = identifier |> String.trim() |> String.downcase()
+
+    with {:ok, repo} <- tracker_repo(),
+         {:ok, issues} <- list_issues(repo, "all") do
+      issues
+      |> Enum.find(fn issue ->
+        num = issue["number"]
+        num_s = if is_integer(num), do: Integer.to_string(num), else: to_string(num || "")
+        gh = String.downcase("gh-#{num_s}")
+
+        wanted == String.downcase(num_s) or wanted == gh or
+          wanted == String.downcase(identifier |> String.trim())
+      end)
+      |> case do
+        nil -> {:error, :not_found}
+        raw -> {:ok, normalize_issue(raw)}
+      end
+    end
+  end
+
   @spec fetch_issue_states_by_ids([String.t()]) :: {:ok, [Issue.t()]} | {:error, term()}
   def fetch_issue_states_by_ids(issue_ids) when is_list(issue_ids) do
     issue_ids

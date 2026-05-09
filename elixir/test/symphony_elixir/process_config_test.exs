@@ -32,12 +32,14 @@ defmodule SymphonyElixir.ProcessConfigTest do
       assert config.observability.dashboard_enabled == true
       assert config.observability.refresh_ms == 1_000
       assert config.observability.render_interval_ms == 16
+      assert config.daemon.max_global_agents == nil
       assert config.projects == []
     end
 
     test "returns defaults when nil path is given" do
       assert {:ok, config} = ProcessConfig.load(nil)
       assert config.server.host == "127.0.0.1"
+      assert config.daemon.max_global_agents == nil
       assert config.projects == []
     end
   end
@@ -73,6 +75,20 @@ defmodule SymphonyElixir.ProcessConfigTest do
       assert config.observability.render_interval_ms == 32
     end
 
+    test "reads daemon.max_global_agents from yaml file", %{tmp_yaml: tmp_yaml} do
+      write_yaml(tmp_yaml, %{"daemon" => %{"max_global_agents" => 7}})
+
+      assert {:ok, config} = ProcessConfig.load(tmp_yaml)
+      assert config.daemon.max_global_agents == 7
+    end
+
+    test "ignores non-positive daemon.max_global_agents values", %{tmp_yaml: tmp_yaml} do
+      write_yaml(tmp_yaml, %{"daemon" => %{"max_global_agents" => 0}})
+
+      assert {:ok, config} = ProcessConfig.load(tmp_yaml)
+      assert is_nil(config.daemon.max_global_agents)
+    end
+
     test "rejects invalid port values from yaml (returns nil)", %{tmp_yaml: tmp_yaml} do
       write_yaml(tmp_yaml, %{"server" => %{"port" => -5}})
 
@@ -85,6 +101,7 @@ defmodule SymphonyElixir.ProcessConfigTest do
 
       assert {:ok, config} = ProcessConfig.load(tmp_yaml)
       assert config.server.host == "127.0.0.1"
+      assert config.daemon.max_global_agents == nil
       assert config.projects == []
     end
   end

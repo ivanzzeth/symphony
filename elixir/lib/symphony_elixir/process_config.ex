@@ -31,6 +31,7 @@ defmodule SymphonyElixir.ProcessConfig do
               refresh_ms: @default_refresh_ms,
               render_interval_ms: @default_render_interval_ms
             },
+            daemon: %{max_global_agents: nil},
             projects: []
 
   @type t :: %__MODULE__{
@@ -40,6 +41,7 @@ defmodule SymphonyElixir.ProcessConfig do
             refresh_ms: pos_integer(),
             render_interval_ms: pos_integer()
           },
+          daemon: %{max_global_agents: pos_integer() | nil},
           projects: [Schema.DaemonProject.t()]
         }
 
@@ -221,8 +223,21 @@ defmodule SymphonyElixir.ProcessConfig do
         refresh_ms: resolve_refresh_ms(yaml_config),
         render_interval_ms: resolve_render_interval_ms(yaml_config)
       },
+      daemon: %{
+        max_global_agents: resolve_daemon_max_global_agents(yaml_config)
+      },
       projects: projects
     }
+  end
+
+  defp resolve_daemon_max_global_agents(yaml_config) when is_map(yaml_config) do
+    case get_in(yaml_config, ["daemon", "max_global_agents"]) do
+      n when is_integer(n) and n > 0 ->
+        n
+
+      _ ->
+        nil
+    end
   end
 
   defp resolve_port(yaml_config, opts) when is_map(yaml_config) do

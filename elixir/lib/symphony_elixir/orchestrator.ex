@@ -236,18 +236,14 @@ defmodule SymphonyElixir.Orchestrator do
 
               case run_outcome do
                 :max_turns_reached ->
-                  Logger.info(
-                    "Agent task completed at agent.max_turns for issue_id=#{issue_id} session_id=#{session_id}; releasing claim without continuation retry"
-                  )
+                  Logger.info("Agent task completed at agent.max_turns for issue_id=#{issue_id} session_id=#{session_id}; releasing claim without continuation retry")
 
                   state
                   |> release_issue_claim(issue_id)
                   |> mark_max_turns_halted_at(issue_id)
 
                 _ ->
-                  Logger.info(
-                    "Agent task completed for issue_id=#{issue_id} session_id=#{session_id}; scheduling active-state continuation check"
-                  )
+                  Logger.info("Agent task completed for issue_id=#{issue_id} session_id=#{session_id}; scheduling active-state continuation check")
 
                   schedule_issue_retry(state, issue_id, 1, %{
                     identifier: running_entry.identifier,
@@ -582,6 +578,45 @@ defmodule SymphonyElixir.Orchestrator do
     end
   end
 
+  defp cancel_retry_timer_and_remove(%State{} = state, issue_id) when is_binary(issue_id) do
+    case Map.get(state.retry_attempts, issue_id) do
+      %{timer_ref: ref} when is_reference(ref) ->
+        _ = Process.cancel_timer(ref)
+        :ok
+
+      _ ->
+        :ok
+    end
+
+    %{state | retry_attempts: Map.delete(state.retry_attempts, issue_id)}
+  end
+
+  defp cancel_issue_by_identifier(%State{} = state, identifier) when is_binary(identifier) do
+    running_ids =
+      state.running
+      |> Enum.filter(fn {_, m} -> Map.get(m, :identifier) == identifier end)
+      |> Enum.map(&elem(&1, 0))
+
+    retry_ids =
+      state.retry_attempts
+      |> Enum.filter(fn {_, r} -> Map.get(r, :identifier) == identifier end)
+      |> Enum.map(&elem(&1, 0))
+
+    ids = Enum.uniq(running_ids ++ retry_ids)
+
+    if ids == [] do
+      {:error, :not_found}
+    else
+      new_state =
+        Enum.reduce(ids, state, fn issue_id, acc ->
+          acc = cancel_retry_timer_and_remove(acc, issue_id)
+          terminate_running_issue(acc, issue_id, true)
+        end)
+
+      {:ok, new_state}
+    end
+  end
+
   defp reconcile_stalled_running_issues(%State{} = state) do
     case Config.settings(workflow_store: state.workflow_store) do
       {:ok, config} -> do_reconcile_stalled(state, config.agent.stall_timeout_ms)
@@ -710,10 +745,42 @@ defmodule SymphonyElixir.Orchestrator do
       !Map.has_key?(running, issue.id) and
       available_slots(state) > 0 and
       state_slots_available?(issue, state) and
-      worker_slots_available?(state)
+      worker_slots_available?(state) and
+      global_dispatch_slot_available?(state)
   end
 
   defp should_dispatch_issue?(_issue, _state, _active_states, _terminal_states), do: false
+
+  defp global_dispatch_slot_available?(%State{running: running}) when is_map(running) do
+    case Config.process_config().daemon.max_global_agents do
+      nil ->
+        true
+
+      max when is_integer(max) and max > 0 ->
+        total_dispatch_sessions_across_projects(running) < max
+
+      _ ->
+        true
+    end
+  end
+
+  defp total_dispatch_sessions_across_projects(running) when is_map(running) do
+    self_pid = self()
+
+    others =
+      ProjectRegistry.list()
+      |> Enum.reject(fn %{pid: pid} -> pid == self_pid end)
+      |> Enum.map(fn %{pid: pid} -> remote_orchestrator_running_count(pid) end)
+      |> Enum.sum()
+
+    others + map_size(running)
+  end
+
+  defp remote_orchestrator_running_count(pid) when is_pid(pid) do
+    GenServer.call(pid, :running_sessions_count, 500)
+  catch
+    :exit, _ -> 0
+  end
 
   defp max_turns_dispatch_allowed?(%Issue{id: issue_id, updated_at: updated_at}, halted_at_by_issue)
        when is_binary(issue_id) and is_map(halted_at_by_issue) do
@@ -731,8 +798,7 @@ defmodule SymphonyElixir.Orchestrator do
   defp pop_pending_agent_outcome(%State{} = state, issue_id) when is_binary(issue_id) do
     pending = Map.get(state, :pending_agent_outcomes) || %{}
 
-    {Map.get(pending, issue_id),
-     %{state | pending_agent_outcomes: Map.delete(pending, issue_id)}}
+    {Map.get(pending, issue_id), %{state | pending_agent_outcomes: Map.delete(pending, issue_id)}}
   end
 
   defp mark_max_turns_halted_at(%State{} = state, issue_id) when is_binary(issue_id) do
@@ -1369,6 +1435,46 @@ defmodule SymphonyElixir.Orchestrator do
     end
   end
 
+  @spec manual_dispatch_issue(GenServer.server(), String.t()) :: :ok | {:error, term()}
+  def manual_dispatch_issue(server, identifier) when is_binary(identifier) do
+    orchestrator_issue_call(server, {:manual_dispatch_issue, identifier})
+  end
+
+  @spec manual_update_issue(GenServer.server(), String.t(), String.t()) :: :ok | {:error, term()}
+  def manual_update_issue(server, identifier, state_name)
+      when is_binary(identifier) and is_binary(state_name) do
+    orchestrator_issue_call(server, {:manual_update_issue, identifier, state_name})
+  end
+
+  @spec manual_cancel_issue(GenServer.server(), String.t()) :: :ok | {:error, term()}
+  def manual_cancel_issue(server, identifier) when is_binary(identifier) do
+    orchestrator_issue_call(server, {:manual_cancel_issue, identifier})
+  end
+
+  @doc """
+  Returns the number of concurrently dispatched agent tasks owned by this orchestrator.
+  """
+  @spec running_sessions_count(GenServer.server()) :: non_neg_integer()
+  def running_sessions_count(server \\ __MODULE__) do
+    case orchestrator_call_target(server) do
+      pid when is_pid(pid) ->
+        try do
+          GenServer.call(pid, :running_sessions_count)
+        catch
+          :exit, _ -> 0
+        end
+
+      _ ->
+        0
+    end
+  end
+
+  @doc false
+  @spec global_dispatch_slot_available_for_test?(term()) :: boolean()
+  def global_dispatch_slot_available_for_test?(%State{} = state) do
+    global_dispatch_slot_available?(state)
+  end
+
   defp orchestrator_call_target(pid) when is_pid(pid) do
     if Process.alive?(pid), do: pid, else: nil
   end
@@ -1394,6 +1500,20 @@ defmodule SymphonyElixir.Orchestrator do
   end
 
   defp orchestrator_call_target(_), do: nil
+
+  defp orchestrator_issue_call(server, message) do
+    case orchestrator_call_target(server) do
+      pid when is_pid(pid) ->
+        try do
+          GenServer.call(pid, message)
+        catch
+          :exit, _ -> {:error, :unavailable}
+        end
+
+      _ ->
+        {:error, :unavailable}
+    end
+  end
 
   @impl true
   def handle_call(:snapshot, _from, state) do
@@ -1461,6 +1581,7 @@ defmodule SymphonyElixir.Orchestrator do
      %{
        running: running,
        retrying: retrying,
+       completed: MapSet.size(state.completed),
        codex_totals: codex_totals,
        rate_limits: Map.get(state, :codex_rate_limits),
        coding_agent: %{kind: agent_kind, label: CodingAgent.kind_display_label(agent_kind)},
@@ -1470,6 +1591,10 @@ defmodule SymphonyElixir.Orchestrator do
          poll_interval_ms: state.poll_interval_ms
        }
      }, state}
+  end
+
+  def handle_call(:running_sessions_count, _from, state) do
+    {:reply, map_size(state.running), state}
   end
 
   def handle_call(:request_refresh, _from, state) do
@@ -1485,6 +1610,68 @@ defmodule SymphonyElixir.Orchestrator do
        requested_at: DateTime.utc_now(),
        operations: ["poll", "reconcile"]
      }, state}
+  end
+
+  def handle_call({:manual_dispatch_issue, identifier}, _from, state) when is_binary(identifier) do
+    tracker_opts = [workflow_store: state.workflow_store]
+
+    case Tracker.fetch_issue_by_identifier(identifier, tracker_opts) do
+      {:error, :not_found} ->
+        {:reply, {:error, :not_found}, state}
+
+      {:error, reason} ->
+        {:reply, {:error, {:tracker_error, reason}}, state}
+
+      {:ok, %Issue{} = issue} ->
+        cond do
+          Map.has_key?(state.running, issue.id) ->
+            {:reply, {:error, :already_running}, state}
+
+          Map.has_key?(state.retry_attempts, issue.id) ->
+            {:reply, {:error, :already_retrying}, state}
+
+          should_dispatch_issue?(issue, state, active_state_set(state), terminal_state_set(state)) ->
+            state = dispatch_issue(state, issue)
+            notify_dashboard()
+            {:reply, :ok, state}
+
+          true ->
+            {:reply, {:error, :not_dispatchable}, state}
+        end
+    end
+  end
+
+  def handle_call({:manual_update_issue, identifier, state_name}, _from, state)
+      when is_binary(identifier) and is_binary(state_name) do
+    tracker_opts = [workflow_store: state.workflow_store]
+
+    case Tracker.fetch_issue_by_identifier(identifier, tracker_opts) do
+      {:error, :not_found} ->
+        {:reply, {:error, :not_found}, state}
+
+      {:error, reason} ->
+        {:reply, {:error, {:tracker_error, reason}}, state}
+
+      {:ok, %Issue{id: issue_id}} ->
+        case Tracker.update_issue_state(issue_id, state_name, tracker_opts) do
+          :ok ->
+            {:reply, :ok, state}
+
+          {:error, reason} ->
+            {:reply, {:error, {:tracker_error, reason}}, state}
+        end
+    end
+  end
+
+  def handle_call({:manual_cancel_issue, identifier}, _from, state) when is_binary(identifier) do
+    case cancel_issue_by_identifier(state, identifier) do
+      {:ok, new_state} ->
+        notify_dashboard()
+        {:reply, :ok, new_state}
+
+      {:error, :not_found} ->
+        {:reply, {:error, :not_found}, state}
+    end
   end
 
   defp integrate_codex_update(running_entry, %{event: event, timestamp: timestamp} = update) do

@@ -27,6 +27,7 @@ defmodule SymphonyElixir.ProcessConfig.StoreTest do
       File.rm(tmp_yaml)
       Application.delete_env(:symphony_elixir, :server_port_override)
       Application.delete_env(:symphony_elixir, :server_host_override)
+      Application.delete_env(:symphony_elixir, :daemon_max_global_agents_override)
     end)
 
     {:ok, tmp_yaml: tmp_yaml}
@@ -99,6 +100,18 @@ defmodule SymphonyElixir.ProcessConfig.StoreTest do
       assert config.observability.dashboard_enabled == true
       assert config.observability.refresh_ms == 500
       assert config.observability.render_interval_ms == 32
+      assert config.daemon.max_global_agents == nil
+    end
+
+    test "daemon_max_global_agents_override is applied on each Store.get/1 call", %{tmp_yaml: tmp_yaml} do
+      Application.put_env(:symphony_elixir, :daemon_max_global_agents_override, 9)
+      {:ok, _pid} = Store.start_link(config_arg: tmp_yaml, name: :store_test_daemon_override)
+
+      assert Store.get(:store_test_daemon_override).daemon.max_global_agents == 9
+
+      Application.delete_env(:symphony_elixir, :daemon_max_global_agents_override)
+
+      assert Store.get(:store_test_daemon_override).daemon.max_global_agents == nil
     end
   end
 end
