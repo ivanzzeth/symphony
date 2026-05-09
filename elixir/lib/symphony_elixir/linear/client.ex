@@ -95,6 +95,45 @@ defmodule SymphonyElixir.Linear.Client do
   }
   """
 
+  @issue_by_ref_query """
+  query SymphonyIssueByRef($issueId: String!, $relationFirst: Int!) {
+    issue(id: $issueId) {
+      id
+      identifier
+      title
+      description
+      priority
+      state {
+        name
+      }
+      branchName
+      url
+      assignee {
+        id
+      }
+      labels {
+        nodes {
+          name
+        }
+      }
+      inverseRelations(first: $relationFirst) {
+        nodes {
+          type
+          issue {
+            id
+            identifier
+            state {
+              name
+            }
+          }
+        }
+      }
+      createdAt
+      updatedAt
+    }
+  }
+  """
+
   @viewer_query """
   query SymphonyLinearViewer {
     viewer {
@@ -116,7 +155,7 @@ defmodule SymphonyElixir.Linear.Client do
         {:error, :missing_linear_project_slug}
 
       true ->
-        with {:ok, assignee_filter} <- routing_assignee_filter() do
+        with {:ok, assignee_filter} <- routing_assignee_filter([]) do
           do_fetch_by_states(project_slug, tracker.active_states, assignee_filter)
         end
     end
@@ -154,8 +193,26 @@ defmodule SymphonyElixir.Linear.Client do
         {:ok, []}
 
       ids ->
-        with {:ok, assignee_filter} <- routing_assignee_filter() do
+        with {:ok, assignee_filter} <- routing_assignee_filter([]) do
           do_fetch_issue_states(ids, assignee_filter)
+        end
+    end
+  end
+
+  @spec fetch_issue_by_identifier(String.t(), keyword()) :: {:ok, Issue.t()} | {:error, term()}
+  def fetch_issue_by_identifier(identifier, opts \\ []) when is_binary(identifier) and is_list(opts) do
+    settings_opts = Keyword.take(opts, [:workflow_store])
+
+    cond do
+      is_nil(Config.settings!(settings_opts).tracker.api_key) ->
+        {:error, :missing_linear_api_token}
+
+      true ->
+        with {:ok, assignee_filter} <- routing_assignee_filter(settings_opts),
+             {:ok, body} <-
+               graphql(@issue_by_ref_query, %{issueId: identifier, relationFirst: @issue_page_size}, settings_opts),
+             {:ok, issue} <- decode_linear_single_issue(body, assignee_filter) do
+          {:ok, issue}
         end
     end
   end
@@ -163,10 +220,15 @@ defmodule SymphonyElixir.Linear.Client do
   @spec graphql(String.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
   def graphql(query, variables \\ %{}, opts \\ [])
       when is_binary(query) and is_map(variables) and is_list(opts) do
+    settings_opts = Keyword.take(opts, [:workflow_store])
     payload = build_graphql_payload(query, variables, Keyword.get(opts, :operation_name))
-    request_fun = Keyword.get(opts, :request_fun, &post_graphql_request/2)
 
-    with {:ok, headers} <- graphql_headers(),
+    request_fun =
+      Keyword.get(opts, :request_fun, fn payload_i, headers ->
+        post_graphql_request(payload_i, headers, settings_opts)
+      end)
+
+    with {:ok, headers} <- graphql_headers(settings_opts),
          {:ok, %{status: 200, body: body}} <- request_fun.(payload, headers) do
       {:ok, body}
     else
@@ -196,7 +258,7 @@ defmodule SymphonyElixir.Linear.Client do
     assignee_filter =
       case assignee do
         value when is_binary(value) ->
-          case build_assignee_filter(value) do
+          case build_assignee_filter(value, []) do
             {:ok, filter} -> filter
             {:error, _reason} -> nil
           end
@@ -380,8 +442,8 @@ defmodule SymphonyElixir.Linear.Client do
     end
   end
 
-  defp graphql_headers do
-    case Config.settings!().tracker.api_key do
+  defp graphql_headers(settings_opts) do
+    case Config.settings!(settings_opts).tracker.api_key do
       nil ->
         {:error, :missing_linear_api_token}
 
@@ -394,12 +456,31 @@ defmodule SymphonyElixir.Linear.Client do
     end
   end
 
-  defp post_graphql_request(payload, headers) do
-    Req.post(Config.settings!().tracker.endpoint,
+  defp post_graphql_request(payload, headers, settings_opts) do
+    Req.post(Config.settings!(settings_opts).tracker.endpoint,
       headers: headers,
       json: payload,
       connect_options: [timeout: 30_000]
     )
+  end
+
+  defp decode_linear_single_issue(%{"errors" => errors}, _assignee_filter) when is_list(errors) do
+    {:error, {:linear_graphql_errors, errors}}
+  end
+
+  defp decode_linear_single_issue(%{"data" => %{"issue" => issue}}, assignee_filter) when is_map(issue) do
+    case normalize_issue(issue, assignee_filter) do
+      nil -> {:error, :not_found}
+      %Issue{} = i -> {:ok, i}
+    end
+  end
+
+  defp decode_linear_single_issue(%{"data" => %{"issue" => nil}}, _assignee_filter) do
+    {:error, :not_found}
+  end
+
+  defp decode_linear_single_issue(_unknown, _assignee_filter) do
+    {:error, :linear_unknown_payload}
   end
 
   defp decode_linear_response(%{"data" => %{"issues" => %{"nodes" => nodes}}}, assignee_filter) do
@@ -487,31 +568,31 @@ defmodule SymphonyElixir.Linear.Client do
 
   defp assignee_id(%{} = assignee), do: normalize_assignee_match_value(assignee["id"])
 
-  defp routing_assignee_filter do
-    case Config.settings!().tracker.assignee do
+  defp routing_assignee_filter(settings_opts) do
+    case Config.settings!(settings_opts).tracker.assignee do
       nil ->
         {:ok, nil}
 
       assignee ->
-        build_assignee_filter(assignee)
+        build_assignee_filter(assignee, settings_opts)
     end
   end
 
-  defp build_assignee_filter(assignee) when is_binary(assignee) do
+  defp build_assignee_filter(assignee, settings_opts) when is_binary(assignee) do
     case normalize_assignee_match_value(assignee) do
       nil ->
         {:ok, nil}
 
       "me" ->
-        resolve_viewer_assignee_filter()
+        resolve_viewer_assignee_filter(settings_opts)
 
       normalized ->
         {:ok, %{configured_assignee: assignee, match_values: MapSet.new([normalized])}}
     end
   end
 
-  defp resolve_viewer_assignee_filter do
-    case graphql(@viewer_query, %{}) do
+  defp resolve_viewer_assignee_filter(settings_opts) do
+    case graphql(@viewer_query, %{}, settings_opts) do
       {:ok, %{"data" => %{"viewer" => viewer}}} when is_map(viewer) ->
         case assignee_id(viewer) do
           nil ->

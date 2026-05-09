@@ -28,14 +28,25 @@ defmodule SymphonyElixirWeb.Router do
   end
 
   scope "/", SymphonyElixirWeb do
+    get("/api/v1/projects", ObservabilityApiController, :projects)
     get("/api/v1/state", ObservabilityApiController, :state)
     get("/api/v1/projects/:project_id/state", ObservabilityApiController, :project_state)
 
     match(:*, "/", ObservabilityApiController, :method_not_allowed)
+    match(:*, "/api/v1/projects", ObservabilityApiController, :method_not_allowed)
     match(:*, "/api/v1/state", ObservabilityApiController, :method_not_allowed)
     match(:*, "/api/v1/projects/:project_id/state", ObservabilityApiController, :method_not_allowed)
     post("/api/v1/refresh", ObservabilityApiController, :refresh)
     match(:*, "/api/v1/refresh", ObservabilityApiController, :method_not_allowed)
+    post("/api/v1/projects/:project_id/refresh", ObservabilityApiController, :project_refresh)
+    match(:*, "/api/v1/projects/:project_id/refresh", ObservabilityApiController, :method_not_allowed)
+
+    post("/api/v1/projects/:project_id/issues/:identifier", ObservabilityApiController, :project_issue_dispatch)
+    put("/api/v1/projects/:project_id/issues/:identifier", ObservabilityApiController, :project_issue_update)
+    delete("/api/v1/projects/:project_id/issues/:identifier", ObservabilityApiController, :project_issue_cancel)
+
+    match(:*, "/api/v1/projects/:project_id/issues/:identifier", ObservabilityApiController, :method_not_allowed)
+
     get("/api/v1/:issue_identifier", ObservabilityApiController, :issue)
     match(:*, "/api/v1/:issue_identifier", ObservabilityApiController, :method_not_allowed)
     match(:*, "/*path", ObservabilityApiController, :not_found)
