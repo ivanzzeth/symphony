@@ -469,4 +469,45 @@ defmodule SymphonyElixir.ProcessConfigTest do
     test prompt
     """)
   end
+
+  describe "apply_symphony_project_cli_overrides/2 and load/2 :symphony_project_cli_overrides" do
+    test "merges dotted workflow override before validation", %{tmp_yaml: tmp_yaml} do
+      dir = Path.dirname(tmp_yaml)
+      File.mkdir_p!(dir)
+      wf = Path.join(dir, "REAL.md")
+      ws = Path.join(dir, "ws_o")
+      File.mkdir_p!(ws)
+      write_min_workflow!(wf, ws)
+
+      File.write!(
+        tmp_yaml,
+        yaml_trim("""
+        projects:
+          svc:
+            workflow: ./MISSING.md
+        """)
+      )
+
+      overrides = [{"svc.workflow", wf}]
+
+      assert {:ok, config} =
+               ProcessConfig.load(tmp_yaml,
+                 skip_overrides: true,
+                 symphony_project_cli_overrides: overrides
+               )
+
+      assert [%{id: "svc", workflow_path: ^wf, enabled: true}] = config.projects
+    end
+
+    test "returns clear error for invalid override path" do
+      assert {:error, {:invalid_symphony_yaml, msg}} =
+               ProcessConfig.load(nil,
+                 skip_overrides: true,
+                 symphony_project_cli_overrides: [{"only_one_segment", "x"}]
+               )
+
+      assert msg =~ "CLI --project"
+      assert msg =~ "expected <project-id>.<field>"
+    end
+  end
 end
