@@ -35,7 +35,14 @@ defmodule SymphonyElixirWeb.DashboardLive do
       end)
 
     if connected?(socket) do
-      :ok = ObservabilityPubSub.subscribe()
+      if multi? do
+        Enum.each(rows, fn row ->
+          :ok = ObservabilityPubSub.subscribe(row.project_id)
+        end)
+      else
+        :ok = ObservabilityPubSub.subscribe(dashboard_observability_project_id())
+      end
+
       schedule_runtime_tick()
 
       if multi? do
@@ -578,6 +585,10 @@ defmodule SymphonyElixirWeb.DashboardLive do
       _ ->
         assign(socket, :payload, Map.put(payload, :agent, %{kind: kind, kind_label: label}))
     end
+  end
+
+  defp dashboard_observability_project_id do
+    Application.get_env(:symphony_elixir, :primary_project_id) || "default"
   end
 
   defp orchestrator do

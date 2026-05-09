@@ -80,9 +80,10 @@ defmodule SymphonyElixir.StatusDashboard do
     GenServer.start_link(__MODULE__, opts, name: name)
   end
 
-  @spec notify_update(GenServer.name()) :: :ok
-  def notify_update(server \\ __MODULE__) do
-    ObservabilityPubSub.broadcast_update()
+  @spec notify_update(GenServer.name(), keyword()) :: :ok
+  def notify_update(server \\ __MODULE__, opts \\ []) when is_list(opts) do
+    project_id = Keyword.get(opts, :project_id) || default_observability_project_id()
+    ObservabilityPubSub.broadcast_update(project_id)
 
     case GenServer.whereis(server) do
       pid when is_pid(pid) ->
@@ -92,6 +93,10 @@ defmodule SymphonyElixir.StatusDashboard do
       _ ->
         :ok
     end
+  end
+
+  defp default_observability_project_id do
+    Application.get_env(:symphony_elixir, :primary_project_id) || "default"
   end
 
   @spec init(keyword()) :: {:ok, t()}
