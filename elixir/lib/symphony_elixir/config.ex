@@ -9,7 +9,8 @@ defmodule SymphonyElixir.Config do
   """
 
   alias SymphonyElixir.Config.Schema
-  alias SymphonyElixir.Workflow
+  alias SymphonyElixir.Config.Context
+  alias SymphonyElixir.{Workflow, WorkflowStore}
 
   @default_prompt_template """
   You are working on a Linear issue.
@@ -32,8 +33,8 @@ defmodule SymphonyElixir.Config do
         }
 
   @spec settings() :: {:ok, Schema.t()} | {:error, term()}
-  def settings do
-    case Workflow.current() do
+  def settings(opts \\ []) do
+    case workflow_loaded(opts) do
       {:ok, %{config: config}} when is_map(config) ->
         Schema.parse(config)
 
@@ -42,9 +43,9 @@ defmodule SymphonyElixir.Config do
     end
   end
 
-  @spec settings!() :: Schema.t()
-  def settings! do
-    case settings() do
+  @spec settings!(keyword()) :: Schema.t()
+  def settings!(opts \\ []) do
+    case settings(opts) do
       {:ok, settings} ->
         settings
 
@@ -53,25 +54,57 @@ defmodule SymphonyElixir.Config do
     end
   end
 
-  @spec max_concurrent_agents_for_state(term()) :: pos_integer()
-  def max_concurrent_agents_for_state(state_name) when is_binary(state_name) do
-    case settings() do
-      {:ok, config} ->
-        Map.get(
-          config.agent.max_concurrent_agents_by_state,
-          Schema.normalize_issue_state(state_name),
-          config.agent.max_concurrent_agents
-        )
+  @doc """
+  Settings resolved against the primary per-project workflow store (for dashboard / HTTP UI).
+  """
+  @spec dashboard_settings() :: {:ok, Schema.t()} | {:error, term()}
+  def dashboard_settings do
+    settings(workflow_store: WorkflowStore.primary_server())
+  end
 
-      {:error, _reason} ->
-        0
+  @spec dashboard_settings!() :: Schema.t()
+  def dashboard_settings! do
+    settings!(workflow_store: WorkflowStore.primary_server())
+  end
+
+  defp workflow_loaded(opts) do
+    store =
+      Keyword.get(opts, :workflow_store) ||
+        Context.workflow_store() ||
+        default_primary_workflow_store()
+
+    case store do
+      nil ->
+        Workflow.current()
+
+      s ->
+        WorkflowStore.current(s)
     end
   end
 
-  def max_concurrent_agents_for_state(_state_name) do
-    case settings() do
-      {:ok, config} -> config.agent.max_concurrent_agents
-      {:error, _reason} -> 0
+  defp default_primary_workflow_store do
+    case WorkflowStore.whereis() do
+      pid when is_pid(pid) -> pid
+      _ -> nil
+    end
+  end
+
+  @spec max_concurrent_agents_for_state(term(), GenServer.server() | nil) :: pos_integer()
+  def max_concurrent_agents_for_state(state_name, workflow_store \\ nil) do
+    case settings(workflow_store: workflow_store) do
+      {:ok, config} ->
+        if is_binary(state_name) do
+          Map.get(
+            config.agent.max_concurrent_agents_by_state,
+            Schema.normalize_issue_state(state_name),
+            config.agent.max_concurrent_agents
+          )
+        else
+          config.agent.max_concurrent_agents
+        end
+
+      {:error, _reason} ->
+        0
     end
   end
 
@@ -86,9 +119,21 @@ defmodule SymphonyElixir.Config do
     end
   end
 
-  @spec workflow_prompt() :: String.t()
-  def workflow_prompt do
-    case Workflow.current() do
+  @spec workflow_prompt(keyword()) :: String.t()
+  def workflow_prompt(opts \\ []) do
+    loaded =
+      case Keyword.get(opts, :workflow_store) do
+        nil ->
+          case Context.workflow_store() || default_primary_workflow_store() do
+            nil -> Workflow.current()
+            store -> WorkflowStore.current(store)
+          end
+
+        store ->
+          WorkflowStore.current(store)
+      end
+
+    case loaded do
       {:ok, %{prompt_template: prompt}} ->
         if String.trim(prompt) == "", do: @default_prompt_template, else: prompt
 
@@ -174,6 +219,16 @@ defmodule SymphonyElixir.Config do
   @spec validate!() :: :ok | {:error, term()}
   def validate! do
     with {:ok, settings} <- settings() do
+      validate_semantics(settings)
+    end
+  end
+
+  @spec validate_orchestrator(GenServer.server() | nil) :: :ok | {:error, term()}
+  def validate_orchestrator(workflow_store) do
+    opts =
+      if is_nil(workflow_store), do: [], else: [workflow_store: workflow_store]
+
+    with {:ok, settings} <- settings(opts) do
       validate_semantics(settings)
     end
   end

@@ -298,15 +298,15 @@ defmodule SymphonyElixir.Config.Schema do
   end
 
   embedded_schema do
-    embeds_one(:tracker, Tracker, on_replace: :update, defaults_to_struct: true)
-    embeds_one(:polling, Polling, on_replace: :update, defaults_to_struct: true)
-    embeds_one(:workspace, Workspace, on_replace: :update, defaults_to_struct: true)
-    embeds_one(:worker, Worker, on_replace: :update, defaults_to_struct: true)
-    embeds_one(:agent, Agent, on_replace: :update, defaults_to_struct: true)
-    embeds_one(:codex, Codex, on_replace: :update, defaults_to_struct: true)
-    embeds_one(:hooks, Hooks, on_replace: :update, defaults_to_struct: true)
-    embeds_one(:observability, Observability, on_replace: :update, defaults_to_struct: true)
-    embeds_one(:server, Server, on_replace: :update, defaults_to_struct: true)
+    embeds_one(:tracker, __MODULE__.Tracker, on_replace: :update, defaults_to_struct: true)
+    embeds_one(:polling, __MODULE__.Polling, on_replace: :update, defaults_to_struct: true)
+    embeds_one(:workspace, __MODULE__.Workspace, on_replace: :update, defaults_to_struct: true)
+    embeds_one(:worker, __MODULE__.Worker, on_replace: :update, defaults_to_struct: true)
+    embeds_one(:agent, __MODULE__.Agent, on_replace: :update, defaults_to_struct: true)
+    embeds_one(:codex, __MODULE__.Codex, on_replace: :update, defaults_to_struct: true)
+    embeds_one(:hooks, __MODULE__.Hooks, on_replace: :update, defaults_to_struct: true)
+    embeds_one(:observability, __MODULE__.Observability, on_replace: :update, defaults_to_struct: true)
+    embeds_one(:server, __MODULE__.Server, on_replace: :update, defaults_to_struct: true)
   end
 
   @disallowed_workflow_keys ["server", "observability"]

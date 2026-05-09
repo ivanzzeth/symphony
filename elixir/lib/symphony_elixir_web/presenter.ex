@@ -20,7 +20,7 @@ defmodule SymphonyElixirWeb.Presenter do
               %{kind: kind, kind_label: CodingAgent.kind_display_label(kind)}
 
             _ ->
-              agent_kind = Config.settings!().agent.kind
+              agent_kind = Config.dashboard_settings!().agent.kind
               %{kind: agent_kind, kind_label: CodingAgent.kind_display_label(agent_kind)}
           end
 
@@ -174,7 +174,7 @@ defmodule SymphonyElixirWeb.Presenter do
   defp workspace_path(issue_identifier, running, retry) do
     (running && Map.get(running, :workspace_path)) ||
       (retry && Map.get(retry, :workspace_path)) ||
-      Path.join(Config.settings!().workspace.root, issue_identifier)
+      Path.join(Config.dashboard_settings!().workspace.root, issue_identifier)
   end
 
   defp workspace_host(running, retry) do

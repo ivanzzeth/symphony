@@ -6,6 +6,7 @@ defmodule SymphonyElixirWeb.DashboardLive do
   use Phoenix.LiveView, layout: {SymphonyElixirWeb.Layouts, :app}
 
   alias SymphonyElixir.{CodingAgent, Config}
+  alias SymphonyElixir.ProjectAliases
   alias SymphonyElixirWeb.{Endpoint, ObservabilityPubSub, Presenter}
   @runtime_tick_ms 1_000
 
@@ -275,7 +276,7 @@ defmodule SymphonyElixirWeb.DashboardLive do
         socket
 
       false ->
-        case Config.settings() do
+        case Config.dashboard_settings() do
           {:ok, config} ->
             kind = config.agent.kind
             label = CodingAgent.kind_display_label(kind)
@@ -295,7 +296,7 @@ defmodule SymphonyElixirWeb.DashboardLive do
   end
 
   defp orchestrator do
-    Endpoint.config(:orchestrator) || SymphonyElixir.Orchestrator
+    Endpoint.config(:orchestrator) || ProjectAliases.primary_orchestrator_name()
   end
 
   defp snapshot_timeout_ms do
@@ -303,7 +304,7 @@ defmodule SymphonyElixirWeb.DashboardLive do
   end
 
   defp completed_runtime_seconds(payload) do
-    payload.codex_totals.seconds_running || 0
+    (payload.codex_totals && payload.codex_totals.seconds_running) || 0
   end
 
   defp total_runtime_seconds(payload, now) do

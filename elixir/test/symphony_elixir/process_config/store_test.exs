@@ -65,6 +65,7 @@ defmodule SymphonyElixir.ProcessConfig.StoreTest do
 
       # Second call must return the original file-loaded value, NOT 9999
       config2 = Store.get(:store_test_isolation)
+
       assert config2.server.port == 4000,
              "expected port 4000 (file value) but got #{inspect(config2.server.port)} — " <>
                "override leaked into GenServer state"
@@ -82,6 +83,7 @@ defmodule SymphonyElixir.ProcessConfig.StoreTest do
       Application.delete_env(:symphony_elixir, :server_host_override)
 
       config2 = Store.get(:store_test_host_isolation)
+
       assert config2.server.host == "127.0.0.1",
              "expected host 127.0.0.1 (file value) but got #{inspect(config2.server.host)} — " <>
                "override leaked into GenServer state"
