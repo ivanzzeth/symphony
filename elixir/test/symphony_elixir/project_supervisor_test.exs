@@ -3,19 +3,6 @@ defmodule SymphonyElixir.ProjectSupervisorTest do
 
   alias SymphonyElixir.{ProjectNaming, ProjectRegistry, ProjectSupervisor}
 
-  defp wait_until(fun, attempts \\ 80)
-
-  defp wait_until(_fun, 0), do: {:error, :timeout}
-
-  defp wait_until(fun, n) do
-    if fun.() do
-      :ok
-    else
-      Process.sleep(25)
-      wait_until(fun, n - 1)
-    end
-  end
-
   defp isolation_project(label) do
     root =
       Path.join(

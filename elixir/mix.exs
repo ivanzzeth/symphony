@@ -25,6 +25,7 @@ defmodule SymphonyElixir.MixProject do
           SymphonyElixir.ProjectAliases,
           SymphonyElixir.ProjectNaming,
           SymphonyElixir.ProjectSupervisor,
+          SymphonyElixir.ProjectDynamicSupervisor,
           SymphonyElixir.ProjectSupervisor.Bootstrap,
           SymphonyElixir.ProjectSupervisor.Meta,
           SymphonyElixir.AgentRunner,
