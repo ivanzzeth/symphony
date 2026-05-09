@@ -101,6 +101,67 @@ defmodule SymphonyElixir.OrchestratorStatusTest do
            }
   end
 
+  test "orchestrator snapshot is json encodable even with pid codex_app_server_pid" do
+    issue_id = "issue-json-encodable-snapshot"
+
+    issue = %Issue{
+      id: issue_id,
+      identifier: "MT-JSON-1",
+      title: "JSON encodable snapshot",
+      description: "Verify snapshot can be JSON encoded",
+      state: "In Progress",
+      url: "https://example.org/issues/MT-JSON-1"
+    }
+
+    orchestrator_name = Module.concat(__MODULE__, :JsonEncodableSnapshotOrch)
+    {:ok, pid} = Orchestrator.start_link(name: orchestrator_name)
+
+    on_exit(fn ->
+      if Process.alive?(pid) do
+        Process.exit(pid, :normal)
+      end
+    end)
+
+    initial_state = :sys.get_state(pid)
+    started_at = DateTime.utc_now()
+
+    running_entry = %{
+      pid: self(),
+      ref: make_ref(),
+      identifier: issue.identifier,
+      issue: issue,
+      session_id: "thread-json-1",
+      turn_count: 1,
+      last_codex_message: nil,
+      last_codex_timestamp: nil,
+      last_codex_event: nil,
+      codex_input_tokens: 0,
+      codex_output_tokens: 0,
+      codex_total_tokens: 0,
+      codex_last_reported_input_tokens: 0,
+      codex_last_reported_output_tokens: 0,
+      codex_last_reported_total_tokens: 0,
+      started_at: started_at,
+      codex_app_server_pid: self()
+    }
+
+    :sys.replace_state(pid, fn _ ->
+      initial_state
+      |> Map.put(:running, %{issue_id => running_entry})
+      |> Map.put(:claimed, MapSet.put(initial_state.claimed, issue_id))
+    end)
+
+    snapshot = GenServer.call(pid, :snapshot)
+
+    # Should encode to JSON without raising
+    assert {:ok, json} = Jason.encode(snapshot)
+    decoded = Jason.decode!(json)
+    running_entry_decoded = hd(decoded["running"])
+
+    # codex_app_server_pid should be a string, not a PID when encoded
+    assert is_binary(running_entry_decoded["codex_app_server_pid"])
+  end
+
   test "orchestrator snapshot tracks codex thread totals and app-server pid" do
     issue_id = "issue-usage-snapshot"
 
