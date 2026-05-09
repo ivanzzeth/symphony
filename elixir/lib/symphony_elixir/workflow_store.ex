@@ -26,32 +26,47 @@ defmodule SymphonyElixir.WorkflowStore do
   def whereis(which \\ :auto)
 
   def whereis(:auto) do
-    case Application.get_env(:symphony_elixir, :primary_project_id) do
-      id when is_binary(id) ->
-        case Registry.lookup(SymphonyElixir.ProjectProcessRegistry, {id, :workflow_store}) do
-          [{pid, _}] -> pid
-          [] -> Process.whereis(__MODULE__)
-        end
+    pid =
+      case Application.get_env(:symphony_elixir, :primary_project_id) do
+        id when is_binary(id) ->
+          case Registry.lookup(SymphonyElixir.ProjectProcessRegistry, {id, :workflow_store}) do
+            [{p, _}] -> p
+            [] -> Process.whereis(__MODULE__)
+          end
 
-      _ ->
-        Process.whereis(__MODULE__)
-    end
+        _ ->
+          case Registry.lookup(SymphonyElixir.ProjectProcessRegistry, {"default", :workflow_store}) do
+            [{p, _}] -> p
+            [] -> Process.whereis(__MODULE__)
+          end
+      end
+
+    alive_pid(pid)
   end
 
-  def whereis(name) when is_pid(name), do: name
+  def whereis(name) when is_pid(name), do: alive_pid(name)
 
   def whereis({:via, Registry, _} = via) do
     {:via, Registry, {reg, key}} = via
 
-    case Registry.lookup(reg, key) do
-      [{pid, _}] -> pid
-      [] -> nil
-    end
+    pid =
+      case Registry.lookup(reg, key) do
+        [{p, _}] -> p
+        [] -> nil
+      end
+
+    alive_pid(pid)
   end
 
   def whereis(name) when is_atom(name) and name == __MODULE__, do: whereis(:auto)
 
-  def whereis(name) when is_atom(name), do: Process.whereis(name)
+  def whereis(name) when is_atom(name), do: alive_pid(Process.whereis(name))
+
+  defp alive_pid(pid) when is_pid(pid) do
+    if node(pid) == node() and Process.alive?(pid), do: pid, else: nil
+  end
+
+  defp alive_pid(_), do: nil
 
   @doc """
   Workflow store for UI/dashboard and cross-cutting reads: primary env project, else first
@@ -78,7 +93,12 @@ defmodule SymphonyElixir.WorkflowStore do
   def current(which \\ :auto) do
     case whereis(which) do
       pid when is_pid(pid) ->
-        GenServer.call(pid, :current)
+        try do
+          GenServer.call(pid, :current)
+        catch
+          :exit, reason ->
+            if call_exit_recoverable?(reason), do: Workflow.load(), else: :erlang.raise(:exit, reason, __STACKTRACE__)
+        end
 
       _ ->
         Workflow.load()
@@ -89,7 +109,19 @@ defmodule SymphonyElixir.WorkflowStore do
   def force_reload(which \\ :auto) do
     case whereis(which) do
       pid when is_pid(pid) ->
-        GenServer.call(pid, :force_reload)
+        try do
+          GenServer.call(pid, :force_reload)
+        catch
+          :exit, reason ->
+            if call_exit_recoverable?(reason) do
+              case Workflow.load() do
+                {:ok, _workflow} -> :ok
+                {:error, err} -> {:error, err}
+              end
+            else
+              :erlang.raise(:exit, reason, __STACKTRACE__)
+            end
+        end
 
       _ ->
         case Workflow.load() do
@@ -99,12 +131,20 @@ defmodule SymphonyElixir.WorkflowStore do
     end
   end
 
+  defp call_exit_recoverable?(:noproc), do: true
+  defp call_exit_recoverable?({:noproc, _}), do: true
+  defp call_exit_recoverable?(:normal), do: true
+  defp call_exit_recoverable?({:normal, _}), do: true
+  defp call_exit_recoverable?(:shutdown), do: true
+  defp call_exit_recoverable?({:shutdown, _}), do: true
+  defp call_exit_recoverable?(_), do: false
+
   @impl true
   def init(opts) do
     path =
       case Keyword.get(opts, :workflow_file_path) do
         p when is_binary(p) -> Path.expand(p)
-        _ -> Workflow.workflow_file_path()
+        _ -> Path.expand(Workflow.workflow_file_path())
       end
 
     project_id = Keyword.get(opts, :project_id)
