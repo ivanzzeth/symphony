@@ -151,16 +151,9 @@ defmodule SymphonyElixir.WorkflowStore do
 
   @impl true
   def handle_call(:current, _from, %State{} = state) do
-    old_stamp = state.stamp
-
-    case reload_state(state) do
-      {:ok, new_state} ->
-        maybe_notify_workflow_changed(old_stamp, new_state.stamp)
-        {:reply, {:ok, new_state.workflow}, new_state}
-
-      {:error, _reason, new_state} ->
-        {:reply, {:ok, new_state.workflow}, new_state}
-    end
+    # Return cached workflow immediately — no synchronous I/O.
+    # The poll timer (every 1s) handles file change detection asynchronously.
+    {:reply, {:ok, state.workflow}, state}
   end
 
   def handle_call(:force_reload, _from, %State{} = state) do

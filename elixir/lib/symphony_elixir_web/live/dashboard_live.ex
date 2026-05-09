@@ -304,7 +304,7 @@ defmodule SymphonyElixirWeb.DashboardLive do
   end
 
   defp completed_runtime_seconds(payload) do
-    payload.codex_totals.seconds_running || 0
+    (payload.codex_totals && payload.codex_totals.seconds_running) || 0
   end
 
   defp total_runtime_seconds(payload, now) do
