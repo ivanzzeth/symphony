@@ -143,6 +143,8 @@ defmodule SymphonyElixir.AgentRunner do
         {:continue, refreshed_issue} ->
           Logger.info("Reached agent.max_turns for #{issue_context(refreshed_issue)} with issue still active; returning control to orchestrator")
 
+          notify_run_stopped_at_max_turns(codex_update_recipient, refreshed_issue)
+
           :ok
 
         {:done, _refreshed_issue} ->
@@ -229,4 +231,14 @@ defmodule SymphonyElixir.AgentRunner do
   defp issue_context(%Issue{id: issue_id, identifier: identifier}) do
     "issue_id=#{issue_id} issue_identifier=#{identifier}"
   end
+
+  defp notify_run_stopped_at_max_turns(nil, _issue), do: :ok
+
+  defp notify_run_stopped_at_max_turns(recipient, %Issue{id: issue_id})
+       when is_pid(recipient) and is_binary(issue_id) do
+    send(recipient, {:symphony_agent_run_outcome, issue_id, :max_turns_reached})
+    :ok
+  end
+
+  defp notify_run_stopped_at_max_turns(_recipient, _issue), do: :ok
 end

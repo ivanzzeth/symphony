@@ -557,6 +557,34 @@ defmodule SymphonyElixir.WorkspaceAndConfigTest do
     assert Orchestrator.should_dispatch_issue_for_test(issue, state)
   end
 
+  test "issue suppressed after max_turns halt is not dispatch-eligible until Linear updated_at advances" do
+    halted_at = ~U[2026-01-01 12:00:00.000000Z]
+
+    state = %Orchestrator.State{
+      max_concurrent_agents: 3,
+      running: %{},
+      claimed: MapSet.new(),
+      codex_totals: %{input_tokens: 0, output_tokens: 0, total_tokens: 0, seconds_running: 0},
+      retry_attempts: %{},
+      max_turns_halted_at: %{"issue-halt-1" => halted_at}
+    }
+
+    issue_same_update = %Issue{
+      id: "issue-halt-1",
+      identifier: "MT-HALT",
+      title: "Halted ticket",
+      description: "d",
+      state: "In Progress",
+      updated_at: halted_at
+    }
+
+    refute Orchestrator.should_dispatch_issue_for_test(issue_same_update, state)
+
+    issue_newer = %{issue_same_update | updated_at: DateTime.add(halted_at, 1, :microsecond)}
+
+    assert Orchestrator.should_dispatch_issue_for_test(issue_newer, state)
+  end
+
   test "dispatch revalidation skips stale todo issue once a non-terminal blocker appears" do
     stale_issue = %Issue{
       id: "blocked-2",
