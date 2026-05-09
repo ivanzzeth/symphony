@@ -1,6 +1,11 @@
 defmodule SymphonyElixir.AgentRunner do
   @moduledoc """
-  Executes a single Linear issue in its workspace with Codex.
+  Executes a single Linear issue in its workspace with the configured coding agent.
+
+  Multi-turn runs continue only while the refreshed tracker state is both listed in
+  `tracker.active_states` and allowed for follow-up turns. Handoff states such as
+  **In Review** and **Merging** remain active for orchestrator polling but do not
+  receive another agent turn in the same run.
   """
 
   require Logger
@@ -171,7 +176,7 @@ defmodule SymphonyElixir.AgentRunner do
   defp continue_with_issue?(%Issue{id: issue_id} = issue, issue_state_fetcher) when is_binary(issue_id) do
     case issue_state_fetcher.([issue_id]) do
       {:ok, [%Issue{} = refreshed_issue | _]} ->
-        if active_issue_state?(refreshed_issue.state) do
+        if active_issue_state?(refreshed_issue.state) and follow_up_turn_allowed?(refreshed_issue.state) do
           {:continue, refreshed_issue}
         else
           {:done, refreshed_issue}
@@ -195,6 +200,16 @@ defmodule SymphonyElixir.AgentRunner do
   end
 
   defp active_issue_state?(_state_name), do: false
+
+  # `tracker.active_states` includes handoff states such as In Review and Merging so the
+  # orchestrator keeps polling them, but those states mean the coding agent must not run
+  # another turn in the same run (human review / land loop owns the ticket).
+  defp follow_up_turn_allowed?(state_name) when is_binary(state_name) do
+    normalized = normalize_issue_state(state_name)
+    normalized not in ["in review", "merging"]
+  end
+
+  defp follow_up_turn_allowed?(_state_name), do: false
 
   defp selected_worker_host(nil, []), do: nil
 
