@@ -6,7 +6,7 @@ defmodule SymphonyElixir.ProjectSupervisor do
   for `start_project/1`, `stop_project/1`, `list_projects/0`, and `startup_failure/1`.
 
   Each child is `SymphonyElixir.Project.Tree`: `WorkflowStore`, `Harness.Manager`,
-  `Task.Supervisor`, `Orchestrator`, `Agent.Supervisor`, and `Project.Tracker`.
+  `Task.Supervisor`, `Agent.Supervisor`, `Project.Tracker`, and `Orchestrator`.
 
   On success, the orchestrator pid is registered in `ProjectRegistry` under `project_id`.
   """
