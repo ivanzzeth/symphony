@@ -304,7 +304,13 @@ defmodule SymphonyElixir.ProcessConfigTest do
 
       defaults = %SymphonyElixir.ProcessConfig{
         server: %{port: nil, host: "127.0.0.1"},
-        observability: %{dashboard_enabled: true, refresh_ms: 1_000, render_interval_ms: 16},
+        observability: %{
+          dashboard_enabled: true,
+          refresh_ms: 1_000,
+          render_interval_ms: 16,
+          per_project_log_files: false
+        },
+        daemon: %{max_global_agents: nil},
         projects: []
       }
 

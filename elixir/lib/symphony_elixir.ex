@@ -54,11 +54,18 @@ defmodule SymphonyElixir.Application do
 
     children = core ++ global_stack ++ tail
 
-    Supervisor.start_link(
-      children,
-      strategy: :one_for_one,
-      name: SymphonyElixir.Supervisor
-    )
+    case Supervisor.start_link(
+           children,
+           strategy: :one_for_one,
+           name: SymphonyElixir.Supervisor
+         ) do
+      {:ok, pid} ->
+        _ = SymphonyElixir.LogFile.after_application_start()
+        {:ok, pid}
+
+      other ->
+        other
+    end
   end
 
   @impl true

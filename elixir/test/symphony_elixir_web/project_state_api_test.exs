@@ -46,6 +46,26 @@ defmodule SymphonyElixirWeb.ProjectStateApiTest do
     assert body["counts"]["completed"] >= 0
   end
 
+  test "GET /api/v1/projects/:project_id/log returns JSON for known project" do
+    conn = get(build_conn(), "/api/v1/projects/default/log")
+    body = json_response(conn, 200)
+    assert body["project_id"] == "default"
+    assert body["source"] in ["daemon_log_filtered", "project_file", "project_file_missing"]
+    assert is_list(body["lines"])
+  end
+
+  test "GET /api/v1/projects/:project_id/log returns 404 for unknown project" do
+    unknown = "missing-log-proj-#{System.unique_integer([:positive])}"
+    conn = get(build_conn(), "/api/v1/projects/#{unknown}/log")
+    assert json_response(conn, 404)["error"]["code"] == "project_not_found"
+  end
+
+  test "GET /api/v1/projects/:project_id/events returns 404 for unknown project" do
+    unknown = "missing-events-proj-#{System.unique_integer([:positive])}"
+    conn = get(build_conn(), "/api/v1/projects/#{unknown}/events")
+    assert json_response(conn, 404)["error"]["code"] == "project_not_found"
+  end
+
   test "GET /api/v1/projects lists default project with agent counts" do
     conn = get(build_conn(), "/api/v1/projects")
     body = json_response(conn, 200)
