@@ -1,5 +1,14 @@
 import Config
 
+# Skip automatic project bootstrap: `TestSupport` starts a temporary default
+# project after writing `WORKFLOW.md` so paths resolve correctly per test.
+config :symphony_elixir, :project_bootstrap_opts, skip_bootstrap: true
+
+# Per-project trees only: duplicate global orchestrators would race the test
+# harness. Suites that need a workflow store use `WorkflowStore.whereis/0` or
+# `SymphonyElixir.TestProjectRuntime`.
+config :symphony_elixir, :symphony_global_stack, false
+
 # `mix test` starts the application before `test/test_helper.exs` runs, so the
 # helper cannot set `SYMPHONY_CONFIG_PATH` early enough to avoid loading a
 # developer `~/.config/symphony/symphony.yaml` that binds HttpServer (port

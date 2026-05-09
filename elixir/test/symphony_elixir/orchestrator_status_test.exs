@@ -1193,20 +1193,6 @@ defmodule SymphonyElixir.OrchestratorStatusTest do
   test "status dashboard coalesces rapid updates to one render per interval" do
     dashboard_name = Module.concat(__MODULE__, :RenderDashboard)
     parent = self()
-    orchestrator_pid = Process.whereis(SymphonyElixir.Orchestrator)
-
-    on_exit(fn ->
-      if is_nil(Process.whereis(SymphonyElixir.Orchestrator)) do
-        case Supervisor.restart_child(SymphonyElixir.Supervisor, SymphonyElixir.Orchestrator) do
-          {:ok, _pid} -> :ok
-          {:error, {:already_started, _pid}} -> :ok
-        end
-      end
-    end)
-
-    if is_pid(orchestrator_pid) do
-      assert :ok = Supervisor.terminate_child(SymphonyElixir.Supervisor, SymphonyElixir.Orchestrator)
-    end
 
     {:ok, pid} =
       StatusDashboard.start_link(
@@ -1676,7 +1662,12 @@ defmodule SymphonyElixir.OrchestratorStatusTest do
     end)
 
     # Spawn a worker and inject it into running state
-    dying_pid = spawn(fn -> receive do :go -> Process.exit(self(), :kill) end end)
+    dying_pid =
+      spawn(fn ->
+        receive do
+          :go -> Process.exit(self(), :kill)
+        end
+      end)
 
     initial_state = :sys.get_state(pid)
     started_at = DateTime.utc_now()

@@ -21,7 +21,7 @@ defmodule SymphonyElixir.HttpServer do
     case Keyword.get(opts, :port, Config.server_port()) do
       port when is_integer(port) and port >= 0 ->
         host = Keyword.get(opts, :host, Config.server_host())
-        orchestrator = Keyword.get(opts, :orchestrator, Orchestrator)
+        orchestrator = Keyword.get(opts, :orchestrator, Orchestrator.http_server_ref())
         snapshot_timeout_ms = Keyword.get(opts, :snapshot_timeout_ms, 15_000)
 
         with {:ok, ip} <- parse_host(host) do

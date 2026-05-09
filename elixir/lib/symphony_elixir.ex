@@ -23,17 +23,36 @@ defmodule SymphonyElixir.Application do
   def start(_type, _args) do
     :ok = SymphonyElixir.LogFile.configure()
 
-    children = [
+    bootstrap_opts = Application.get_env(:symphony_elixir, :project_bootstrap_opts, [])
+
+    core = [
       {Phoenix.PubSub, name: SymphonyElixir.PubSub},
       {Task.Supervisor, name: SymphonyElixir.TaskSupervisor},
       SymphonyElixir.ProcessConfig.Store,
-      SymphonyElixir.WorkflowStore,
-      SymphonyElixir.Harness.Manager,
-      SymphonyElixir.ProjectRegistry,
-      SymphonyElixir.Orchestrator,
+      {Registry, keys: :unique, name: SymphonyElixir.ProjectProcessRegistry},
+      SymphonyElixir.ProjectSupervisor.Meta,
+      SymphonyElixir.ProjectSupervisor,
+      SymphonyElixir.ProjectRegistry
+    ]
+
+    global_stack =
+      if Application.get_env(:symphony_elixir, :symphony_global_stack, false) do
+        [
+          SymphonyElixir.WorkflowStore,
+          SymphonyElixir.Harness.Manager,
+          SymphonyElixir.Orchestrator
+        ]
+      else
+        []
+      end
+
+    tail = [
+      {SymphonyElixir.ProjectSupervisor.Bootstrap, bootstrap_opts},
       SymphonyElixir.HttpServer,
       SymphonyElixir.StatusDashboard
     ]
+
+    children = core ++ global_stack ++ tail
 
     Supervisor.start_link(
       children,

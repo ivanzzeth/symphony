@@ -177,8 +177,7 @@ defmodule SymphonyElixir.ClaudeAdapterTest do
 
     assert_received {:m, %{event: :session_started}}
 
-    assert_received {:m,
-                     %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :claude}}
+    assert_received {:m, %{event: :turn_timeout, timeout_ms: ^stream_timeout_ms, adapter: :claude}}
   end
 
   test "short line split across noeol emits buffer_exceeded and completes without crash" do

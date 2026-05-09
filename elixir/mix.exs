@@ -19,6 +19,14 @@ defmodule SymphonyElixir.MixProject do
           SymphonyElixir.SpecsCheck,
           SymphonyElixir.Orchestrator,
           SymphonyElixir.Orchestrator.State,
+          SymphonyElixir.Agent.Supervisor,
+          SymphonyElixir.Project.Tree,
+          SymphonyElixir.Project.Tracker,
+          SymphonyElixir.ProjectAliases,
+          SymphonyElixir.ProjectNaming,
+          SymphonyElixir.ProjectSupervisor,
+          SymphonyElixir.ProjectSupervisor.Bootstrap,
+          SymphonyElixir.ProjectSupervisor.Meta,
           SymphonyElixir.AgentRunner,
           SymphonyElixir.CLI,
           SymphonyElixir.Codex.AppServer,
@@ -42,7 +50,8 @@ defmodule SymphonyElixir.MixProject do
       ],
       test_ignore_filters: [
         "test/support/snapshot_support.exs",
-        "test/support/test_support.exs"
+        "test/support/test_support.exs",
+        "test/support/test_project_runtime.exs"
       ],
       dialyzer: [
         plt_add_apps: [:mix]

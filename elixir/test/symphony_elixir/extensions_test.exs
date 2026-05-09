@@ -7,6 +7,7 @@ defmodule SymphonyElixir.ExtensionsTest do
   alias SymphonyElixir.CodingAgent
   alias SymphonyElixir.Config
   alias SymphonyElixir.Linear.Adapter
+  alias SymphonyElixir.TestProjectRuntime
   alias SymphonyElixir.Tracker.Memory
 
   @endpoint SymphonyElixirWeb.Endpoint
@@ -108,7 +109,7 @@ defmodule SymphonyElixir.ExtensionsTest do
     assert {:ok, %{prompt: "You are an agent for this repository."}} = Workflow.current()
 
     write_workflow_file!(Workflow.workflow_file_path(), prompt: "Second prompt")
-    send(WorkflowStore, :poll)
+    send(WorkflowStore.whereis(), :poll)
 
     assert_eventually(fn ->
       match?({:ok, %{prompt: "Second prompt"}}, Workflow.current())
@@ -123,10 +124,10 @@ defmodule SymphonyElixir.ExtensionsTest do
     Workflow.set_workflow_file_path(third_workflow)
     assert {:ok, %{prompt: "Third prompt"}} = Workflow.current()
 
-    assert :ok = Supervisor.terminate_child(SymphonyElixir.Supervisor, WorkflowStore)
+    assert :ok = TestProjectRuntime.terminate_workflow_store!()
     assert {:ok, %{prompt: "Third prompt"}} = WorkflowStore.current()
     assert :ok = WorkflowStore.force_reload()
-    assert {:ok, _pid} = Supervisor.restart_child(SymphonyElixir.Supervisor, WorkflowStore)
+    assert {:ok, _pid} = TestProjectRuntime.restart_workflow_store!()
   end
 
   test "workflow store init stops on missing workflow file" do
@@ -142,7 +143,7 @@ defmodule SymphonyElixir.ExtensionsTest do
     manual_path = Path.join(Path.dirname(existing_path), "MANUAL_WORKFLOW.md")
     missing_path = Path.join(Path.dirname(existing_path), "MANUAL_MISSING_WORKFLOW.md")
 
-    assert :ok = Supervisor.terminate_child(SymphonyElixir.Supervisor, WorkflowStore)
+    assert :ok = TestProjectRuntime.terminate_workflow_store!()
 
     Workflow.set_workflow_file_path(missing_path)
 
@@ -173,7 +174,7 @@ defmodule SymphonyElixir.ExtensionsTest do
     assert_receive :poll, 3_000
 
     Process.exit(manual_pid, :normal)
-    restart_result = Supervisor.restart_child(SymphonyElixir.Supervisor, WorkflowStore)
+    restart_result = TestProjectRuntime.restart_workflow_store!()
 
     assert match?({:ok, _pid}, restart_result) or
              match?({:error, {:already_started, _pid}}, restart_result)
@@ -187,7 +188,7 @@ defmodule SymphonyElixir.ExtensionsTest do
     path = Workflow.workflow_file_path()
 
     write_workflow_file!(path, agent_kind: "codex")
-    send(WorkflowStore, :poll)
+    send(WorkflowStore.whereis(), :poll)
 
     assert_eventually(fn ->
       Config.settings!().agent.kind == "codex"
@@ -197,7 +198,7 @@ defmodule SymphonyElixir.ExtensionsTest do
 
     write_workflow_file!(path, agent_kind: "cursor")
 
-    send(WorkflowStore, :poll)
+    send(WorkflowStore.whereis(), :poll)
 
     assert_eventually(fn ->
       Config.settings!().agent.kind == "cursor"
@@ -766,12 +767,15 @@ defmodule SymphonyElixir.ExtensionsTest do
   defp assert_eventually(_fun, 0), do: flunk("condition not met in time")
 
   defp ensure_workflow_store_running do
-    if Process.whereis(WorkflowStore) do
+    pid = TestProjectRuntime.workflow_store_pid()
+
+    if is_pid(pid) and Process.alive?(pid) do
       :ok
     else
-      case Supervisor.restart_child(SymphonyElixir.Supervisor, WorkflowStore) do
+      case TestProjectRuntime.restart_workflow_store!() do
         {:ok, _pid} -> :ok
         {:error, {:already_started, _pid}} -> :ok
+        other -> flunk("workflow store unavailable: #{inspect(other)}")
       end
     end
   end
