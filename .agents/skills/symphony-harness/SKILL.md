@@ -476,7 +476,7 @@ Use these as quick dry-runs after reconfiguring `.agents/` or `AGENTS.md`:
 2. **Error:** `elixir/WORKFLOW.md` missing or unreadable. Expect harness to stop
    after reporting the blocker; no partial writes to skills.
 3. **Continuation:** Resume harness configuration from current tree. Expect
-   re-audit, no duplicate agent files, symphony-linear / symphony-land / symphony-pull alignment verified.
+   re-audit, no duplicate agent files, linear/land/pull alignment verified.
 
 ## References
 
@@ -487,4 +487,4 @@ Use these as quick dry-runs after reconfiguring `.agents/` or `AGENTS.md`:
 - **Skill testing guide**: `references/skill-testing-guide.md` — testing/evaluation/iterative improvement methodology
 - **QA agent guide**: `references/qa-agent-guide.md` — reference when including QA agents in build harnesses. Covers integration consistency verification methodology, boundary bug patterns, QA agent definition template. Based on 7 real bugs found in actual projects.
 - **Symphony dispatch**: `references/symphony-dispatch.md` — Symphony platform integration protocols for harness agents dispatched by the Symphony orchestrator.
-- **Issue PR gates (checklist)**: `references/issue-execution-checklist.md` — WORKFLOW Step 1 workpad shape (app flow checks, ticket validation mirror, pull evidence in `Notes`), Step 2 **`pull`** / **`commit`** / **`push`** / **`land sweep`** (or **`symphony-*`** mirror skills), Guardrails (no extra completion comments), `Todo`+PR flow, workpad edit fallback, PR feedback sweep, Manual QA Plan, mandatory validation gate, completion bar (runtime validation + media), merge→Done, blocked-access escape hatch (pointers only; `elixir/WORKFLOW.md` is authoritative).
+- **Issue PR gates (checklist)**: `references/issue-execution-checklist.md` — WORKFLOW Step 1 workpad shape (app flow checks, ticket validation mirror, pull evidence in `Notes`), Step 2 implement/push/sweep, Guardrails (no extra completion comments), `Todo`+PR flow, workpad edit fallback, PR feedback sweep, Manual QA Plan, mandatory validation gate, completion bar (runtime validation + media), merge→Done, blocked-access escape hatch (pointers only; `elixir/WORKFLOW.md` is authoritative).
