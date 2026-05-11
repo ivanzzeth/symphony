@@ -24,7 +24,8 @@ When the harness skill triggers, first assess the current harness state and dete
 2. Detect execution context:
    - **Symphony dispatch**: The harness run is driven by Symphony (for example `SymphonyElixir.Harness.Manager` after a `WORKFLOW.md` content-hash change, an explicit harness dispatch, or caller-supplied orchestrator context such as `_workspace/symphony_context.json`).
      1. **Hard prerequisite: read the injected workflow file immediately.** The dispatch context provides a workflow file path. Read that file in full before any other operation. Understand its actual content, structure, and term usage.
-     2. Only after reading may you proceed to audit `.agents/` and `AGENTS.md`.
+     2. **Fallback when the injected path is unreadable:** If the path is missing, permission-denied, or not present in the environment (for example a host-only `/tmp/...` path), read the monorepo canonical contract **`elixir/WORKFLOW.md`** in full instead. Treat it as the same execution contract for alignment purposes. **Never** modify the workflow file from harness work—only `.agents/` and `AGENTS.md`.
+     3. Only after a successful read (injected path or fallback) may you proceed to audit `.agents/` and `AGENTS.md`.
    - **Manual invocation**: User-requested harness work without the Symphony dispatch signals above. Still check for a workflow file in the project when one is referenced, and read it before making changes. Use standard standalone protocols.
 3. Branch by current state:
    - **New build**: agent/skill directories are missing or empty → run all phases starting from Phase 1
