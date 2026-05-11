@@ -2,7 +2,7 @@
 
 ## Overview
 
-When the harness skill is invoked by the Symphony platform (not manually by a user), the **workflow file path** is injected into the dispatch context by `SymphonyElixir.Harness.Manager`. The harness agent **must** read this file in full before making any changes to `.agents/` or `AGENTS.md`. The file’s actual content — its name, structure, and terminology — is the source of truth. Never guess or assume its contents based on prior runs.
+When the harness skill is invoked by the Symphony platform (not manually by a user), the **workflow file path** is injected into the dispatch context by `SymphonyElixir.Harness.Manager`. The harness agent **must** resolve and read the execution contract per **Injected path resolution** before making any changes to `.agents/` or `AGENTS.md`. The file’s actual content — its name, structure, and terminology — is the source of truth. Never guess or assume its contents based on prior runs.
 
 ## Path Injection Mechanism
 
