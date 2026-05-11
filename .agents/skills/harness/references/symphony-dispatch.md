@@ -40,6 +40,7 @@ When running under Symphony, these platform-level details are available:
 ### Execution Contract
 - `WORKFLOW.md` defines what Symphony expects from this harness run
 - The file has two layers: YAML config (tracker, polling, workspace, hooks, `agent` pool limits including **`stream_timeout_ms`**, `codex` runner) **and** the Markdown prompt after the second `---` (status routing, Default posture, workpad rules, PR feedback sweep, completion bar). Harness reconfiguration must keep **AGENTS.md** and issue-execution skills (`pull`, `push`, `land`, `linear`, …) aligned with **both** layers.
+- The Markdown prompt is organized as **Step 0: Route**, **Step 1: Workpad bootstrap**, **Step 2: Execute**, **Step 3: In Review**, **Step 4: Rework**, then **Completion bar**, **Guardrails**, **Blocked-access escape hatch**, and **Prerequisite**. Do not assume older sub-step numbering from historical harness edits—the live file is the source of truth.
 - The Markdown template may include a **`{% if attempt %}` continuation block**: retry attempt number, resume-from-current-workspace instructions, and constraints on repeating completed work. Issue-execution agents must treat that as **continuation semantics**, not a cold start—see `issue-execution-checklist.md` → *Continuation / retry attempts*.
 - **WORKFLOW Contract (numbered list):** unattended output, workpad-first, reproduce first, single workpad, ticket metadata rules, scope discipline — see `elixir/WORKFLOW.md` heading **Contract**.
 - **State → Skill routing:** follow the Markdown **State → Skill routing** table in WORKFLOW for `Todo` through `Canceled` / `Duplicate`. For **`Backlog`**, use **Step 0** point 2 (do not modify the ticket — stop and wait for the human); `Backlog` is **not** a row in that table but is still routed in Step 0.
@@ -54,7 +55,6 @@ When running under Symphony, these platform-level details are available:
 - **Ticket metadata vs issue body:** Default posture asks to keep ticket metadata current (**state**, **checklist**, **acceptance criteria**, **links**); Guardrails forbid using the issue **description/body** for planning/progress—that belongs in **`## Codex Workpad`** (see `issue-execution-checklist.md`).
 - **Workpad edit fallback:** MCP comment update preferred; if unavailable use the **update script** path documented in the `linear` skill—only block when both fail (WORKFLOW Guardrails).
 - For a short operator checklist (PR sweep commands, merge→Done), see `issue-execution-checklist.md` in the same directory—still subordinate to the loaded workflow file.
-- May specify: target files, acceptance criteria, constraints, artifact paths
 
 ## Harness Agent Behavior Under Symphony
 
