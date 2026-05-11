@@ -23,6 +23,16 @@ Heuristics:
 **Never modify** the loaded workflow file; update only `.agents/` and
 `AGENTS.md` when reconfiguring the harness.
 
+### Injected workflow path unreadable
+
+Dispatch may name an **ephemeral** workflow path (for example under `/tmp/...`)
+that no longer exists on disk after the exporting process exits. If the
+injected path **cannot be read**, do **not** treat that alone as permission to
+guess the contract. For this monorepo, read **`elixir/WORKFLOW.md`** in full as
+the authoritative execution template (it matches what the orchestrator ships)
+and record in the active issue **`## Codex Workpad` → `Notes`** that this
+fallback was used. Still **never** edit `elixir/WORKFLOW.md` from harness work.
+
 ## Symphony Context (when active)
 
 When running under Symphony, these platform-level details are available:

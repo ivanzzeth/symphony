@@ -38,7 +38,7 @@ When the harness skill triggers, first assess the current harness state and dete
    | Add/modify skill | Skip | Skip | Skip | Required | If connections change | Required |
    | Architecture change | Skip | Required | Affected agents only | Affected skills only | Required | Required |
 4. Cross-reference existing agent/skill lists against AGENTS.md records to detect drift
-5. Summarize audit findings for the user and confirm the execution plan
+5. Summarize audit findings in the **deliverable** (final summary and **AGENTS.md** change history when edits land). Under Symphony’s **unattended** Contract, **do not** ask the human to confirm the execution plan mid-run—execute the phased workflow, or document **blockers only** (including blocked-access paths per `elixir/WORKFLOW.md`).
 
 **Multi-turn resume (Symphony harness):** Prompts like “Continue the harness configuration…” mean **continuation**, not a greenfield rebuild: re-read `elixir/WORKFLOW.md`, re-audit `.agents/` and `AGENTS.md`, finish only incomplete edits, keep `AGENTS.md` aligned with `.agents/` (this monorepo often symlinks `CLAUDE.md` → `AGENTS.md`—edit **once**), and append **Change History**. If audit finds **no drift**, append a dated row noting a verification-only pass rather than re-touching files blindly. See `references/symphony-dispatch.md` → *Harness multi-turn resume*.
 
@@ -473,8 +473,7 @@ Use these as quick dry-runs after reconfiguring `.agents/` or `AGENTS.md`:
 1. **Normal:** User asks to sync harness with `elixir/WORKFLOW.md`. Expect Phase 0
    audit, diff of YAML + prompt sections, updates under `.agents/` + `AGENTS.md`
    only, change-history row.
-2. **Error:** `elixir/WORKFLOW.md` missing or unreadable. Expect harness to stop
-   after reporting the blocker; no partial writes to skills.
+2. **Error:** Injected workflow path and **`elixir/WORKFLOW.md`** both missing or unreadable. Expect harness to stop after reporting the blocker; no partial writes to skills. If only the injected path is missing, expect fallback read of **`elixir/WORKFLOW.md`** per `references/symphony-dispatch.md` → *Injected workflow path unreadable*.
 3. **Continuation:** Resume harness configuration from current tree. Expect
    re-audit, no duplicate agent files, linear/land/pull alignment verified.
 
