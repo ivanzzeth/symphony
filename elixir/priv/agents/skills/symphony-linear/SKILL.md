@@ -4,11 +4,7 @@ description: |
   Use Symphony's `linear_graphql` client tool for raw Linear GraphQL
   operations: comment create/update/delete, issue state transitions, GitHub PR
   attachments, uploads, and issue execution workpad (`## Codex Workpad`) flows
-  including Rework reset. When `linear_graphql` is unavailable, use an
-  authenticated `linear` CLI (`linear issue update`, `linear issue comment
-  add`/`update`, `linear issue comment list`) for the same transitions and
-  workpad edits per blocked-access / operator-recovery guidance. Use whenever
-  Linear API access is needed in-session.
+  including Rework reset. Use whenever Linear API access is needed in-session.
 ---
 
 # Linear GraphQL
@@ -23,19 +19,7 @@ the **Prerequisite** and **Blocked-access escape hatch**: **do not** ask the
 human to configure Linear during unattended issue execution. Record what is
 missing, why it blocks acceptance/validation, and exact human unblock actions in
 the workpad (and a single blocker comment if no workpad exists yet per
-WORKFLOW Guardrails), then move states per WORKFLOW blocked-access rules (for
-non-GitHub missing tool/auth, WORKFLOW directs moving to **`In Review`** with the
-workpad brief).
-
-**Operator / recovery sessions (CLI):** When `linear_graphql` is absent but an
-authenticated **`linear` CLI** is available in the environment (for example
-`linear issue update`, `linear issue comment add` / `update`, `linear issue
-comment list`), you may use it to perform the **same** state transitions and
-workpad edits the GraphQL path would cover. This does **not** replace the
-WORKFLOW prerequisite for fully unattended Symphony runs (orchestrator still
-expects MCP/`linear_graphql`); it is a **documented fallback** for human- or
-agent-assisted recovery and for harness/issue work driven from a shell where
-the CLI is already logged in.
+WORKFLOW Guardrails), then move states per WORKFLOW blocked-access rules.
 
 ## Primary tool
 
@@ -306,7 +290,7 @@ record the failure mode in the workpad.
 - Do **not** paste the PR URL into the workpad body—WORKFLOW keeps PR linkage on
   the issue, not duplicated inside the workpad.
 
-**After PR merge (`Merging` → `Done`):** When `.agents/skills/land/SKILL.md` has
+**After PR merge (`Merging` → `Done`):** When `.agents/skills/symphony-land/SKILL.md` has
 completed and the PR is merged, transition the issue to **`Done`** with
 `issueUpdate` + the team’s completed `stateId`.
 
@@ -456,7 +440,7 @@ the ticket is in **`Todo`** (before analysis, reproduction, or implementation):
 2. Find or create the single persistent **`## Codex Workpad`** comment (when
    searching, ignore **resolved** comments—only active/unresolved comments
    qualify).
-3. Only then proceed with planning, `pull`, code changes, or validation.
+3. Only then proceed with planning, **`symphony-pull`**, code changes, or validation.
 
 If **`Todo`** already has a PR linked, treat kickoff as a **feedback/rework
 loop**: run the full **PR feedback sweep** protocol from WORKFLOW before new
