@@ -9,6 +9,10 @@ defmodule SymphonyElixir.Harness.Manager do
   Per SPEC V1.1 Section 4.4: on WORKFLOW.md change (hash mismatch), dispatches a
   harness agent session in the **project directory** (not a per-issue workspace).
   The harness agent does NOT consume an issue dispatch slot.
+
+  When there is no stored hash yet and the workflow file is missing or
+  effectively empty (including whitespace-only), the manager records the empty
+  hash and **does not** start a harness session — there is nothing to configure.
   """
 
   use GenServer
@@ -63,9 +67,13 @@ defmodule SymphonyElixir.Harness.Manager do
 
   @doc """
   Synchronously check for WORKFLOW.md changes and dispatch if needed.
-  Returns `:dispatched`, `:unchanged`, or `:harness_busy`.
+
+  Returns `:dispatched`, `:unchanged`, `:harness_busy`, or `:synced` (hash recorded
+  for a missing or empty workflow with no prior harness baseline — harness agent
+  not started).
   """
-  @spec check(GenServer.server() | :auto) :: :dispatched | :unchanged | :harness_busy
+  @spec check(GenServer.server() | :auto) ::
+          :dispatched | :unchanged | :harness_busy | :synced
   def check(server \\ :auto) do
     case resolve_harness_server(server) do
       nil ->
@@ -178,22 +186,44 @@ defmodule SymphonyElixir.Harness.Manager do
     workflow_path = Map.get(state, :workflow_file_path) || Workflow.workflow_file_path()
     current_hash = compute_hash(workflow_path)
 
-    if current_hash != state.last_hash do
-      _ = Logger.info("WORKFLOW.md hash changed last=#{inspect(state.last_hash)} current=#{inspect(current_hash)}; dispatching harness agent")
+    cond do
+      current_hash == state.last_hash ->
+        {:unchanged, state}
 
-      state = dispatch_harness_agent(state, current_hash)
-      {:dispatched, state}
-    else
-      {:unchanged, state}
+      skip_harness_for_empty_workflow?(state.last_hash, current_hash) ->
+        _ =
+          Logger.info(
+            "WORKFLOW.md at #{workflow_path} is missing or effectively empty; recording hash and skipping harness agent dispatch"
+          )
+
+        persist_hash(state.harness_state_path, current_hash)
+        {:synced, %{state | last_hash: current_hash}}
+
+      true ->
+        _ =
+          Logger.info(
+            "WORKFLOW.md hash changed last=#{inspect(state.last_hash)} current=#{inspect(current_hash)}; dispatching harness agent"
+          )
+
+        state = dispatch_harness_agent(state, current_hash)
+        {:dispatched, state}
     end
+  end
+
+  defp skip_harness_for_empty_workflow?(last_hash, current_hash) do
+    current_hash == "" and is_nil(last_hash)
   end
 
   defp compute_hash(path) do
     case File.read(path) do
       {:ok, content} ->
-        content
-        |> then(&:crypto.hash(:sha256, &1))
-        |> Base.encode16(case: :lower)
+        if String.trim(content) == "" do
+          ""
+        else
+          content
+          |> then(&:crypto.hash(:sha256, &1))
+          |> Base.encode16(case: :lower)
+        end
 
       {:error, :enoent} ->
         ""
