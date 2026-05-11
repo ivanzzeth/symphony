@@ -475,20 +475,28 @@ workflow states, use the mutations below.
 
 ### Audit current workflow states
 
+`Team.workflowStates` was removed from Linear's schema. Use `Team.states` (paginated `WorkflowStateConnection`) until `pageInfo.hasNextPage` is false:
+
 ```graphql
-query WorkflowStates($teamId: String!) {
+query WorkflowStates($teamId: String!, $first: Int!, $after: String) {
   team(id: $teamId) {
-    workflowStates {
+    states(first: $first, after: $after) {
       nodes {
         id
         name
         type
         position
       }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
     }
   }
 }
 ```
+
+Do **not** use `draftWorkflowState`, `mergeWorkflowState`, or `startWorkflowState` to enumerate the board — those are singular Git-automation pointers (deprecated in favor of `gitAutomationStates`), not the full workflow.
 
 ### Resolve team ID from project slug
 
