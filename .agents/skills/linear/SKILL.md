@@ -4,7 +4,11 @@ description: |
   Use Symphony's `linear_graphql` client tool for raw Linear GraphQL
   operations: comment create/update/delete, issue state transitions, GitHub PR
   attachments, uploads, and issue execution workpad (`## Codex Workpad`) flows
-  including Rework reset. Use whenever Linear API access is needed in-session.
+  including Rework reset. When `linear_graphql` is unavailable, use an
+  authenticated `linear` CLI (`linear issue update`, `linear issue comment
+  add`/`update`, `linear issue comment list`) for the same transitions and
+  workpad edits per blocked-access / operator-recovery guidance. Use whenever
+  Linear API access is needed in-session.
 ---
 
 # Linear GraphQL
@@ -20,6 +24,16 @@ human to configure Linear during unattended issue execution. Record what is
 missing, why it blocks acceptance/validation, and exact human unblock actions in
 the workpad (and a single blocker comment if no workpad exists yet per
 WORKFLOW Guardrails), then move states per WORKFLOW blocked-access rules.
+
+**Operator / recovery sessions (CLI):** When `linear_graphql` is absent but an
+authenticated **`linear` CLI** is available in the environment (for example
+`linear issue update`, `linear issue comment add` / `update`, `linear issue
+comment list`), you may use it to perform the **same** state transitions and
+workpad edits the GraphQL path would cover. This does **not** replace the
+WORKFLOW prerequisite for fully unattended Symphony runs (orchestrator still
+expects MCP/`linear_graphql`); it is a **documented fallback** for human- or
+agent-assisted recovery and for harness/issue work driven from a shell where
+the CLI is already logged in.
 
 ## Primary tool
 
