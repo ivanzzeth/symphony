@@ -266,10 +266,26 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 │   │   └── SKILL.md
 │   ├── push/
 │   │   └── SKILL.md
+│   ├── symphony-commit/
+│   │   └── SKILL.md
+│   ├── symphony-debug/
+│   │   └── SKILL.md
 │   ├── symphony-dev/
 │   │   ├── SKILL.md
 │   │   └── references/
 │   │       └── orchestrator-workflow.md
+│   ├── symphony-harness/
+│   │   ├── SKILL.md
+│   │   └── references/
+│   ├── symphony-land/
+│   │   ├── SKILL.md
+│   │   └── land_watch.py
+│   ├── symphony-linear/
+│   │   └── SKILL.md
+│   ├── symphony-pull/
+│   │   └── SKILL.md
+│   ├── symphony-push/
+│   │   └── SKILL.md
 │   ├── elixir-planner/
 │   │   └── SKILL.md
 │   ├── elixir-developer/
@@ -284,11 +300,12 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 └── worktree_init.sh
 ```
 
-Optional: repositories may also carry `symphony-*` skill directories (`symphony-pull`, `symphony-commit`, …) as IDE aliases — treat them as equivalent to the canonical `pull`, `commit`, … skills when present.
+`symphony-*` skill directories mirror the canonical `pull` / `commit` / `push` / `land` / `linear` / `debug` / `harness` trees for tooling that resolves skills by legacy names; keep them aligned when editing either side.
 
 **Change History:**
 | Date | Change | Target | Reason |
 |------|--------|--------|--------|
+| 2026-05-12 | WEB-114 harness reconfigure: injected WORKFLOW path fallback, Phase 0 read order, mirrored references, AGENTS directory tree | `.agents/` (harness + symphony-harness + harness-agent), `AGENTS.md` | Ticket WEB-114; `/tmp/.../WORKFLOW.md` may be absent — fall back to `elixir/WORKFLOW.md`; sync duplicate reference trees |
 | 2026-05-06 | Initial harness configuration | All | WORKFLOW.md hash change detected; created symphony-agent definition and AGENTS.md harness context |
 | 2026-05-06 | Updated for config split | AGENTS.md, symphony-agent.md | Process-level config (server/observability) moved from WORKFLOW.md to ~/.config/symphony/symphony.yaml; added --config/--host CLI flags; WORKFLOW.md disallows server/observability keys |
 | 2026-05-06 | Reconfiguration for v2 WORKFLOW.md | AGENTS.md, push/pull/land skills, land_watch.py | WORKFLOW.md significantly updated: base_branch=develop, polling=5000ms, workspace=~/code/symphony-workspaces, agent=claude with max_concurrent=10 + max_turns=20, codex=never-approve+workspace-write, tracker=linear/project_slug=symphony-079b97dd6409, new after_create/before_remove hooks, detailed Step 0-4 flow, PR feedback sweep, blocked-access escape hatch, workpad template; symphony-agent.md deleted (orchestrator now dispatches via prompt template directly) |
