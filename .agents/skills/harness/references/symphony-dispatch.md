@@ -2,7 +2,7 @@
 
 ## Overview
 
-When the harness skill is invoked by the Symphony platform (not manually by a user), the **workflow file path** is injected into the dispatch context by `SymphonyElixir.Harness.Manager`. The harness agent **must** read this file in full before making any changes to `.agents/` or `AGENTS.md`. The file’s actual content — its name, structure, and terminology — is the source of truth. Never guess or assume its contents based on prior runs.
+When the harness skill is invoked by the Symphony platform (not manually by a user), the **workflow file path** is injected into the dispatch context by `SymphonyElixir.Harness.Manager`. The harness agent **must** read this file in full before making any changes to `.agents/` or `AGENTS.md`. The file’s actual content — its name, structure, and terminology — is the source of truth. Never guess or assume its contents based on prior runs. If the injected path is **missing or unreadable** (wrong machine, expired temp copy), use **`elixir/WORKFLOW.md`** in this monorepo, record why in the workpad **`Notes`**, and proceed — still **never modify** the workflow file from harness work.
 
 ## Path Injection Mechanism
 
@@ -60,7 +60,7 @@ When running under Symphony, these platform-level details are available:
 
 ### Phase 0 Modifications
 When Symphony dispatch is detected:
-1. Read the repo’s **Symphony** `WORKFLOW.md` (for this monorepo: `elixir/WORKFLOW.md`) to understand the execution contract
+1. Read the workflow file from dispatch context; on failure, read **`elixir/WORKFLOW.md`** and note the fallback in **`Notes`**
 2. Check `_workspace/symphony_context.json` (when present) for the current issue context
 3. Align the harness execution plan with the WORKFLOW.md requirements — the harness serves the platform's execution contract
 
