@@ -13,6 +13,13 @@ defmodule SymphonyElixir.Harness.Manager do
     4. Agent runs in workspace, commits `.agents/` changes, creates PR
     5. Goes through In Review → Merging → Done
     6. Harness.Manager detects Done → records hash as processed
+
+  When the workflow file is **missing**, **empty**, or **whitespace-only**, the
+  content hash is treated as a sentinel empty string (`""`). If there is no
+  prior non-empty workflow hash (fresh project or never had content), **no**
+  Linear harness issue is created — the sentinel is persisted so polling stays
+  quiet. If content existed before and is now gone or emptied, the harness
+  **deletion** flow still runs so `.agents/` cleanup can occur.
   """
 
   use GenServer
@@ -164,14 +171,43 @@ defmodule SymphonyElixir.Harness.Manager do
     workflow_path = Map.get(state, :workflow_file_path) || Workflow.workflow_file_path()
     current_hash = compute_hash(workflow_path)
 
-    if current_hash != state.last_hash do
-      _ = Logger.info("WORKFLOW.md hash changed last=#{inspect(state.last_hash)} current=#{inspect(current_hash)}; creating harness Linear issue")
+    cond do
+      is_nil(current_hash) ->
+        Logger.warning("WORKFLOW.md hash unavailable at #{workflow_path}; skipping harness check")
+        {:unchanged, state}
 
-      state = dispatch_harness_agent(state, current_hash)
-      {:dispatched, state}
-    else
-      {:unchanged, state}
+      skip_harness_dispatch?(state.last_hash, current_hash) ->
+        if current_hash != state.last_hash do
+          Logger.info("WORKFLOW.md absent or empty at #{workflow_path}; recording baseline hash without harness Linear issue")
+
+          persist_harness_state(state.harness_state_path, current_hash, nil)
+
+          state = %{
+            state
+            | last_hash: current_hash,
+              harness_issue_id: nil,
+              harness_running: false
+          }
+
+          {:unchanged, state}
+        else
+          {:unchanged, state}
+        end
+
+      current_hash != state.last_hash ->
+        _ =
+          Logger.info("WORKFLOW.md hash changed last=#{inspect(state.last_hash)} current=#{inspect(current_hash)}; creating harness Linear issue")
+
+        state = dispatch_harness_agent(state, current_hash)
+        {:dispatched, state}
+
+      true ->
+        {:unchanged, state}
     end
+  end
+
+  defp skip_harness_dispatch?(last_hash, current_hash) do
+    current_hash == "" and last_hash in [nil, ""]
   end
 
   defp check_harness_issue_status(%State{harness_issue_id: nil} = state), do: state
@@ -203,9 +239,13 @@ defmodule SymphonyElixir.Harness.Manager do
   defp compute_hash(path) do
     case File.read(path) do
       {:ok, content} ->
-        content
-        |> then(&:crypto.hash(:sha256, &1))
-        |> Base.encode16(case: :lower)
+        if content |> String.trim() |> String.length() == 0 do
+          ""
+        else
+          content
+          |> then(&:crypto.hash(:sha256, &1))
+          |> Base.encode16(case: :lower)
+        end
 
       {:error, :enoent} ->
         ""
@@ -294,19 +334,20 @@ defmodule SymphonyElixir.Harness.Manager do
                  "HARNESS: Reconfigure agent harness",
                  prompt
                ),
-           :ok <- move_harness_issue_to_todo(issue_id, state) do
+             :ok <- move_harness_issue_to_todo(issue_id, state) do
           {:ok, issue_id}
         end
     end
   end
 
   defp move_harness_issue_to_todo(issue_id, state) do
-    case SymphonyElixir.Tracker.update_issue_state(issue_id, "Todo",
-           workflow_store: state.workflow_store
-         ) do
-      :ok -> :ok
+    case SymphonyElixir.Tracker.update_issue_state(issue_id, "Todo", workflow_store: state.workflow_store) do
+      :ok ->
+        :ok
+
       {:error, reason} ->
         Logger.warning("Failed to move harness issue #{issue_id} to Todo: #{inspect(reason)}; orchestrator may not pick it up")
+
         :ok
     end
   end
@@ -357,12 +398,15 @@ defmodule SymphonyElixir.Harness.Manager do
   3. Create a PR targeting the workflow's base branch
   """
 
-  @harness_empty_prompt "The workflow file at __WORKFLOW_PATH__ is empty or does not exist. No harness configuration is needed."
+  defp build_harness_prompt(last_hash, "", path) when last_hash not in [nil, ""],
+    do: inject_path(@harness_deletion_prompt, path)
 
-  defp build_harness_prompt(nil, "", path), do: inject_path(@harness_empty_prompt, path)
-  defp build_harness_prompt(nil, _current_hash, path), do: inject_path(@harness_setup_prompt, path)
-  defp build_harness_prompt(_last_hash, "", path), do: inject_path(@harness_deletion_prompt, path)
-  defp build_harness_prompt(_last_hash, _current_hash, path), do: inject_path(@harness_update_prompt, path)
+  defp build_harness_prompt(last_hash, current_hash, path)
+       when last_hash in [nil, ""] and current_hash != "",
+       do: inject_path(@harness_setup_prompt, path)
+
+  defp build_harness_prompt(_last_hash, _current_hash, path),
+    do: inject_path(@harness_update_prompt, path)
 
   defp inject_path(prompt, path), do: String.replace(prompt, "__WORKFLOW_PATH__", path)
 
