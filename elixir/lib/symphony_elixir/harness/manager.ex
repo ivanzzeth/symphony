@@ -7,7 +7,10 @@ defmodule SymphonyElixir.Harness.Manager do
   WORKFLOW.md content hash and the active harness Linear issue ID.
 
   On WORKFLOW.md change (hash mismatch):
-    1. Creates a real Linear issue with harness prompt as its description
+    0. If there is no prior recorded hash and the workflow file is missing or
+       effectively empty (whitespace-only), records the absent marker locally
+       and does **not** open a harness Linear issue — nothing to configure.
+    1. Otherwise creates a real Linear issue with harness prompt as its description
     2. Sets issue to Todo (or active state for dispatch)
     3. Orchestrator polls and picks it up naturally
     4. Agent runs in workspace, commits `.agents/` changes, creates PR
@@ -203,9 +206,13 @@ defmodule SymphonyElixir.Harness.Manager do
   defp compute_hash(path) do
     case File.read(path) do
       {:ok, content} ->
-        content
-        |> then(&:crypto.hash(:sha256, &1))
-        |> Base.encode16(case: :lower)
+        if String.trim(content) == "" do
+          ""
+        else
+          content
+          |> then(&:crypto.hash(:sha256, &1))
+          |> Base.encode16(case: :lower)
+        end
 
       {:error, :enoent} ->
         ""
@@ -252,20 +259,37 @@ defmodule SymphonyElixir.Harness.Manager do
   end
 
   defp dispatch_harness_agent(state, current_hash) do
-    prompt = build_harness_prompt(state.last_hash, current_hash, state.workflow_file_path)
+    # No workflow contract yet (missing/empty file) and we have never recorded a hash:
+    # record the absent marker locally without opening a harness Linear issue — there is
+    # nothing to configure (see @harness_empty_prompt).
+    if harness_noop_initial_absent?(state.last_hash, current_hash) do
+      Logger.info(
+        "WORKFLOW.md is missing or empty and no prior hash recorded; skipping harness Linear issue"
+      )
 
-    case create_harness_issue(state, prompt) do
-      {:ok, issue_id} ->
-        Logger.info("Created harness Linear issue: #{issue_id}")
+      persist_harness_state(state.harness_state_path, current_hash, nil)
 
-        persist_harness_state(state.harness_state_path, current_hash, issue_id)
+      %{state | last_hash: current_hash, harness_issue_id: nil, harness_running: false}
+    else
+      prompt = build_harness_prompt(state.last_hash, current_hash, state.workflow_file_path)
 
-        %{state | last_hash: current_hash, harness_issue_id: issue_id, harness_running: true}
+      case create_harness_issue(state, prompt) do
+        {:ok, issue_id} ->
+          Logger.info("Created harness Linear issue: #{issue_id}")
 
-      {:error, reason} ->
-        Logger.error("Failed to create harness issue: #{inspect(reason)}")
-        state
+          persist_harness_state(state.harness_state_path, current_hash, issue_id)
+
+          %{state | last_hash: current_hash, harness_issue_id: issue_id, harness_running: true}
+
+        {:error, reason} ->
+          Logger.error("Failed to create harness issue: #{inspect(reason)}")
+          state
+      end
     end
+  end
+
+  defp harness_noop_initial_absent?(last_hash, current_hash) do
+    last_hash == nil and current_hash == ""
   end
 
   defp create_harness_issue(state, prompt) do
@@ -359,10 +383,20 @@ defmodule SymphonyElixir.Harness.Manager do
 
   @harness_empty_prompt "The workflow file at __WORKFLOW_PATH__ is empty or does not exist. No harness configuration is needed."
 
-  defp build_harness_prompt(nil, "", path), do: inject_path(@harness_empty_prompt, path)
-  defp build_harness_prompt(nil, _current_hash, path), do: inject_path(@harness_setup_prompt, path)
-  defp build_harness_prompt(_last_hash, "", path), do: inject_path(@harness_deletion_prompt, path)
-  defp build_harness_prompt(_last_hash, _current_hash, path), do: inject_path(@harness_update_prompt, path)
+  defp build_harness_prompt(last_hash, current_hash, path) do
+    last_hash = normalize_last_hash_for_prompt(last_hash)
+
+    case {last_hash, current_hash} do
+      {nil, ""} -> inject_path(@harness_empty_prompt, path)
+      {nil, _} -> inject_path(@harness_setup_prompt, path)
+      {_, ""} -> inject_path(@harness_deletion_prompt, path)
+      {_, _} -> inject_path(@harness_update_prompt, path)
+    end
+  end
+
+  defp normalize_last_hash_for_prompt(nil), do: nil
+  defp normalize_last_hash_for_prompt(""), do: nil
+  defp normalize_last_hash_for_prompt(h), do: h
 
   defp inject_path(prompt, path), do: String.replace(prompt, "__WORKFLOW_PATH__", path)
 
