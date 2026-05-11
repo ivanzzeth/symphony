@@ -1,5 +1,5 @@
 ---
-name: symphony-land
+name: land
 description:
   Land a PR by monitoring conflicts, resolving them, waiting for checks, and
   squash-merging when green; use when asked to land, merge, or shepherd a PR to

@@ -4,7 +4,7 @@ Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
 only.
 
-## WORKFLOW command names (Step 1–2)
+## WORKFLOW command names (Steps 0–4)
 
 `elixir/WORKFLOW.md` names **`pull`**, **`commit`**, **`push`**, and **`land sweep`**
 directly. Use the matching harness skills **`pull`**, **`commit`**, **`push`**, and
