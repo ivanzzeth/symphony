@@ -4,6 +4,10 @@ Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
 only.
 
+Section titles below use shorthand (**Step 0**, **Step 1**, …) that align with
+the **Step 0: Route** through **Step 4: Rework** headings in `elixir/WORKFLOW.md`
+(some headings here split one WORKFLOW step across multiple checklist sections).
+
 ## WORKFLOW command names (Step 1–2)
 
 `elixir/WORKFLOW.md` names **`pull`**, **`commit`**, **`push`**, and **`land sweep`**

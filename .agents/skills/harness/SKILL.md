@@ -24,7 +24,8 @@ When the harness skill triggers, first assess the current harness state and dete
 2. Detect execution context:
    - **Symphony dispatch**: The harness run is driven by Symphony (for example `SymphonyElixir.Harness.Manager` after a `WORKFLOW.md` content-hash change, an explicit harness dispatch, or caller-supplied orchestrator context such as `_workspace/symphony_context.json`).
      1. **Hard prerequisite: read the injected workflow file immediately.** The dispatch context provides a workflow file path. Read that file in full before any other operation. Understand its actual content, structure, and term usage.
-     2. Only after reading may you proceed to audit `.agents/` and `AGENTS.md`.
+     2. **If missing or unreadable:** read **`elixir/WORKFLOW.md`** (this monorepo’s canonical contract). On a Linear-driven harness ticket, record the substitution in **`## Codex Workpad` → `Notes`**. Do not fail solely because an ephemeral `/tmp/...` or other stale injected path is absent.
+     3. Only after a successful contract read (injected path **or** `elixir/WORKFLOW.md` fallback) may you proceed to audit `.agents/` and `AGENTS.md`.
    - **Manual invocation**: User-requested harness work without the Symphony dispatch signals above. Still check for a workflow file in the project when one is referenced, and read it before making changes. Use standard standalone protocols.
 3. Branch by current state:
    - **New build**: agent/skill directories are missing or empty → run all phases starting from Phase 1
@@ -477,6 +478,7 @@ Use these as quick dry-runs after reconfiguring `.agents/` or `AGENTS.md`:
    after reporting the blocker; no partial writes to skills.
 3. **Continuation:** Resume harness configuration from current tree. Expect
    re-audit, no duplicate agent files, linear/land/pull alignment verified.
+4. **Missing injected path:** Dispatch supplies a workflow path that does not exist (for example stale `/tmp/...`). Expect read of **`elixir/WORKFLOW.md`**, workpad **`Notes`** documenting the substitution, then normal harness sync without editing any workflow file.
 
 ## References
 
