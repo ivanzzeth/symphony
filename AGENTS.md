@@ -319,6 +319,7 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 | 2026-05-11 | Harness sync to WORKFLOW (vNext prompt: Contract, State→Skill, Prerequisite escape hatch) | AGENTS.md, linear/SKILL.md, issue-execution-checklist.md, symphony-dispatch.md, harness/SKILL.md | `elixir/WORKFLOW.md` simplified Steps 0–4; removed sub-step numbering; missing Linear uses blocked-access not user prompts |
 | 2026-05-11 | Harness continuation (resume): WORKFLOW literal `pull`/`commit`/`push`/`land sweep` | AGENTS.md, issue-execution-checklist.md, symphony-dispatch.md, push/SKILL.md, harness-agent.md | `elixir/WORKFLOW.md` Markdown now names skills directly; State table without `Backlog` row (Step 0 only); harness docs drop stale `symphony-*` as primary |
 | 2026-05-11 | Harness continuation (resume): State table vs `Backlog`, blocked-access tone | AGENTS.md, symphony-dispatch.md, issue-execution-checklist.md | Re-audit `elixir/WORKFLOW.md`: `Backlog` only in Step 0 (not State table); document blocked-access carve-out; continuation blockers include Linear prerequisite |
+| 2026-05-12 | Harness sync WEB-91 (WORKFLOW contract verification) | `.agents/skills/harness/SKILL.md`, `symphony-dispatch.md`, AGENTS.md | Read `elixir/WORKFLOW.md` (injected `/tmp/.../WORKFLOW.md` unavailable in workspace); verified issue-execution harness matches simplified Steps 0–4 + Contract; added fallback guidance when injected workflow path is unreadable |
 
 ## Harness: Symphony Development
 
