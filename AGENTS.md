@@ -323,6 +323,7 @@ Optional: repositories may also carry `symphony-*` skill directories (`symphony-
 | 2026-05-11 | Harness continuation (resume): WORKFLOW literal `pull`/`commit`/`push`/`land sweep` | AGENTS.md, issue-execution-checklist.md, symphony-dispatch.md, push/SKILL.md, harness-agent.md | `elixir/WORKFLOW.md` Markdown now names skills directly; State table without `Backlog` row (Step 0 only); harness docs drop stale `symphony-*` as primary |
 | 2026-05-11 | Harness continuation (resume): State table vs `Backlog`, blocked-access tone | AGENTS.md, symphony-dispatch.md, issue-execution-checklist.md | Re-audit `elixir/WORKFLOW.md`: `Backlog` only in Step 0 (not State table); document blocked-access carve-out; continuation blockers include Linear prerequisite |
 | 2026-05-12 | Harness sync (WEB-107): WORKFLOW Steps 0–4 map, temp-path read fallback to `elixir/WORKFLOW.md`, `symphony-linear` workpad note | harness + symphony-harness SKILL, `symphony-dispatch` (both), `issue-execution-checklist`, `harness-agent`, AGENTS.md | Align harness with current `elixir/WORKFLOW.md` prompt template; ticket temp path unavailable in agent environment |
+| 2026-05-12 | WEB-107 continuation (attempt #1): `symphony-harness` checklist parity | `.agents/skills/symphony-harness/references/issue-execution-checklist.md`, `.agents/skills/harness/references/issue-execution-checklist.md`, AGENTS.md | Restored Steps 0–4 map + aligned `symphony-linear` / `symphony-land` hints with canonical `harness/` copy |
 
 ## Harness: Symphony Development
 

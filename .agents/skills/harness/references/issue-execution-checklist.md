@@ -129,7 +129,7 @@ If blocked and **no** workpad exists yet, add **one** concise blocker comment on
 
 ## Workpad comment editing (WORKFLOW Guardrails)
 
-If in-session comment editing is unavailable, use the documented **update script** fallback (see `linear` skill). Only treat workpad updates as blocked if **both** MCP-style editing and script-based editing fail.
+If in-session comment editing is unavailable, use the documented **update script** fallback (see `linear` or **`symphony-linear`** skill — same tree). Only treat workpad updates as blocked if **both** MCP-style editing and script-based editing fail.
 
 ## Workpad environment stamp
 
@@ -193,6 +193,6 @@ If no workpad exists yet when blocked, add the single blocker comment per Guardr
 
 ## After squash-merge (`Merging` → `Done`)
 
-Follow `.agents/skills/land/SKILL.md` and its watcher loop. When the PR is
+Follow `.agents/skills/land/SKILL.md` (or **`symphony-land`** mirror) and its watcher loop. When the PR is
 merged, move the Linear issue to **`Done`** via `issueUpdate` with the completed
-state id (use `linear` skill / `linear_graphql`).
+state id (use `linear` / **`symphony-linear`** skill / `linear_graphql`).
