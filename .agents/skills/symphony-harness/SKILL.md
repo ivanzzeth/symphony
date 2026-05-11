@@ -12,7 +12,7 @@ Configures a harness tailored to a domain/project, defines each agent's role, an
 2. **Use agent teams as the default execution mode.**
 3. **Register harness context in AGENTS.md** — record harness structure and trigger rules in the project AGENTS.md so agent teams activate immediately in new sessions.
 4. **The harness is a living system, not a static artifact.** — After every execution, incorporate feedback and continuously update agents, skills, and AGENTS.md.
-5. **Symphony dispatch: read the workflow file FIRST, before changing anything.** The running `symphony` process injects the workflow file path into the dispatch context. Before making any modification to `.agents/` or `AGENTS.md`, always read that file in full. Understand what it defines and what names it uses. Never assume its filename or terminology — go read the actual content. Manual (non-Symphony) invocations still check for a workflow file when one is mentioned in project context.
+5. **Symphony dispatch: read the workflow file FIRST, before changing anything.** The running `symphony` process injects the workflow file path into the dispatch context. Read that path in full when it exists; if it is missing or unreadable (for example an ephemeral `/tmp/...` copy), read **`elixir/WORKFLOW.md`** as the in-repo canonical contract for this monorepo. Never modify the workflow file from harness work. Manual (non-Symphony) invocations still read `elixir/WORKFLOW.md` when reconfiguring issue-execution docs.
 
 ## Workflow
 
@@ -23,7 +23,7 @@ When the harness skill triggers, first assess the current harness state and dete
 1. Read `project/.agents/agents/`, `project/.agents/skills/`, `project/AGENTS.md`
 2. Detect execution context:
    - **Symphony dispatch**: The harness run is driven by Symphony (for example `SymphonyElixir.Harness.Manager` after a `WORKFLOW.md` content-hash change, an explicit harness dispatch, or caller-supplied orchestrator context such as `_workspace/symphony_context.json`).
-     1. **Hard prerequisite: read the injected workflow file immediately.** The dispatch context provides a workflow file path. Read that file in full before any other operation. Understand its actual content, structure, and term usage.
+     1. **Hard prerequisite: read the workflow contract immediately.** The dispatch context provides a workflow file path — read it in full when present and readable. If that path is missing or unreadable, read **`elixir/WORKFLOW.md`** instead (see `references/symphony-dispatch.md` → *Injected path missing or unreadable*). Understand YAML + Markdown content, structure, and terminology before edits.
      2. Only after reading may you proceed to audit `.agents/` and `AGENTS.md`.
    - **Manual invocation**: User-requested harness work without the Symphony dispatch signals above. Still check for a workflow file in the project when one is referenced, and read it before making changes. Use standard standalone protocols.
 3. Branch by current state:
@@ -473,7 +473,7 @@ Use these as quick dry-runs after reconfiguring `.agents/` or `AGENTS.md`:
 1. **Normal:** User asks to sync harness with `elixir/WORKFLOW.md`. Expect Phase 0
    audit, diff of YAML + prompt sections, updates under `.agents/` + `AGENTS.md`
    only, change-history row.
-2. **Error:** `elixir/WORKFLOW.md` missing or unreadable. Expect harness to stop
+2. **Error:** Injected workflow path and `elixir/WORKFLOW.md` both missing or unreadable. Expect harness to stop
    after reporting the blocker; no partial writes to skills.
 3. **Continuation:** Resume harness configuration from current tree. Expect
    re-audit, no duplicate agent files, symphony-linear / symphony-land / symphony-pull alignment verified.
@@ -487,4 +487,4 @@ Use these as quick dry-runs after reconfiguring `.agents/` or `AGENTS.md`:
 - **Skill testing guide**: `references/skill-testing-guide.md` — testing/evaluation/iterative improvement methodology
 - **QA agent guide**: `references/qa-agent-guide.md` — reference when including QA agents in build harnesses. Covers integration consistency verification methodology, boundary bug patterns, QA agent definition template. Based on 7 real bugs found in actual projects.
 - **Symphony dispatch**: `references/symphony-dispatch.md` — Symphony platform integration protocols for harness agents dispatched by the Symphony orchestrator.
-- **Issue PR gates (checklist)**: `references/issue-execution-checklist.md` — WORKFLOW Step 1 workpad shape (app flow checks, ticket validation mirror, pull evidence in `Notes`), Step 2 **`pull`** / **`commit`** / **`push`** / **`land sweep`** (or **`symphony-*`** mirror skills), Guardrails (no extra completion comments), `Todo`+PR flow, workpad edit fallback, PR feedback sweep, Manual QA Plan, mandatory validation gate, completion bar (runtime validation + media), merge→Done, blocked-access escape hatch (pointers only; `elixir/WORKFLOW.md` is authoritative).
+- **Issue PR gates (checklist)**: `references/issue-execution-checklist.md` — WORKFLOW Step 1 workpad shape (app flow checks, ticket validation mirror, pull evidence in `Notes`), Step 2 **`pull`** / **`commit`** / **`push`** / **`land sweep`** (or **`symphony-*`** mirror skills), Guardrails (no extra completion comments), `Todo`+PR flow, workpad edit fallback, PR feedback sweep, Manual QA Plan, mandatory validation gate, completion bar (runtime validation + media), merge→Done, blocked-access escape hatch (pointers only; read contract from injected path when readable, else `elixir/WORKFLOW.md`).

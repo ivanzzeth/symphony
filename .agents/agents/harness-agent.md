@@ -34,6 +34,7 @@ and the AGENTS.md harness context.
 6. **Config architecture awareness** — The WORKFLOW.md now contains only project-level config (tracker, polling, workspace, agent, codex, hooks, prompt). Daemon-level settings (server, observability) live in `~/.config/symphony/symphony.yaml`. The `server` and `observability` keys are **disallowed in WORKFLOW.md** and silently stripped with a warning. When auditing/reconfiguring based on WORKFLOW.md changes, ignore process-level config keys since they belong in symphony.yaml.
 7. **YAML `agent` drift** — When WORKFLOW gains or changes pool/timeout fields under `agent` (for example `stream_timeout_ms`), reflect them in **AGENTS.md** execution rules and in any skills that describe orchestrator behavior (`elixir-planner`, `debug`, `symphony-dispatch`) so operators and dev agents do not rely on stale numbers.
 8. **Issue-execution doc sync** — When WORKFLOW changes routing, Contract/Steps, validation, PR-at-kickoff, completion-bar, prerequisite, blocked-access escape hatch (GitHub fallbacks vs non-GitHub → `In Review`), or literal command wording (`pull` / `commit` / `push` / `land sweep`, including any legacy `symphony-*` aliases), update **`AGENTS.md`** issue-execution bullets and **`references/issue-execution-checklist.md`** (and `symphony-dispatch.md` execution-contract bullets when needed); never edit `elixir/WORKFLOW.md` from the harness agent.
+9. **Injected workflow path fallback** — When the dispatch-injected absolute path is missing or unreadable, read **`elixir/WORKFLOW.md`** per `symphony-dispatch.md` (*Injected path missing or unreadable*); still never modify the contract file from harness runs.
 
 ## Skills
 
@@ -59,8 +60,8 @@ and the AGENTS.md harness context.
 ## Error Handling
 
 - **Missing WORKFLOW.md**: Report and exit; cannot configure harness without the
-  Symphony execution contract. In this monorepo the canonical file is
-  `elixir/WORKFLOW.md` (path passed to the running orchestrator).
+  Symphony execution contract. Try the **injected** path from dispatch first;
+  if missing or unreadable, read **`elixir/WORKFLOW.md`** (canonical in this monorepo).
 - **Parse failures**: Log the error, skip the problematic file, continue with remaining work.
 - **Conflicting definitions**: Prefer the more specific definition; document the conflict in AGENTS.md change history.
 - **Disallowed WORKFLOW.md keys**: If WORKFLOW.md contains `server` or `observability` keys, note that these are process-level config that belongs in `~/.config/symphony/symphony.yaml`. Report to user but do not block — the runtime silently strips them with a warning.
