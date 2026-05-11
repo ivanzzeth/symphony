@@ -205,7 +205,7 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 - **Skill name map:** WORKFLOW **`pull`**, **`commit`**, **`push`**, **`land sweep`** → skills **`pull`**, **`commit`**, **`push`**, **`land`**. Legacy **`symphony-*`** = same flows.
 - **Continuation / `{% if attempt %}`:** resume workspace + workpad; skip redundant validation unless invalidated; remain active until resolved or blocked (auth/secrets/unreachable Linear per Prerequisite).
 - **Guardrails:** one workpad; no planning in issue body; no PR URL in workpad body; no extra completion comments; ticket metadata vs description per WORKFLOW.
-- **Prerequisite / blocked-access:** prefer **Linear MCP** or **`linear_graphql`** in Symphony sessions; if absent but the authenticated **`linear` CLI** is available, use it for states/comments and note it in `Notes`. If all access fails, blocked-access brief in workpad (and blocker comment if no workpad). GitHub is **not** a default blocker.
+- **Prerequisite / blocked-access:** prefer **Linear MCP** or **`linear_graphql`** in Symphony sessions; if absent but the authenticated **`linear` CLI** is available, use it for states/comments and note it in `Notes`. If all access fails, blocked-access brief in workpad (and blocker comment if no workpad). For non-GitHub missing tool/auth, WORKFLOW directs **`In Review`** + workpad brief. GitHub is **not** a default blocker.
 - **Daemon config:** `server` / `observability` only in `~/.config/symphony/symphony.yaml` — disallowed in WORKFLOW YAML (stripped with warning). CLI `--config` / `--port` / `--host` override process config.
 - **Out-of-scope:** file **Backlog** issues (`related`, `blockedBy` when needed).
 - **`WORKFLOW.md` hash changes** trigger **`Harness.Manager`** harness runs.
@@ -256,6 +256,8 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 └── worktree_init.sh
 ```
 
+Optional: repositories may also carry `symphony-*` skill directories (`symphony-pull`, `symphony-commit`, …) as IDE aliases — treat them as equivalent to the canonical `pull`, `commit`, … skills when present.
+
 **Change History:**
 | Date | Change | Target | Reason |
 |------|--------|--------|--------|
@@ -291,7 +293,9 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 | 2026-05-11 | Harness sync to WORKFLOW (vNext prompt: Contract, State→Skill, Prerequisite escape hatch) | AGENTS.md, linear/SKILL.md, issue-execution-checklist.md, symphony-dispatch.md, harness/SKILL.md | `elixir/WORKFLOW.md` simplified Steps 0–4; removed sub-step numbering; missing Linear uses blocked-access not user prompts |
 | 2026-05-11 | Harness continuation (resume): WORKFLOW literal `pull`/`commit`/`push`/`land sweep` | AGENTS.md, issue-execution-checklist.md, symphony-dispatch.md, push/SKILL.md, harness-agent.md | `elixir/WORKFLOW.md` Markdown now names skills directly; State table without `Backlog` row (Step 0 only); harness docs drop stale `symphony-*` as primary |
 | 2026-05-11 | Harness continuation (resume): State table vs `Backlog`, blocked-access tone | AGENTS.md, symphony-dispatch.md, issue-execution-checklist.md | Re-audit `elixir/WORKFLOW.md`: `Backlog` only in Step 0 (not State table); document blocked-access carve-out; continuation blockers include Linear prerequisite |
+| 2026-05-11 | Harness sync to WORKFLOW (blocked-access + Step 1 shape) | AGENTS.md, harness references, harness + symphony-harness SKILL.md, linear/SKILL.md | Match current `elixir/WORKFLOW.md`: escape hatch (GitHub fallbacks; non-GitHub missing auth → `In Review` + workpad brief); Contract bullets aligned; Step 1 = validation mirror + app-touching flow checks only |
 | 2026-05-12 | WEB-90: re-sync issue-execution harness to simplified WORKFLOW Steps 0–4 | AGENTS.md, `.agents/skills/harness/SKILL.md`, `.agents/skills/linear/SKILL.md`, `.agents/agents/harness-agent.md`, `.agents/skills/harness/references/symphony-dispatch.md` | Injected workflow path fallback; `Backlog` vs routing table clarity; Linear CLI fallback when `linear_graphql` absent |
+| 2026-05-12 | WEB-90: merge `develop` into harness branch; resolve AGENTS + linear skill conflicts | AGENTS.md, `.agents/skills/linear/SKILL.md` | PR #72 was CONFLICTING after upstream harness commits; preserve CLI fallback + blocked-access `In Review` wording |
 
 ## Harness: Symphony Development
 

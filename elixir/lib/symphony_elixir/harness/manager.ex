@@ -1,38 +1,37 @@
 defmodule SymphonyElixir.Harness.Manager do
   @moduledoc """
   Detects WORKFLOW.md changes via SHA-256 hash comparison and dispatches harness
-  agent sessions to reconfigure the project's `.agents/` definitions and skills.
+  agent sessions by creating a real Linear issue for the orchestrator to pick up.
 
   Manages `.symphony/harness-state.json` — a persistent marker recording the
-  WORKFLOW.md content hash.
+  WORKFLOW.md content hash and the active harness Linear issue ID.
 
-  Per SPEC V1.1 Section 4.4: on WORKFLOW.md change (hash mismatch), dispatches a
-  harness agent session in the **project directory** (not a per-issue workspace).
-  The harness agent does NOT consume an issue dispatch slot.
+  On WORKFLOW.md change (hash mismatch):
+    1. Creates a real Linear issue with harness prompt as its description
+    2. Sets issue to Todo (or active state for dispatch)
+    3. Orchestrator polls and picks it up naturally
+    4. Agent runs in workspace, commits `.agents/` changes, creates PR
+    5. Goes through In Review → Merging → Done
+    6. Harness.Manager detects Done → records hash as processed
   """
 
   use GenServer
   require Logger
 
-  alias SymphonyElixir.{CodingAgent, Config.Context, Rescue, Workflow}
+  alias SymphonyElixir.Workflow
 
   @harness_state_dir ".symphony"
   @harness_state_file "harness-state.json"
-  @poll_interval_ms 5_000
-
-  @harness_issue %{
-    id: "harness",
-    identifier: "HARNESS",
-    title: "Reconfigure agent harness",
-    state: "harness"
-  }
+  @poll_interval_ms 10_000
 
   defmodule State do
     @moduledoc false
     defstruct [
       :project_dir,
+      :project_id,
       :harness_state_path,
       :last_hash,
+      :harness_issue_id,
       :harness_running,
       :poll_timer_ref,
       :workflow_file_path,
@@ -48,7 +47,7 @@ defmodule SymphonyElixir.Harness.Manager do
   end
 
   @doc """
-  Returns true when a harness agent is currently running in the project directory.
+  Returns true when a harness agent is currently running.
   """
   @spec harness_running?(GenServer.server() | :auto) :: boolean()
   def harness_running?(server \\ :auto) do
@@ -68,11 +67,8 @@ defmodule SymphonyElixir.Harness.Manager do
   @spec check(GenServer.server() | :auto) :: :dispatched | :unchanged | :harness_busy
   def check(server \\ :auto) do
     case resolve_harness_server(server) do
-      nil ->
-        :unchanged
-
-      resolved ->
-        GenServer.call(resolved, :check)
+      nil -> :unchanged
+      resolved -> GenServer.call(resolved, :check)
     end
   end
 
@@ -115,15 +111,17 @@ defmodule SymphonyElixir.Harness.Manager do
         end
 
     harness_state_path = harness_state_path(project_dir)
-    workflow_store = Keyword.get(opts, :workflow_store)
+    {last_hash, harness_issue_id} = load_harness_state(harness_state_path)
 
     state = %State{
       project_dir: project_dir,
+      project_id: Keyword.get(opts, :project_id),
       harness_state_path: harness_state_path,
-      last_hash: load_last_hash(harness_state_path),
-      harness_running: false,
+      last_hash: last_hash,
+      harness_issue_id: harness_issue_id,
+      harness_running: harness_issue_id != nil,
       manager_pid: self(),
-      workflow_store: workflow_store
+      workflow_store: Keyword.get(opts, :workflow_store)
     }
 
     state =
@@ -153,6 +151,8 @@ defmodule SymphonyElixir.Harness.Manager do
     state = schedule_poll(state)
 
     if state.harness_running do
+      # Check if harness issue has reached a terminal state
+      state = check_harness_issue_status(state)
       {:noreply, state}
     else
       {_reply, state} = do_check(state)
@@ -160,31 +160,43 @@ defmodule SymphonyElixir.Harness.Manager do
     end
   end
 
-  def handle_info({:harness_complete, _result}, state) do
-    Logger.info("Harness agent session completed")
-    {:noreply, sync_last_hash(%{state | harness_running: false})}
-  end
-
-  def handle_info({:DOWN, _ref, :process, _pid, _reason}, state) do
-    Logger.info("Harness agent process terminated")
-    {:noreply, sync_last_hash(%{state | harness_running: false})}
-  end
-
-  def handle_info({ref, _result}, state) when is_reference(ref) do
-    {:noreply, state}
-  end
-
   defp do_check(state) do
     workflow_path = Map.get(state, :workflow_file_path) || Workflow.workflow_file_path()
     current_hash = compute_hash(workflow_path)
 
     if current_hash != state.last_hash do
-      _ = Logger.info("WORKFLOW.md hash changed last=#{inspect(state.last_hash)} current=#{inspect(current_hash)}; dispatching harness agent")
+      _ = Logger.info("WORKFLOW.md hash changed last=#{inspect(state.last_hash)} current=#{inspect(current_hash)}; creating harness Linear issue")
 
       state = dispatch_harness_agent(state, current_hash)
       {:dispatched, state}
     else
       {:unchanged, state}
+    end
+  end
+
+  defp check_harness_issue_status(%State{harness_issue_id: nil} = state), do: state
+
+  defp check_harness_issue_status(%State{harness_issue_id: issue_id} = state) do
+    case fetch_linear_issue(issue_id) do
+      {:ok, %{state: state_name}} when is_binary(state_name) ->
+        normalized = String.downcase(String.trim(state_name))
+
+        if normalized in ["done", "canceled", "duplicate"] do
+          Logger.info("Harness issue #{issue_id} reached terminal state: #{state_name}; recording hash")
+
+          persist_harness_state(state.harness_state_path, state.last_hash, nil)
+
+          %{state | harness_issue_id: nil, harness_running: false}
+        else
+          state
+        end
+
+      {:error, reason} ->
+        Logger.debug("Failed to check harness issue #{issue_id} status: #{inspect(reason)}")
+        state
+
+      _ ->
+        state
     end
   end
 
@@ -204,110 +216,105 @@ defmodule SymphonyElixir.Harness.Manager do
     end
   end
 
-  defp load_last_hash(path) do
+  defp load_harness_state(path) do
     case File.read(path) do
       {:ok, content} ->
         case Jason.decode(content) do
-          {:ok, %{"hash" => hash}} when is_binary(hash) -> hash
-          _ -> nil
+          {:ok, decoded} ->
+            hash = Map.get(decoded, "hash")
+            issue_id = Map.get(decoded, "harness_issue_id")
+            {hash, issue_id}
+
+          _ ->
+            {nil, nil}
         end
 
       {:error, :enoent} ->
-        nil
+        {nil, nil}
 
       {:error, reason} ->
         Logger.warning("Failed to read harness-state.json at #{path}: #{inspect(reason)}")
-        nil
+        {nil, nil}
     end
   end
 
-  defp persist_hash(path, hash) do
+  defp persist_harness_state(path, hash, issue_id) do
     state_dir = Path.dirname(path)
     File.mkdir_p!(state_dir)
 
     state = %{
       "hash" => hash,
+      "harness_issue_id" => issue_id,
       "updated_at" => DateTime.utc_now() |> DateTime.to_iso8601()
     }
 
     File.write!(path, Jason.encode!(state, pretty: true))
   end
 
-  @harness_max_turns 3
-
   defp dispatch_harness_agent(state, current_hash) do
     prompt = build_harness_prompt(state.last_hash, current_hash, state.workflow_file_path)
 
-    task_ref =
-      Task.async(fn ->
-        try do
-          if ws = state.workflow_store do
-            Context.put_workflow_store(ws)
-          end
+    case create_harness_issue(state, prompt) do
+      {:ok, issue_id} ->
+        Logger.info("Created harness Linear issue: #{issue_id}")
 
-          adapter = CodingAgent.adapter()
-          do_dispatch_harness(adapter, state, prompt)
-        rescue
-          e ->
-            Rescue.log_error("Harness agent task crashed", e, __STACKTRACE__)
-            send(state.manager_pid, {:harness_complete, {:error, e}})
-        after
-          _ = Context.delete_workflow_store()
-        end
-      end)
+        persist_harness_state(state.harness_state_path, current_hash, issue_id)
 
-    Process.monitor(task_ref.pid)
-
-    persist_hash(state.harness_state_path, current_hash)
-
-    %{state | last_hash: current_hash, harness_running: true}
-  end
-
-  defp do_dispatch_harness(adapter, state, prompt) do
-    manager_pid = state.manager_pid
-
-    case adapter.start_session(state.project_dir, []) do
-      {:ok, session} ->
-        try do
-          result = run_harness_turns(adapter, session, prompt)
-          send(manager_pid, {:harness_complete, result})
-        after
-          adapter.stop_session(session)
-        end
+        %{state | last_hash: current_hash, harness_issue_id: issue_id, harness_running: true}
 
       {:error, reason} ->
-        Logger.error("Failed to start harness agent session: #{inspect(reason)}")
-        send(manager_pid, {:harness_complete, {:error, reason}})
+        Logger.error("Failed to create harness issue: #{inspect(reason)}")
+        state
     end
   end
 
-  defp run_harness_turns(adapter, session, prompt) do
-    do_run_harness_turns(adapter, session, prompt, 1, @harness_max_turns)
+  defp create_harness_issue(state, prompt) do
+    cfg =
+      case state.workflow_store do
+        nil -> SymphonyElixir.Config.settings!()
+        ws -> SymphonyElixir.Config.settings!(workflow_store: ws)
+      end
+
+    tracker = cfg.tracker
+
+    cond do
+      is_nil(tracker.api_key) ->
+        {:error, :missing_linear_api_token}
+
+      is_nil(tracker.project_slug) ->
+        {:error, :missing_linear_project_slug}
+
+      tracker.kind != "linear" ->
+        {:error, {:unsupported_tracker, tracker.kind}}
+
+      true ->
+        with {:ok, issue_id} <-
+               SymphonyElixir.Linear.Client.create_issue(
+                 tracker.project_slug,
+                 "HARNESS: Reconfigure agent harness",
+                 prompt
+               ),
+           :ok <- move_harness_issue_to_todo(issue_id, state) do
+          {:ok, issue_id}
+        end
+    end
   end
 
-  defp do_run_harness_turns(_adapter, session, _prompt, turn_number, max_turns)
-       when turn_number > max_turns do
-    Logger.info("Harness agent reached max_turns=#{max_turns}")
-    {:ok, session}
-  end
-
-  defp do_run_harness_turns(adapter, session, prompt, turn_number, max_turns) do
-    turn_prompt = if turn_number == 1, do: prompt, else: "Continue the harness configuration. Resume from the current workspace and .agents/ state."
-
-    case adapter.run_turn(session, turn_prompt, @harness_issue, []) do
-      {:ok, turn_result} ->
-        Logger.info("Harness agent turn #{turn_number}/#{max_turns} completed")
-
-        updated_session = Map.merge(session, %{resume_id: turn_result.resume_id})
-
-        # Short sleep between turns to avoid rate limiting
-        :timer.sleep(2_000)
-
-        do_run_harness_turns(adapter, updated_session, prompt, turn_number + 1, max_turns)
-
+  defp move_harness_issue_to_todo(issue_id, state) do
+    case SymphonyElixir.Tracker.update_issue_state(issue_id, "Todo",
+           workflow_store: state.workflow_store
+         ) do
+      :ok -> :ok
       {:error, reason} ->
-        Logger.error("Harness agent turn #{turn_number}/#{max_turns} failed: #{inspect(reason)}")
-        {:error, reason}
+        Logger.warning("Failed to move harness issue #{issue_id} to Todo: #{inspect(reason)}; orchestrator may not pick it up")
+        :ok
+    end
+  end
+
+  defp fetch_linear_issue(issue_id) do
+    case SymphonyElixir.Linear.Client.fetch_issue_by_id(issue_id) do
+      {:ok, issue} -> {:ok, %{state: issue.state}}
+      other -> other
     end
   end
 
@@ -319,6 +326,11 @@ defmodule SymphonyElixir.Harness.Manager do
   Read that file to understand the project's execution contract, then follow the full harness skill workflow (Phase 0-6) to analyze the domain, design the team architecture, generate agent definitions and skills, and register the harness context in AGENTS.md.
 
   IMPORTANT: Do NOT modify the workflow file under any circumstances. This file is the Symphony execution contract and must remain unchanged. Only create or update files under .agents/ and AGENTS.md.
+
+  After completing the harness configuration:
+  1. Commit all `.agents/` changes and AGENTS.md
+  2. Push to origin
+  3. Create a PR targeting the workflow's base branch
   """
 
   @harness_update_prompt """
@@ -329,10 +341,20 @@ defmodule SymphonyElixir.Harness.Manager do
   That file has been updated. Read it to understand the changes, then follow the harness skill workflow — audit current .agents/ state (Phase 0), then determine which phases are needed to bring the harness in sync with the updated workflow file.
 
   IMPORTANT: Do NOT modify the workflow file under any circumstances. This file is the Symphony execution contract and must remain unchanged. Only create or update files under .agents/ and AGENTS.md.
+
+  After completing the harness configuration:
+  1. Commit all `.agents/` changes and AGENTS.md
+  2. Push to origin
+  3. Create a PR targeting the workflow's base branch
   """
 
   @harness_deletion_prompt """
   The workflow file at __WORKFLOW_PATH__ has been deleted. Use the /harness skill to clean up the agent harness configuration accordingly. Do NOT recreate the workflow file.
+
+  After completing cleanup:
+  1. Commit the changes
+  2. Push to origin
+  3. Create a PR targeting the workflow's base branch
   """
 
   @harness_empty_prompt "The workflow file at __WORKFLOW_PATH__ is empty or does not exist. No harness configuration is needed."
@@ -343,13 +365,6 @@ defmodule SymphonyElixir.Harness.Manager do
   defp build_harness_prompt(_last_hash, _current_hash, path), do: inject_path(@harness_update_prompt, path)
 
   defp inject_path(prompt, path), do: String.replace(prompt, "__WORKFLOW_PATH__", path)
-
-  defp sync_last_hash(state) do
-    workflow_path = Map.get(state, :workflow_file_path) || Workflow.workflow_file_path()
-    current_hash = compute_hash(workflow_path)
-    persist_hash(state.harness_state_path, current_hash)
-    %{state | last_hash: current_hash}
-  end
 
   defp harness_state_path(project_dir) do
     Path.join([project_dir, @harness_state_dir, @harness_state_file])
