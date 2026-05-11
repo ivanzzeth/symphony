@@ -320,6 +320,7 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 | 2026-05-11 | Harness continuation (resume): WORKFLOW literal `pull`/`commit`/`push`/`land sweep` | AGENTS.md, issue-execution-checklist.md, symphony-dispatch.md, push/SKILL.md, harness-agent.md | `elixir/WORKFLOW.md` Markdown now names skills directly; State table without `Backlog` row (Step 0 only); harness docs drop stale `symphony-*` as primary |
 | 2026-05-11 | Harness continuation (resume): State table vs `Backlog`, blocked-access tone | AGENTS.md, symphony-dispatch.md, issue-execution-checklist.md | Re-audit `elixir/WORKFLOW.md`: `Backlog` only in Step 0 (not State table); document blocked-access carve-out; continuation blockers include Linear prerequisite |
 | 2026-05-12 | Harness sync: WORKFLOW Steps 0–4 mapping (WEB-95) | issue-execution-checklist.md, symphony-dispatch.md, harness/SKILL.md | Explicit mapping table for simplified `elixir/WORKFLOW.md` sections; rename skill/command heading; dispatch doc notes Step 0–4 prompt structure |
+| 2026-05-12 | Harness continuation (WEB-95 retry): injected workflow path fallback | harness/SKILL.md, symphony-dispatch.md, harness-agent.md, AGENTS.md | Dispatch context may point at a stale `/tmp/...` WORKFLOW copy; document fallback to `elixir/WORKFLOW.md` for audit-only reads |
 
 ## Harness: Symphony Development
 
