@@ -59,7 +59,7 @@ assumptions (WORKFLOW Step 2). **Revert every proof edit** before staging or
 committing. Document what you tried and observed in the workpad `Validation` /
 `Notes` sections. Never leave proof-only changes in commits.
 
-**Unattended posture (WORKFLOW Instructions):** Do **not** ask the human to
+**Unattended posture (WORKFLOW Contract):** Do **not** ask the human to
 confirm staging scope or wait on interactive prompts. If the index looks wrong
 (suspicious paths, unrelated files), fix `git add` / revert noise yourself. Only
 stop for a **true blocker**—record it in `## Codex Workpad` and transition the

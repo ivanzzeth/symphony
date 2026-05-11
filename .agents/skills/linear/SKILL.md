@@ -14,11 +14,12 @@ Use this skill for raw Linear GraphQL work during Symphony app-server sessions.
 ## Symphony issue execution — Linear access
 
 `elixir/WORKFLOW.md` requires talking to Linear via a configured **Linear MCP**
-server or the injected **`linear_graphql`** tool. If neither is available, that
-is the **documented** exception to unattended runs: **stop and ask the user to
-configure Linear** (WORKFLOW Prerequisite). When a workpad already exists, also
-record the blocker there; if there is no workpad yet, add a short blocker
-comment per WORKFLOW Guardrails.
+server or the injected **`linear_graphql`** tool. If neither is available, follow
+the **Prerequisite** and **Blocked-access escape hatch**: **do not** ask the
+human to configure Linear during unattended issue execution. Record what is
+missing, why it blocks acceptance/validation, and exact human unblock actions in
+the workpad (and a single blocker comment if no workpad exists yet per
+WORKFLOW Guardrails), then move states per WORKFLOW blocked-access rules.
 
 ## Primary tool
 

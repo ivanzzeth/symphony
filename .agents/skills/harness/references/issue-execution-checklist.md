@@ -4,6 +4,19 @@ Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
 only.
 
+## WORKFLOW command names (Step 1–2)
+
+`elixir/WORKFLOW.md` names **`pull`**, **`commit`**, **`push`**, and **`land sweep`**
+directly. Use the matching harness skills **`pull`**, **`commit`**, **`push`**, and
+**`land`** (sweep mode). Older runners or snippets may still say `symphony-pull` /
+`symphony-*` — treat those as aliases for the same **`pull`** / **`commit`** /
+**`push`** / **`land`** flows.
+
+## `Backlog` (WORKFLOW Step 0)
+
+If the routed issue is in **`Backlog`**: **do not** modify the ticket; stop and
+wait for the human (no autonomous kickoff).
+
 ## Default posture (WORKFLOW)
 
 - Start by determining the ticket’s **current status**, then follow the matching flow.
@@ -31,8 +44,19 @@ substantive analysis or implementation:
 3. Only then begin planning, reproduction, or code work.
 
 If a **`Todo`** ticket already has a PR attached at kickoff, treat it as a
-feedback loop: run the **PR feedback sweep** early (see below and WORKFLOW
-Status map / Step 2) before new feature work.
+feedback/rework loop (WORKFLOW Status map): run the **full PR feedback sweep**
+immediately after the workpad exists—**before** new feature work—then address
+or post explicit justified pushback on every actionable thread, revalidate, and
+only then move back toward `In Review` when the completion bar is satisfied.
+
+## Step 1 — workpad bootstrap + acceptance criteria (WORKFLOW Step 1)
+
+Keep a hierarchical **Plan** and explicit **Acceptance Criteria** / **Validation** / **`Notes`** in checklist form.
+
+- **User-facing changes:** add an acceptance criterion that is a **UI walkthrough**—end-to-end user path to validate (WORKFLOW Step 1).
+- **App-touching changes:** add explicit **app-specific flow checks** under `Acceptance Criteria` (for example: launch path, changed interaction path, expected result path)—before relying only on generic tests (WORKFLOW Step 1).
+- When the ticket **description** or **comment context** includes `Validation`, `Test Plan`, or `Testing` sections: copy those requirements into the workpad **`Acceptance Criteria`** and **`Validation`** sections as **required** checkboxes.
+- **No optional downgrade** — every copied item stays mandatory until executed and checked off.
 
 ## Continuation / retry attempts
 
@@ -41,19 +65,19 @@ When the orchestrator injects **continuation** context (retry attempt number,
 resume from the live workpad and branch state, avoid redoing finished
 investigation or validation unless a new change invalidates it, and do not stop
 while the issue is still in an **active** workflow state except for true
-blockers (missing required auth/secrets)—per WORKFLOW default posture.
+blockers (missing required auth/secrets **or unreachable Linear per the Prerequisite / blocked-access path**)—per WORKFLOW continuation block and Contract.
 
-## Step 0 — inconsistent state vs issue content (WORKFLOW Step 0 §6)
+## Step 0 — inconsistent state vs issue content (WORKFLOW Step 0)
 
 When Linear **workflow state** and **issue content or attachments** look inconsistent,
-post a **short** Linear comment documenting the mismatch, then pick the **safest**
-Step 0 routing branch from WORKFLOW—do not silently assume one interpretation.
+document the mismatch in workpad **`Notes`**, then pick the **safest** Step 0
+routing branch from WORKFLOW—do not silently assume one interpretation.
 
-## Unattended session output (WORKFLOW Instructions)
+## Unattended session output (WORKFLOW Contract)
 
 - Final agent message must report **completed actions** and **blockers only**.
 - Do **not** include open-ended “next steps for user” prompts.
-- **`commit` / `pull` / `land` skills** include Symphony-specific overrides: no interactive confirmation loops—document decisions in `## Codex Workpad` and follow blocked-access / state rules instead.
+- **`commit` / `pull` / `push` / `land`** (harness skills) include Symphony-specific overrides: no interactive confirmation loops—document decisions in `## Codex Workpad` and follow blocked-access / state rules instead.
 
 ## Single workpad — no extra completion comments (WORKFLOW Default posture)
 
@@ -69,6 +93,17 @@ Step 0 routing branch from WORKFLOW—do not silently assume one interpretation.
 
 - Never leave **completed** work unchecked in the workpad plan—keep checkboxes aligned with reality after each milestone.
 
+## Mandatory validation gate (WORKFLOW Step 2)
+
+- When the ticket defines **`Validation`**, **`Test Plan`**, or **`Testing`** content, execute **all** of it before considering the work complete.
+- **Unmet items = incomplete work** (mandatory gate; not advisory).
+
+## Execution phase — implement + handoff (WORKFLOW Step 2)
+
+- **After Step 1 bootstrap:** **`pull`** has run; **pull skill evidence** is recorded in workpad **`Notes`**; repo state (`branch`, `git status`, `HEAD`) is understood before substantive implementation.
+- **Guardrails:** Do **not** paste the PR URL into the workpad; do **not** post a separate “done” or completion **summary** comment outside `## Codex Workpad`—only update the workpad (and use `### Confusions` when something was unclear).
+- **`Todo` + PR at kickoff:** After PR feedback sweep and required fixes, **`push`** the branch with any updates, then move to **`In Review`** when the completion bar is satisfied.
+
 ## `In Review` — freeze (WORKFLOW Step 3)
 
 While **`In Review`**: do **not** write implementation code and do **not** change
@@ -80,6 +115,10 @@ or required fixes → `Rework`).
 ## Blocked before workpad exists (WORKFLOW Guardrails)
 
 If blocked and **no** workpad exists yet, add **one** concise blocker comment on the issue describing the blocker, impact, and the next unblock action (then follow blocked-access rules when moving states).
+
+## Workpad comment editing (WORKFLOW Guardrails)
+
+If in-session comment editing is unavailable, use the documented **update script** fallback (see `linear` skill). Only treat workpad updates as blocked if **both** MCP-style editing and script-based editing fail.
 
 ## Workpad environment stamp
 
@@ -115,6 +154,12 @@ actionable remains:
 If the PR has a **Manual QA Plan** comment, read it before moving to `In Review`
 and use it to sharpen UI/runtime coverage.
 
+## Before `In Review` — workpad truth + checks (WORKFLOW Step 2 + Completion bar)
+
+- Re-open and refresh the workpad so **`Plan`**, **`Acceptance Criteria`**, and **`Validation`** exactly match completed work.
+- Confirm **every** required ticket-provided validation / test-plan item is explicitly marked complete in the workpad.
+- Repeat read-address-verify until PR checks are green and no outstanding actionable review comments remain.
+
 ## Blocked-access brief (non-GitHub tools/auth)
 
 When moving to `In Review` under the escape hatch, the workpad blocker brief
@@ -132,8 +177,9 @@ record attempts in the workpad.
 - Workpad `Plan` / `Acceptance Criteria` / `Validation` match completed work.
 - Ticket `Validation` / `Test Plan` / `Testing` sections executed and checked off.
 - PR checks green; PR linked on issue; label **`symphony`**; base **`develop`**.
-- App-touching: run **`launch-app`** validation and capture/upload media via
-  **`github-pr-media`** before handoff (WORKFLOW Step 2 and Completion bar).
+- App-touching: satisfy **runtime validation + media captured** from the
+  completion bar—typically **`launch-app`** validation and **`github-pr-media`**
+  when the change touches app files or behavior (WORKFLOW Step 2 and Completion bar).
 - Optional `### Confusions` in workpad when execution was unclear.
 
 ## After squash-merge (`Merging` → `Done`)
