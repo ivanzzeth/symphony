@@ -24,7 +24,8 @@ When the harness skill triggers, first assess the current harness state and dete
 2. Detect execution context:
    - **Symphony dispatch**: The harness run is driven by Symphony (for example `SymphonyElixir.Harness.Manager` after a `WORKFLOW.md` content-hash change, an explicit harness dispatch, or caller-supplied orchestrator context such as `_workspace/symphony_context.json`).
      1. **Hard prerequisite: read the injected workflow file immediately.** The dispatch context provides a workflow file path. Read that file in full before any other operation. Understand its actual content, structure, and term usage.
-     2. Only after reading may you proceed to audit `.agents/` and `AGENTS.md`.
+     2. **If that path is missing or unreadable** (ephemeral `/tmp/...` copy, wrong host, etc.), fall back to the monorepo canonical **`elixir/WORKFLOW.md`** for read-only verification — still **never** modify any workflow file. See `references/symphony-dispatch.md` → *Unreadable or missing workflow path*.
+     3. Only after a successful read (injected path or canonical fallback) may you proceed to audit `.agents/` and `AGENTS.md`.
    - **Manual invocation**: User-requested harness work without the Symphony dispatch signals above. Still check for a workflow file in the project when one is referenced, and read it before making changes. Use standard standalone protocols.
 3. Branch by current state:
    - **New build**: agent/skill directories are missing or empty → run all phases starting from Phase 1
@@ -473,8 +474,10 @@ Use these as quick dry-runs after reconfiguring `.agents/` or `AGENTS.md`:
 1. **Normal:** User asks to sync harness with `elixir/WORKFLOW.md`. Expect Phase 0
    audit, diff of YAML + prompt sections, updates under `.agents/` + `AGENTS.md`
    only, change-history row.
-2. **Error:** `elixir/WORKFLOW.md` missing or unreadable. Expect harness to stop
-   after reporting the blocker; no partial writes to skills.
+2. **Error:** Injected workflow path missing/unreadable **and** `elixir/WORKFLOW.md`
+   missing or unreadable. Expect harness to stop after reporting the blocker;
+   no partial writes to skills. (If only the injected path fails, fallback read of
+   `elixir/WORKFLOW.md` succeeds — proceed with audit and document the fallback.)
 3. **Continuation:** Resume harness configuration from current tree. Expect
    re-audit, no duplicate agent files, symphony-linear / symphony-land / symphony-pull alignment verified.
 
