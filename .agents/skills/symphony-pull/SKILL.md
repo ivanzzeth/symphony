@@ -35,13 +35,13 @@ When this skill runs inside the Linear issue-execution flow (`elixir/WORKFLOW.md
    - `git add <files>`
    - `git commit` (or `git merge --continue` if the merge is paused)
 8. Verify with project checks after the merge: from repo root run
-   `cd elixir && mise exec -- mix test` (same gate as **`symphony-push`** for
+   `cd elixir && mise exec -- mix test` (same gate as the `push` skill for
    Symphony). Fix failures before reporting the merge complete.
 9. Summarize the merge:
    - Call out the most challenging conflicts/files and how they were resolved.
    - Note any assumptions or follow-ups.
 10. **Workpad evidence (issue execution only):** If a Linear `## Codex Workpad`
-    exists for this ticket, append a short **pull evidence** note (WORKFLOW
+    exists for this ticket, append a short **`pull skill evidence`** note (WORKFLOW
     Step 1) under `Notes` (or the nearest appropriate section), including:
     - merge source(s) (for example `origin/develop`),
     - outcome: `clean` or `conflicts resolved`,
