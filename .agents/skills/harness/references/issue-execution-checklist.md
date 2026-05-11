@@ -4,6 +4,8 @@ Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
 only.
 
+**Step alignment:** Headings below follow WORKFLOW **Step 0** (route + branch hygiene), **Step 1** (workpad bootstrap + `pull` evidence), **Step 2** (implement, `commit` / `push`, `land sweep`, completion bar), **Step 3** (`In Review` freeze), and **Step 4** (`Rework` full reset). The template uses these integers only—ignore legacy decimal sub-step numbers in older notes.
+
 ## WORKFLOW command names (Step 1–2)
 
 `elixir/WORKFLOW.md` names **`pull`**, **`commit`**, **`push`**, and **`land sweep`**
@@ -44,7 +46,7 @@ substantive analysis or implementation:
 3. Only then begin planning, reproduction, or code work.
 
 If a **`Todo`** ticket already has a PR attached at kickoff, treat it as a
-feedback/rework loop (WORKFLOW Status map): run the **full PR feedback sweep**
+feedback/rework loop (WORKFLOW State → Skill routing + Step 2): run the **full PR feedback sweep**
 immediately after the workpad exists—**before** new feature work—then address
 or post explicit justified pushback on every actionable thread, revalidate, and
 only then move back toward `In Review` when the completion bar is satisfied.
