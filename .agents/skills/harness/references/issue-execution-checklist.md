@@ -4,6 +4,8 @@ Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
 only.
 
+**Step mapping:** The live prompt template uses **Step 0** through **Step 4** (plus Completion bar and Guardrails). Sections below use descriptive names (`Todo kickoff`, `Step 1 — workpad`, …) that align with those steps—when in doubt, match behavior to `elixir/WORKFLOW.md`, not to this file’s headings alone.
+
 ## WORKFLOW command names (Step 1–2)
 
 `elixir/WORKFLOW.md` names **`pull`**, **`commit`**, **`push`**, and **`land sweep`**
