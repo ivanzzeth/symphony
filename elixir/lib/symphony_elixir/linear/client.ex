@@ -95,7 +95,6 @@ defmodule SymphonyElixir.Linear.Client do
   }
   """
 
-  # Resolves by human-readable identifier (e.g. "WEB-81"). Linear's `issue(id:)` expects an internal UUID.
   @issue_by_human_identifier_query """
   query SymphonyIssueByHumanIdentifier($identifier: String!, $relationFirst: Int!) {
     issues(filter: {identifier: {eq: $identifier}}, first: 1) {
@@ -141,6 +140,45 @@ defmodule SymphonyElixir.Linear.Client do
   query SymphonyLinearViewer {
     viewer {
       id
+    }
+  }
+  """
+
+  @issue_by_id_query """
+  query SymphonyIssueById($id: String!) {
+    issue(id: $id) {
+      id
+      identifier
+      state {
+        name
+      }
+    }
+  }
+  """
+
+  @project_by_slug_query """
+  query SymphonyProjectBySlug($slug: String!) {
+    projects(filter: {slugId: {eq: $slug}}, first: 1) {
+      nodes {
+        id
+        teams {
+          nodes {
+            id
+          }
+        }
+      }
+    }
+  }
+  """
+
+  @create_issue_mutation """
+  mutation SymphonyCreateIssue($teamId: String!, $projectId: String!, $title: String!, $description: String!) {
+    issueCreate(input: {teamId: $teamId, projectId: $projectId, title: $title, description: $description}) {
+      success
+      issue {
+        id
+        identifier
+      }
     }
   }
   """
@@ -224,6 +262,66 @@ defmodule SymphonyElixir.Linear.Client do
         end
     end
   end
+
+  @doc """
+  Fetches a single Linear issue by its internal ID (UUID), returning its state.
+  Used by Harness.Manager to poll harness issue status.
+  """
+  @spec fetch_issue_by_id(String.t()) :: {:ok, %{state: String.t()}} | {:error, term()}
+  def fetch_issue_by_id(issue_id) when is_binary(issue_id) do
+    with {:ok, body} <- graphql(@issue_by_id_query, %{id: issue_id}),
+         {:ok, issue_data} <- extract_issue_data(body) do
+      state_name = get_in(issue_data, ["state", "name"])
+      {:ok, %{state: state_name}}
+    end
+  end
+
+  @doc """
+  Creates a Linear issue in the team belonging to the given project slug.
+  Returns {:ok, issue_id} on success.
+  """
+  @spec create_issue(String.t(), String.t(), String.t()) :: {:ok, String.t()} | {:error, term()}
+  def create_issue(project_slug, title, description) when is_binary(project_slug) do
+    with {:ok, project} <- lookup_project(project_slug),
+         project_id when is_binary(project_id) <- Map.get(project, "id"),
+         team_id when is_binary(team_id) <- get_first_team_id(project),
+         {:ok, body} <-
+           graphql(
+             @create_issue_mutation,
+             %{teamId: team_id, projectId: project_id, title: title, description: description}
+           ) do
+      case get_in(body, ["data", "issueCreate"]) do
+        %{"success" => true, "issue" => %{"id" => issue_id}} ->
+          {:ok, issue_id}
+
+        %{"success" => true, "issue" => %{"identifier" => identifier}} ->
+          {:ok, identifier}
+
+        _ ->
+          {:error, :issue_create_failed}
+      end
+    end
+  end
+
+  defp get_first_team_id(project) do
+    case get_in(project, ["teams", "nodes"]) do
+      [team | _] when is_map(team) -> team["id"]
+      _ -> nil
+    end
+  end
+
+  defp lookup_project(slug) when is_binary(slug) do
+    with {:ok, body} <- graphql(@project_by_slug_query, %{slug: slug}) do
+      case get_in(body, ["data", "projects", "nodes"]) do
+        [project | _] when is_map(project) -> {:ok, project}
+        _ -> {:error, :project_not_found}
+      end
+    end
+  end
+
+  defp extract_issue_data(%{"data" => %{"issue" => issue}}) when is_map(issue), do: {:ok, issue}
+  defp extract_issue_data(%{"data" => %{"issues" => %{"nodes" => [issue | _]}}}), do: {:ok, issue}
+  defp extract_issue_data(_), do: {:error, :issue_not_found}
 
   @spec graphql(String.t(), map(), keyword()) :: {:ok, map()} | {:error, term()}
   def graphql(query, variables \\ %{}, opts \\ [])

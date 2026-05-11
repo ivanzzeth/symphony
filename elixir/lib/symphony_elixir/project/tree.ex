@@ -57,7 +57,7 @@ defmodule SymphonyElixir.Project.Tree do
 
     children = [
       Supervisor.child_spec({SymphonyElixir.WorkflowStore, ws_opts}, restart: :transient),
-      {SymphonyElixir.Harness.Manager, name: hm_via, project_dir: project_root, workflow_file_path: wf_path, workflow_store: ws_via},
+      {SymphonyElixir.Harness.Manager, name: hm_via, project_dir: project_root, project_id: project_id, workflow_file_path: wf_path, workflow_store: ws_via},
       {Task.Supervisor, name: task_via},
       {SymphonyElixir.Orchestrator, name: orch_via, workflow_store: ws_via, task_supervisor: task_via, workflow_path: wf_path, project_id: project_id},
       {SymphonyElixir.Agent.Supervisor, project_id: project_id},

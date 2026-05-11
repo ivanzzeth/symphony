@@ -33,6 +33,43 @@ defmodule SymphonyElixir.CLI do
       System.halt(0)
     end
 
+    case parse_init_command(args) do
+      {:init, init_opts} ->
+        case SymphonyElixir.Init.run(init_opts) do
+          :ok ->
+            System.halt(0)
+
+          {:error, message} ->
+            IO.puts(:stderr, message)
+            System.halt(1)
+        end
+
+      {:not_init, rest} ->
+        evaluate_and_wait(rest)
+    end
+  end
+
+  @doc false
+  @spec parse_init_command([String.t()]) :: {:init, keyword()} | {:not_init, [String.t()]}
+  def parse_init_command(args) do
+    case args do
+      ["init" | rest] ->
+        {parsed, _, _} =
+          OptionParser.parse(rest,
+            strict: [target_dir: :string, upgrade: :boolean, force: :boolean]
+          )
+
+        target = Keyword.get(parsed, :target_dir, File.cwd!()) |> Path.expand()
+        upgrade? = Keyword.get(parsed, :upgrade, false)
+        force? = Keyword.get(parsed, :force, false)
+        {:init, [target_dir: target, upgrade: upgrade?, force: force?]}
+
+      _ ->
+        {:not_init, args}
+    end
+  end
+
+  defp evaluate_and_wait(args) do
     case evaluate(args) do
       :ok ->
         wait_for_shutdown()

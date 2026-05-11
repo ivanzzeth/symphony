@@ -1,0 +1,49 @@
+# {{project_name}} — Symphony Assistant
+
+This project uses [Symphony](https://github.com/ivanzzeth/symphony), an AI-powered development orchestrator.
+Symphony tracks work via Linear issues, dispatches AI agents from `Todo` issues, and manages the full dev lifecycle.
+
+## Issue Lifecycle
+
+| State | Meaning |
+|-------|---------|
+| `Backlog` | Parked work, ignored by Symphony |
+| `Todo` | Queued for agent dispatch |
+| `In Progress` | Agent actively working |
+| `In Review` | PR attached, waiting for human review |
+| `Merging` | Approved, agent executing merge |
+| `Rework` | Reviewer requested changes |
+| `Done` / `Canceled` / `Duplicate` | Terminal |
+
+## Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `symphony-linear` | Linear GraphQL operations (state transitions, comments, issue creation) |
+| `symphony-commit` | Create well-formed git commits |
+| `symphony-push` | Push branch, create/update PR |
+| `symphony-pull` | Sync branch with origin/base |
+| `symphony-land` | Squash-merge PR (sweep + merge modes) |
+| `symphony-debug` | Investigate stuck/failing runs |
+| `symphony-harness` | Configure and maintain agent harness |
+
+## Variables
+
+Project-specific variables in `.agents/symphony-vars.yaml` must be replaced before first agent run.
+
+## Directory Structure
+
+```
+.agents/
+├── agents/                        # Agent definitions
+│   └── symphony-*.md
+├── skills/
+│   ├── symphony-*/                # Symphony generic skills
+│   │   └── SKILL.md
+│   └── <project>-*/               # Project-specific skills
+├── templates/
+│   ├── WORKFLOW.md.symphony       # Workflow definition template
+│   └── AGENTS.md.symphony         # This file template
+├── symphony-vars.yaml             # Project variables
+└── .symphony-manifest.yaml        # Version manifest (managed by `symphony init`)
+```

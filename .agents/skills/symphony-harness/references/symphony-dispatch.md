@@ -2,11 +2,11 @@
 
 ## Overview
 
-When the harness skill is invoked by the Symphony platform (not manually by a user), the **workflow file path** is normally injected into the dispatch context by `SymphonyElixir.Harness.Manager`. The harness agent **must** load that file in full **when the path resolves on disk** before making changes to `.agents/` or `AGENTS.md`. If the path does not resolve, fall back to **`elixir/WORKFLOW.md`** per **Path Injection Mechanism**—still without editing workflow contract files. Never guess or assume contents based on prior runs alone.
+When the harness skill is invoked by the Symphony platform (not manually by a user), the **workflow file path** is injected into the dispatch context by `SymphonyElixir.Harness.Manager`. The harness agent **must** read this file in full before making any changes to `.agents/` or `AGENTS.md`. The file’s actual content — its name, structure, and terminology — is the source of truth. Never guess or assume its contents based on prior runs.
 
 ## Path Injection Mechanism
 
-The workflow file path is supplied to the harness agent as part of the dispatch context. The agent reads it from the context and uses it verbatim when the file exists. When the path is missing or unreadable (wrong host, cleaned `/tmp`, or permission errors), document that in the issue **`## Codex Workpad`** **`Notes`** and read the repo’s **`elixir/WORKFLOW.md`** as the canonical contract for this monorepo—without modifying either file as part of harness configuration.
+The workflow file path is supplied to the harness agent as part of the dispatch context. The agent reads it from the context and uses it verbatim. There is no hardcoded default path — every invocation supplies the correct path for the running `symphony` process.
 
 ## Detection
 
@@ -53,7 +53,7 @@ When running under Symphony, these platform-level details are available:
 - **Blocked-access escape hatch:** GitHub is **not** a default blocker — try fallbacks, document in workpad. **Non-GitHub** missing tool/auth → move to **`In Review`** with workpad brief (what/why/unblock); exception to unattended tone — **workpad only**.
 - **Prerequisite:** missing Linear MCP / `linear_graphql` → **blocked-access escape hatch** (record blocker; do not prompt the user to configure Linear mid-run).
 - **Ticket metadata vs issue body:** Default posture asks to keep ticket metadata current (**state**, **checklist**, **acceptance criteria**, **links**); Guardrails forbid using the issue **description/body** for planning/progress—that belongs in **`## Codex Workpad`** (see `issue-execution-checklist.md`).
-- **Workpad edit fallback:** MCP comment update preferred; if unavailable use the **update script** path documented in the `linear` skill—only block when both fail (WORKFLOW Guardrails).
+- **Workpad edit fallback:** MCP comment update preferred; if unavailable use the **update script** path documented in the `linear` skill (**`symphony-linear`** is the same skill tree)—only block when both fail (WORKFLOW Guardrails).
 - For a short operator checklist (PR sweep commands, merge→Done), see `issue-execution-checklist.md` in the same directory—still subordinate to the loaded workflow file.
 - May specify: target files, acceptance criteria, constraints, artifact paths
 
@@ -61,7 +61,7 @@ When running under Symphony, these platform-level details are available:
 
 ### Phase 0 Modifications
 When Symphony dispatch is detected:
-1. Resolve the execution contract: read the **injected workflow file path** from the dispatch context when present **and** readable. If no path was supplied, or the file is missing/stale/unreadable (for example an ephemeral `/tmp/.../WORKFLOW.md` from another host), record that in the active issue workpad **`Notes`** when one exists, then read the repo’s canonical **`elixir/WORKFLOW.md`**. **Never** edit workflow contract files from harness work.
+1. Read the repo’s **Symphony** `WORKFLOW.md` (for this monorepo: `elixir/WORKFLOW.md`) to understand the execution contract
 2. Check `_workspace/symphony_context.json` (when present) for the current issue context
 3. Align the harness execution plan with the WORKFLOW.md requirements — the harness serves the platform's execution contract
 
