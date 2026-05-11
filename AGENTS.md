@@ -209,6 +209,7 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 - **Plan hygiene:** never leave completed work unchecked in the workpad (WORKFLOW Step 2)
 - **Blocked before workpad:** if blocked and no workpad exists yet, add one blocker comment (blocker, impact, next unblock action) per WORKFLOW Guardrails
 - Each agent operates in an isolated workspace per issue (root: `~/code/symphony-workspaces`), following the WORKFLOW.md execution contract
+- **Contract file resolution:** the authoritative repo copy is **`elixir/WORKFLOW.md`**. When a ticket or dispatch path points at another location (for example a host-specific `/tmp/.../WORKFLOW.md`) and that file is not readable in the workspace, read **`elixir/WORKFLOW.md`** instead; never modify the contract file from harness or issue-execution work
 - For issue execution work, the orchestrator runs the Cursor CLI per workflow `codex.command` (currently `cursor --model auto`) with the WORKFLOW.md prompt template
 - The WORKFLOW.md defines the execution contract (tracker, polling, workspace, agent, codex, hooks, and prompt template)
 - Agent config: kind=cursor, max_concurrent_agents=10, max_turns=20, stream_timeout_ms=600000
@@ -319,6 +320,7 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 | 2026-05-11 | Harness sync to WORKFLOW (vNext prompt: Contract, State→Skill, Prerequisite escape hatch) | AGENTS.md, linear/SKILL.md, issue-execution-checklist.md, symphony-dispatch.md, harness/SKILL.md | `elixir/WORKFLOW.md` simplified Steps 0–4; removed sub-step numbering; missing Linear uses blocked-access not user prompts |
 | 2026-05-11 | Harness continuation (resume): WORKFLOW literal `pull`/`commit`/`push`/`land sweep` | AGENTS.md, issue-execution-checklist.md, symphony-dispatch.md, push/SKILL.md, harness-agent.md | `elixir/WORKFLOW.md` Markdown now names skills directly; State table without `Backlog` row (Step 0 only); harness docs drop stale `symphony-*` as primary |
 | 2026-05-11 | Harness continuation (resume): State table vs `Backlog`, blocked-access tone | AGENTS.md, symphony-dispatch.md, issue-execution-checklist.md | Re-audit `elixir/WORKFLOW.md`: `Backlog` only in Step 0 (not State table); document blocked-access carve-out; continuation blockers include Linear prerequisite |
+| 2026-05-12 | WEB-89 harness reconfigure: injected-path fallback | harness/SKILL.md, symphony-dispatch.md, harness-agent.md, AGENTS.md | Ticket referenced `/tmp/.../WORKFLOW.md`; document canonical `elixir/WORKFLOW.md` when injected path unreadable; align Phase 0 / dispatch / harness-agent |
 
 ## Harness: Symphony Development
 
