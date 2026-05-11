@@ -12,7 +12,7 @@ Configures a harness tailored to a domain/project, defines each agent's role, an
 2. **Use agent teams as the default execution mode.**
 3. **Register harness context in AGENTS.md** — record harness structure and trigger rules in the project AGENTS.md so agent teams activate immediately in new sessions.
 4. **The harness is a living system, not a static artifact.** — After every execution, incorporate feedback and continuously update agents, skills, and AGENTS.md.
-5. **Symphony dispatch: read the workflow file FIRST, before changing anything.** The running `symphony` process injects the workflow file path into the dispatch context. Before making any modification to `.agents/` or `AGENTS.md`, always read that file in full. Understand what it defines and what names it uses. Never assume its filename or terminology — go read the actual content. Manual (non-Symphony) invocations still check for a workflow file when one is mentioned in project context.
+5. **Symphony dispatch: read the workflow contract FIRST, before changing anything.** The running `symphony` process injects a workflow file path into the dispatch context. Read that path in full when it exists on disk; if it is missing or unreadable, read `elixir/WORKFLOW.md` in the repo and document the fallback in AGENTS.md Change History. Never assume Markdown wording without reading the actual file. Manual (non-Symphony) invocations still read `elixir/WORKFLOW.md` when configuring issue-execution alignment.
 
 ## Workflow
 
@@ -23,8 +23,8 @@ When the harness skill triggers, first assess the current harness state and dete
 1. Read `project/.agents/agents/`, `project/.agents/skills/`, `project/AGENTS.md`
 2. Detect execution context:
    - **Symphony dispatch**: The harness run is driven by Symphony (for example `SymphonyElixir.Harness.Manager` after a `WORKFLOW.md` content-hash change, an explicit harness dispatch, or caller-supplied orchestrator context such as `_workspace/symphony_context.json`).
-     1. **Hard prerequisite: read the injected workflow file immediately.** The dispatch context provides a workflow file path. Read that file in full before any other operation. Understand its actual content, structure, and term usage.
-     2. Only after reading may you proceed to audit `.agents/` and `AGENTS.md`.
+     1. **Hard prerequisite: read the workflow contract before changing harness files.** The dispatch context usually provides a workflow file path. Read that path in full when it exists and is readable. If the path is missing or unreadable on this host (common with absolute `/tmp/...` paths from another machine), fall back to `elixir/WORKFLOW.md` in the repo workspace, read it in full, and append an **AGENTS.md** Change History row documenting the fallback—then proceed to audit `.agents/` and `AGENTS.md`.
+     2. Only after a successful read (injected path or fallback) may you proceed to audit `.agents/` and `AGENTS.md`.
    - **Manual invocation**: User-requested harness work without the Symphony dispatch signals above. Still check for a workflow file in the project when one is referenced, and read it before making changes. Use standard standalone protocols.
 3. Branch by current state:
    - **New build**: agent/skill directories are missing or empty → run all phases starting from Phase 1
@@ -473,8 +473,10 @@ Use these as quick dry-runs after reconfiguring `.agents/` or `AGENTS.md`:
 1. **Normal:** User asks to sync harness with `elixir/WORKFLOW.md`. Expect Phase 0
    audit, diff of YAML + prompt sections, updates under `.agents/` + `AGENTS.md`
    only, change-history row.
-2. **Error:** `elixir/WORKFLOW.md` missing or unreadable. Expect harness to stop
-   after reporting the blocker; no partial writes to skills.
+2. **Error:** Injected workflow path missing on disk but `elixir/WORKFLOW.md`
+   present. Expect fallback read, documented Change History row, then normal
+   audit. If **both** paths are unreadable, expect harness to stop after
+   reporting the blocker; no partial writes to skills.
 3. **Continuation:** Resume harness configuration from current tree. Expect
    re-audit, no duplicate agent files, linear/land/pull alignment verified.
 
