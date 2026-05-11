@@ -23,8 +23,9 @@ When the harness skill triggers, first assess the current harness state and dete
 1. Read `project/.agents/agents/`, `project/.agents/skills/`, `project/AGENTS.md`
 2. Detect execution context:
    - **Symphony dispatch**: The harness run is driven by Symphony (for example `SymphonyElixir.Harness.Manager` after a `WORKFLOW.md` content-hash change, an explicit harness dispatch, or caller-supplied orchestrator context such as `_workspace/symphony_context.json`).
-     1. **Hard prerequisite: read the injected workflow file immediately.** The dispatch context provides a workflow file path. Read that file in full before any other operation. Understand its actual content, structure, and term usage.
-     2. Only after reading may you proceed to audit `.agents/` and `AGENTS.md`.
+     1. **Hard prerequisite: read the injected workflow file immediately.** The dispatch context provides a workflow file path. When that path exists and is readable, read it in full before any other operation. Understand its actual content, structure, and term usage.
+     2. **Fallback when the injected path is missing or unreadable** (for example a stale `/tmp/.../WORKFLOW.md` from another host): read **`elixir/WORKFLOW.md`** at the repository root—the canonical Symphony execution contract in this monorepo—and use it for the rest of the run. Record in **AGENTS.md Change History** (and any active `## Codex Workpad` notes) that the fallback was used. If neither the injected path nor `elixir/WORKFLOW.md` is readable, stop with a blocker; do not guess contract text.
+     3. Only after a successful read (injected or fallback) may you proceed to audit `.agents/` and `AGENTS.md`.
    - **Manual invocation**: User-requested harness work without the Symphony dispatch signals above. Still check for a workflow file in the project when one is referenced, and read it before making changes. Use standard standalone protocols.
 3. Branch by current state:
    - **New build**: agent/skill directories are missing or empty → run all phases starting from Phase 1
@@ -473,8 +474,9 @@ Use these as quick dry-runs after reconfiguring `.agents/` or `AGENTS.md`:
 1. **Normal:** User asks to sync harness with `elixir/WORKFLOW.md`. Expect Phase 0
    audit, diff of YAML + prompt sections, updates under `.agents/` + `AGENTS.md`
    only, change-history row.
-2. **Error:** `elixir/WORKFLOW.md` missing or unreadable. Expect harness to stop
-   after reporting the blocker; no partial writes to skills.
+2. **Error:** Injected workflow path and `elixir/WORKFLOW.md` are both missing or
+   unreadable. Expect harness to stop after reporting the blocker; no partial
+   writes to skills.
 3. **Continuation:** Resume harness configuration from current tree. Expect
    re-audit, no duplicate agent files, linear/land/pull alignment verified.
 
