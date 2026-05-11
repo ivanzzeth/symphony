@@ -292,7 +292,7 @@ record the failure mode in the workpad.
 - Do **not** paste the PR URL into the workpad body—WORKFLOW keeps PR linkage on
   the issue, not duplicated inside the workpad.
 
-**After PR merge (`Merging` → `Done`):** When `.agents/skills/land/SKILL.md` has
+**After PR merge (`Merging` → `Done`):** When `.agents/skills/symphony-land/SKILL.md` has
 completed and the PR is merged, transition the issue to **`Done`** with
 `issueUpdate` + the team’s completed `stateId`.
 
@@ -442,7 +442,7 @@ the ticket is in **`Todo`** (before analysis, reproduction, or implementation):
 2. Find or create the single persistent **`## Codex Workpad`** comment (when
    searching, ignore **resolved** comments—only active/unresolved comments
    qualify).
-3. Only then proceed with planning, `pull`, code changes, or validation.
+3. Only then proceed with planning, **`symphony-pull`**, code changes, or validation.
 
 If **`Todo`** already has a PR linked, treat kickoff as a **feedback/rework
 loop**: run the full **PR feedback sweep** protocol from WORKFLOW before new
