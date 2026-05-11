@@ -6,11 +6,7 @@ When the harness skill is invoked by the Symphony platform (not manually by a us
 
 ## Path Injection Mechanism
 
-The workflow file path is supplied to the harness agent as part of the dispatch context. The agent reads it from the context and uses it verbatim when the file is readable. There is no hardcoded default path in the orchestrator — each running `symphony` process supplies the path it loaded.
-
-### Unreadable or missing injected path
-
-When the dispatch-supplied path does not exist on the agent host (for example a stale `/tmp/.../WORKFLOW.md` path from another machine or a cleaned temp directory), **do not** invent contract text. Fall back to `elixir/WORKFLOW.md` in the checked-out repository workspace, read it in full, and record the fallback reason in **AGENTS.md** Change History for that harness pass. The injected file remains authoritative **when readable**; the repo copy is the supported fallback for harness alignment when the injection path cannot be opened.
+The workflow file path is supplied to the harness agent as part of the dispatch context. The agent reads it from the context and uses it verbatim. There is no hardcoded default path — every invocation supplies the correct path for the running `symphony` process.
 
 ## Detection
 
@@ -57,7 +53,7 @@ When running under Symphony, these platform-level details are available:
 - **Blocked-access escape hatch:** GitHub is **not** a default blocker — try fallbacks, document in workpad. **Non-GitHub** missing tool/auth → move to **`In Review`** with workpad brief (what/why/unblock); exception to unattended tone — **workpad only**.
 - **Prerequisite:** missing Linear MCP / `linear_graphql` → **blocked-access escape hatch** (record blocker; do not prompt the user to configure Linear mid-run).
 - **Ticket metadata vs issue body:** Default posture asks to keep ticket metadata current (**state**, **checklist**, **acceptance criteria**, **links**); Guardrails forbid using the issue **description/body** for planning/progress—that belongs in **`## Codex Workpad`** (see `issue-execution-checklist.md`).
-- **Workpad edit fallback:** MCP comment update preferred; if unavailable use the **update script** path documented in the `linear` skill—only block when both fail (WORKFLOW Guardrails).
+- **Workpad edit fallback:** MCP comment update preferred; if unavailable use the **update script** path documented in the `linear` skill (**`symphony-linear`** is the same skill tree)—only block when both fail (WORKFLOW Guardrails).
 - For a short operator checklist (PR sweep commands, merge→Done), see `issue-execution-checklist.md` in the same directory—still subordinate to the loaded workflow file.
 - May specify: target files, acceptance criteria, constraints, artifact paths
 

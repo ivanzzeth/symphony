@@ -6,11 +6,7 @@ When the harness skill is invoked by the Symphony platform (not manually by a us
 
 ## Path Injection Mechanism
 
-The workflow file path is supplied to the harness agent as part of the dispatch context. The agent reads it from the context and uses it verbatim when the file is readable. There is no hardcoded default path in the orchestrator — each running `symphony` process supplies the path it loaded.
-
-### Unreadable or missing injected path
-
-When the dispatch-supplied path does not exist on the agent host (for example a stale `/tmp/.../WORKFLOW.md` path from another machine or a cleaned temp directory), **do not** invent contract text. Fall back to `elixir/WORKFLOW.md` in the checked-out repository workspace, read it in full, and record the fallback reason in **AGENTS.md** Change History for that harness pass. The injected file remains authoritative **when readable**; the repo copy is the supported fallback for harness alignment when the injection path cannot be opened.
+The workflow file path is supplied to the harness agent as part of the dispatch context. The agent reads it from the context and uses it verbatim. There is no hardcoded default path — every invocation supplies the correct path for the running `symphony` process.
 
 ## Detection
 
@@ -43,21 +39,19 @@ When running under Symphony, these platform-level details are available:
 
 ### Execution Contract
 - `WORKFLOW.md` defines what Symphony expects from this harness run
-- The file has two layers: YAML config (tracker, polling, workspace, hooks, `agent` pool limits including **`stream_timeout_ms`**, `codex` runner) **and** the Markdown prompt after the second `---` (status routing, Default posture, workpad rules, PR feedback sweep, completion bar). Harness reconfiguration must keep **AGENTS.md** and issue-execution skills (`pull`, `push`, `land`, `linear`, …) aligned with **both** layers.
+- The file has two layers: YAML config (tracker, polling, workspace, hooks, `agent` pool limits including **`stream_timeout_ms`**, `codex` runner) **and** the Markdown prompt after the second `---` (status routing, Default posture, workpad rules, PR feedback sweep, completion bar). Harness reconfiguration must keep **AGENTS.md** and issue-execution skills (`symphony-pull`, `symphony-push`, `symphony-land`, `symphony-linear`, …) aligned with **both** layers.
 - The Markdown template may include a **`{% if attempt %}` continuation block**: retry attempt number, resume-from-current-workspace instructions, and constraints on repeating completed work. Issue-execution agents must treat that as **continuation semantics**, not a cold start—see `issue-execution-checklist.md` → *Continuation / retry attempts*.
 - **WORKFLOW Contract (numbered list):** unattended output, workpad-first, reproduce first, single workpad, ticket metadata rules, scope discipline — see `elixir/WORKFLOW.md` heading **Contract**.
-- **State → Skill routing:** follow the Markdown **State → Skill routing** table in WORKFLOW for `Todo` through `Canceled` / `Duplicate`. For **`Backlog`**, use **Step 0** point 2 (do not modify the ticket — stop and wait for the human); `Backlog` is **not** a row in that table but is still routed in Step 0.
-- **WORKFLOW command names:** the Markdown template uses **`pull`**, **`commit`**, **`push`**, and **`land sweep`** — same responsibilities as the harness **`pull`**, **`commit`**, **`push`**, and **`land`** skills (`land` sweep vs merge per `land` skill). Legacy prompts may still say `symphony-*`; treat as equivalent to **`pull`** / **`commit`** / **`push`** / **`land`**.
-- **Workpad Step 1 shape:** mirror ticket **`Validation` / `Test Plan` / `Testing`** into the workpad as required items; **app-touching** work needs **app-specific flow checks** in `Acceptance Criteria` (not only generic commands); pull evidence lives in **`Notes`** after the Step 1 **`pull`** sync — see `issue-execution-checklist.md` → *Step 1 — workpad bootstrap + acceptance criteria*.
+- **State → Skill routing:** follow the Markdown **State → Skill routing** table in WORKFLOW — it names **`symphony-linear`**, **`symphony-pull`**, **`symphony-commit`**, **`symphony-push`**, **`symphony-land`**, and **`symphony-land sweep`**. **Steps 1–2** use the same identifiers (for example run **`symphony-pull`**; record **pull evidence** in **`Notes`**; **`symphony-commit`** → **`symphony-push`**; **`symphony-land sweep`**). For **`Backlog`**, use **Step 0** point 2 (do not modify the ticket — stop and wait for the human); `Backlog` is **not** a row in the State table but is still routed in Step 0.
+- **Workpad Step 1 shape:** user-facing work needs a **UI walkthrough** acceptance line; app-touching work needs **app-specific flow checks** in `Acceptance Criteria` (not only generic commands); **pull evidence** lives in **`Notes`** after the Step 1 **`symphony-pull`** sync — see `issue-execution-checklist.md` → *Step 1 — workpad bootstrap + acceptance criteria*.
 - **Ticket-authored validation:** `Validation` / `Test Plan` / `Testing` content must be **mirrored** into the workpad as required checkboxes (**no optional downgrade**, WORKFLOW Step 1) and **executed in full** before completion (WORKFLOW Step 2; unmet items = incomplete work).
-- **`Todo` + attached PR at kickoff:** run the **full PR feedback sweep** after the workpad exists and **before** new feature work (WORKFLOW State map + Step 2); before `In Review`, **`push`** required branch updates when fixes land.
-- **Kickoff sync:** confirm **`pull`** evidence is in the workpad **`Notes`** and repo state is understood before substantive implementation (WORKFLOW Step 1).
-- **Before `In Review`:** run **`land sweep`**; refresh the workpad so `Plan` / `Acceptance Criteria` / `Validation` match shipped reality; confirm every ticket-provided validation item is checked off; read **Manual QA Plan** when present (WORKFLOW Step 2 + Completion bar).
+- **`Todo` + attached PR at kickoff:** run the **full PR feedback sweep** after the workpad exists and **before** new feature work (WORKFLOW State map + Step 2); before `In Review`, run **`symphony-push`** when fixes land.
+- **Kickoff sync:** confirm **pull evidence** from **`symphony-pull`** is in the workpad **`Notes`** and repo state is understood before substantive implementation.
+- **Before `In Review`:** run **`symphony-land sweep`**; refresh the workpad so `Plan` / `Acceptance Criteria` / `Validation` match shipped reality; confirm every ticket-provided validation item is checked off; read **Manual QA Plan** when present (WORKFLOW Step 2 + Completion bar).
 - **Unattended Contract:** final agent output must list **completed actions** and **blockers only**—no open-ended “next steps for user” (see WORKFLOW Contract point 1).
-- **Blocked-access escape hatch:** GitHub is **not** a default blocker — try fallbacks, document in workpad. **Non-GitHub** missing tool/auth → move to **`In Review`** with workpad brief (what/why/unblock); exception to unattended tone — **workpad only**.
 - **Prerequisite:** missing Linear MCP / `linear_graphql` → **blocked-access escape hatch** (record blocker; do not prompt the user to configure Linear mid-run).
 - **Ticket metadata vs issue body:** Default posture asks to keep ticket metadata current (**state**, **checklist**, **acceptance criteria**, **links**); Guardrails forbid using the issue **description/body** for planning/progress—that belongs in **`## Codex Workpad`** (see `issue-execution-checklist.md`).
-- **Workpad edit fallback:** MCP comment update preferred; if unavailable use the **update script** path documented in the `linear` skill—only block when both fail (WORKFLOW Guardrails).
+- **Workpad edit fallback:** MCP comment update preferred; if unavailable use the **update script** path documented in the **`symphony-linear`** skill—only block when both fail (WORKFLOW Guardrails).
 - For a short operator checklist (PR sweep commands, merge→Done), see `issue-execution-checklist.md` in the same directory—still subordinate to the loaded workflow file.
 - May specify: target files, acceptance criteria, constraints, artifact paths
 
