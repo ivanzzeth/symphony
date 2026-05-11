@@ -4,26 +4,11 @@ Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
 only.
 
-## Mapping to `elixir/WORKFLOW.md` (Steps 0–4)
+## WORKFLOW skill names (State → Skill and Steps 1–2)
 
-The Markdown prompt uses **Step 0: Route** through **Step 4: Rework**, plus **Completion bar before In Review**, **Guardrails**, **Blocked-access escape hatch**, and **Prerequisite**. Sub-headings here are grouped under those sections (not legacy numbered sub-steps like “Step 1.6”).
+`elixir/WORKFLOW.md` uses the same **`symphony-*`** identifiers in the **State → Skill routing** table **and** in **Steps 1–2** (for example: run **`symphony-pull`**; then **`symphony-commit`** → **`symphony-push`**; then **`symphony-land sweep`**). Load the matching skill under `.agents/skills/<name>/SKILL.md`.
 
-| WORKFLOW section | Where in this checklist |
-|------------------|-------------------------|
-| **Step 0: Route** | `Backlog`; Todo kickoff sequencing; Step 0 — branch and PR hygiene; Step 0 — inconsistent state |
-| **Step 1: Workpad bootstrap** | Step 1 — workpad bootstrap + acceptance criteria; workpad stamp; pull evidence / kickoff sync |
-| **Step 2: Execute** | Default posture; mandatory validation; execution phase; PR feedback sweep; before `In Review` |
-| **Step 3: In Review** | `In Review` — freeze |
-| **Step 4: Rework** | Fresh branch / full reset (coordinate with `linear` + `pull` skills and WORKFLOW Step 4) |
-| **Completion bar** | Completion bar (reminder); blocked-access brief |
-
-## Harness skill names vs WORKFLOW wording
-
-`elixir/WORKFLOW.md` names **`pull`**, **`commit`**, **`push`**, and **`land sweep`**
-directly. Use the matching harness skills **`pull`**, **`commit`**, **`push`**, and
-**`land`** (sweep mode). Older runners or snippets may still say `symphony-pull` /
-`symphony-*` — treat those as aliases for the same **`pull`** / **`commit`** /
-**`push`** / **`land`** flows.
+WORKFLOW still asks for **pull evidence** in workpad **`Notes`** after the Step 1 sync — that means evidence from the **`symphony-pull`** run (sources, clean vs conflicts resolved, HEAD SHA).
 
 ## `Backlog` (WORKFLOW Step 0)
 
@@ -44,7 +29,7 @@ wait for the human (no autonomous kickoff).
 - If a PR already exists for the current branch and GitHub reports it as
   **`CLOSED`** or **`MERGED`**, treat prior branch work as **non-reusable** for
   this run: create a **fresh branch** from `origin/develop` and restart kickoff
-  (pull, workpad, plan) as a new attempt.
+  (`symphony-pull`, workpad, plan) as a new attempt.
 
 ## Todo kickoff sequencing (WORKFLOW Step 0)
 
@@ -66,6 +51,7 @@ only then move back toward `In Review` when the completion bar is satisfied.
 
 Keep a hierarchical **Plan** and explicit **Acceptance Criteria** / **Validation** / **`Notes`** in checklist form.
 
+- **User-facing changes:** add an acceptance criterion that is a **UI walkthrough**—end-to-end user path to validate (WORKFLOW Step 1).
 - **App-touching changes:** add explicit **app-specific flow checks** under `Acceptance Criteria` (for example: launch path, changed interaction path, expected result path)—before relying only on generic tests (WORKFLOW Step 1).
 - When the ticket **description** or **comment context** includes `Validation`, `Test Plan`, or `Testing` sections: copy those requirements into the workpad **`Acceptance Criteria`** and **`Validation`** sections as **required** checkboxes.
 - **No optional downgrade** — every copied item stays mandatory until executed and checked off.
@@ -89,7 +75,7 @@ routing branch from WORKFLOW—do not silently assume one interpretation.
 
 - Final agent message must report **completed actions** and **blockers only**.
 - Do **not** include open-ended “next steps for user” prompts.
-- **`commit` / `pull` / `push` / `land`** (harness skills) include Symphony-specific overrides: no interactive confirmation loops—document decisions in `## Codex Workpad` and follow blocked-access / state rules instead.
+- **`symphony-commit` / `symphony-pull` / `symphony-push` / `symphony-land`** (WORKFLOW Step 1–2) include Symphony-specific overrides: no interactive confirmation loops—document decisions in `## Codex Workpad` and follow blocked-access / state rules instead.
 
 ## Single workpad — no extra completion comments (WORKFLOW Default posture)
 
@@ -112,9 +98,9 @@ routing branch from WORKFLOW—do not silently assume one interpretation.
 
 ## Execution phase — implement + handoff (WORKFLOW Step 2)
 
-- **After Step 1 bootstrap:** **`pull`** has run; **pull skill evidence** is recorded in workpad **`Notes`**; repo state (`branch`, `git status`, `HEAD`) is understood before substantive implementation.
+- **After Step 1 bootstrap:** **`symphony-pull`** has run; **pull evidence** is recorded in workpad **`Notes`**; repo state (`branch`, `git status`, `HEAD`) is understood before substantive implementation.
 - **Guardrails:** Do **not** paste the PR URL into the workpad; do **not** post a separate “done” or completion **summary** comment outside `## Codex Workpad`—only update the workpad (and use `### Confusions` when something was unclear).
-- **`Todo` + PR at kickoff:** After PR feedback sweep and required fixes, **`push`** the branch with any updates, then move to **`In Review`** when the completion bar is satisfied.
+- **`Todo` + PR at kickoff:** After PR feedback sweep and required fixes, **`symphony-push`** the branch with any updates, then move to **`In Review`** when the completion bar is satisfied.
 
 ## `In Review` — freeze (WORKFLOW Step 3)
 
@@ -130,7 +116,7 @@ If blocked and **no** workpad exists yet, add **one** concise blocker comment on
 
 ## Workpad comment editing (WORKFLOW Guardrails)
 
-If in-session comment editing is unavailable, use the documented **update script** fallback (see `linear` skill). Only treat workpad updates as blocked if **both** MCP-style editing and script-based editing fail.
+If in-session comment editing is unavailable, use the documented **update script** fallback (see **`symphony-linear`** skill). Only treat workpad updates as blocked if **both** MCP-style editing and script-based editing fail.
 
 ## Workpad environment stamp
 
@@ -142,7 +128,7 @@ If in-session comment editing is unavailable, use the documented **update script
 
 - WORKFLOW allows temporary local edits to validate assumptions (for example
   tweak a build input or a UI path). **Revert all proof edits** before
-  `commit` / `push`. Record what you tried and the outcome in workpad
+  **`symphony-commit`** / **`symphony-push`**. Record what you tried and the outcome in workpad
   `Validation` / `Notes`.
 
 ## PR feedback sweep (before `In Review`)
@@ -172,15 +158,17 @@ and use it to sharpen UI/runtime coverage.
 - Confirm **every** required ticket-provided validation / test-plan item is explicitly marked complete in the workpad.
 - Repeat read-address-verify until PR checks are green and no outstanding actionable review comments remain.
 
-## Blocked-access escape hatch (WORKFLOW)
+## Blocked-access brief (non-GitHub tools/auth)
 
-Mirror `elixir/WORKFLOW.md` **Blocked-access escape hatch**:
+When moving to `In Review` under the escape hatch, the workpad blocker brief
+must be concise and include:
 
-- **GitHub** is **not** a default blocker — try fallbacks (alternate remote/auth mode), document attempts in the workpad.
-- **Non-GitHub** missing tool/auth — move to **`In Review`** with a blocker brief in the workpad (what is missing, why it blocks, exact unblock action).
-- This is the intentional exception to “no next steps for user” — keep the brief **action-oriented** and **in the workpad only**.
+- what is missing,
+- why it blocks required acceptance/validation,
+- exact human action needed to unblock.
 
-If no workpad exists yet when blocked, add the single blocker comment per Guardrails before state moves.
+GitHub access is **not** a default blocker—try documented fallbacks first and
+record attempts in the workpad.
 
 ## Completion bar (reminder)
 
@@ -194,6 +182,6 @@ If no workpad exists yet when blocked, add the single blocker comment per Guardr
 
 ## After squash-merge (`Merging` → `Done`)
 
-Follow `.agents/skills/land/SKILL.md` and its watcher loop. When the PR is
+Follow `.agents/skills/symphony-land/SKILL.md` and its watcher loop. When the PR is
 merged, move the Linear issue to **`Done`** via `issueUpdate` with the completed
-state id (use `linear` skill / `linear_graphql`).
+state id (use **`symphony-linear`** skill / `linear_graphql`).
