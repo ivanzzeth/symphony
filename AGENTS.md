@@ -192,9 +192,11 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 | land | Squash-merge loop via gh CLI when issue reaches Merging | orchestrator agent |
 | debug | Investigate stuck/failing runs, correlate logs | orchestrator agent |
 | harness | Configure and maintain the agent harness (meta-skill) | harness-agent |
+| symphony-harness | Mirror of `harness` skill (same content; alternate path) | harness-agent |
 
 **Execution Rules:**
 - Symphony orchestrator polls Linear for Todo issues and dispatches one Cursor-backed agent run per issue (polling interval: 5000ms)
+- **Harness reconfiguration:** read the execution contract from the injected workflow path when present; if that path is missing or unreadable, use **`elixir/WORKFLOW.md`**. Only modify `.agents/` and `AGENTS.md` — never the workflow file itself.
 - **WORKFLOW Contract (Markdown template):** mirror `elixir/WORKFLOW.md` **Contract** — (1) **Unattended:** never ask the human for follow-up actions; final message = completed actions + blockers only; (2) **Workpad-first:** open `## Codex Workpad` and update it before new implementation; (3) **Reproduce first:** confirm current behavior/signal before changing code; (4) **Single workpad:** one workpad comment; no separate “done” comments; (5) **Ticket metadata:** keep state, checklist, acceptance criteria, and links current; do not edit the issue body for planning; (6) **Scope discipline:** out-of-scope discoveries → separate Backlog issue with `related` (+ `blockedBy` when dependent)
 - **State → Skill routing (WORKFLOW):** `Backlog` → do not modify the ticket; stop and wait for the human | `Todo` → `linear` + `pull` after moving to In Progress and bootstrapping workpad | `In Progress` → `pull` → implement → `commit` → `push` → land **sweep** before `In Review` | `In Review` → wait + poll, no code | `Merging` → `land` merge mode | `Rework` → `linear` (delete workpad) then `pull` on fresh branch | `Canceled` / `Duplicate` → shut down
 - **WORKFLOW command names vs skills:** the Markdown contract names **`pull`** (base-branch sync), **`commit`**, **`push`**, and **`land sweep`** (PR feedback sweep before `In Review`); these map to the **`pull`**, **`commit`**, **`push`**, and **`land`** skills (`land` **sweep** vs **merge** modes per `.agents/skills/land/SKILL.md`). Some runners or older prompts may still surface `symphony-pull` / `symphony-*` aliases — treat them as the same flows as **`pull`** / **`commit`** / **`push`** / **`land`**.
@@ -280,16 +282,32 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 │   │   └── SKILL.md
 │   └── elixir-reviewer/
 │       └── SKILL.md
+│   ├── symphony-commit/
+│   │   └── SKILL.md
+│   ├── symphony-debug/
+│   │   └── SKILL.md
+│   ├── symphony-harness/
+│   │   ├── SKILL.md
+│   │   └── references/
+│   ├── symphony-land/
+│   │   ├── SKILL.md
+│   │   └── land_watch.py
+│   ├── symphony-linear/
+│   │   └── SKILL.md
+│   ├── symphony-pull/
+│   │   └── SKILL.md
+│   └── symphony-push/
+│       └── SKILL.md
 ├── rules/ (empty — rules ≠ skills)
 └── worktree_init.sh
 ```
 
-Optional: repositories may also carry `symphony-*` skill directories (`symphony-pull`, `symphony-commit`, …) as IDE aliases — treat them as equivalent to the canonical `pull`, `commit`, … skills when present.
+Optional: `symphony-*` skill directories mirror the canonical `pull` / `commit` / `push` / `land` / `linear` / `debug` / `harness` trees for IDE or legacy path compatibility — treat them as equivalent; **keep mirrors aligned** when issue-execution wording changes.
 
 **Change History:**
 | Date | Change | Target | Reason |
 |------|--------|--------|--------|
-| 2026-05-06 | Initial harness configuration | All | WORKFLOW.md hash change detected; created symphony-agent definition and AGENTS.md harness context |
+| 2026-05-12 | WEB-121 harness reconfigure: workflow path fallback, mirror sync | `.agents/skills/{harness,symphony-harness}/`, `symphony-dispatch.md`, `symphony-*` issue skills, `harness-agent.md`, AGENTS.md | Injected `/tmp/...` workflow missing; align `symphony-*` copies with canonical skills; directory tree accuracy |
 | 2026-05-06 | Updated for config split | AGENTS.md, symphony-agent.md | Process-level config (server/observability) moved from WORKFLOW.md to ~/.config/symphony/symphony.yaml; added --config/--host CLI flags; WORKFLOW.md disallows server/observability keys |
 | 2026-05-06 | Reconfiguration for v2 WORKFLOW.md | AGENTS.md, push/pull/land skills, land_watch.py | WORKFLOW.md significantly updated: base_branch=develop, polling=5000ms, workspace=~/code/symphony-workspaces, agent=claude with max_concurrent=10 + max_turns=20, codex=never-approve+workspace-write, tracker=linear/project_slug=symphony-079b97dd6409, new after_create/before_remove hooks, detailed Step 0-4 flow, PR feedback sweep, blocked-access escape hatch, workpad template; symphony-agent.md deleted (orchestrator now dispatches via prompt template directly) |
 | 2026-05-06 | Harness reconfiguration | AGENTS.md, land/SKILL.md, land_watch.py | Codex sandbox config naming synced to thread_sandbox+turn_sandbox_policy; land skill .codex/ path corrected to .agents/; directory structure updated for land_watch.py |

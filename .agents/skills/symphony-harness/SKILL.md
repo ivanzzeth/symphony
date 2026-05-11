@@ -23,8 +23,8 @@ When the harness skill triggers, first assess the current harness state and dete
 1. Read `project/.agents/agents/`, `project/.agents/skills/`, `project/AGENTS.md`
 2. Detect execution context:
    - **Symphony dispatch**: The harness run is driven by Symphony (for example `SymphonyElixir.Harness.Manager` after a `WORKFLOW.md` content-hash change, an explicit harness dispatch, or caller-supplied orchestrator context such as `_workspace/symphony_context.json`).
-     1. **Hard prerequisite: read the injected workflow file immediately.** The dispatch context provides a workflow file path. Read that file in full before any other operation. Understand its actual content, structure, and term usage.
-     2. Only after reading may you proceed to audit `.agents/` and `AGENTS.md`.
+     1. **Hard prerequisite: read the injected workflow file immediately.** The dispatch context provides a workflow file path. Read that file in full when it exists and is readable. If the path is **missing or unreadable** (for example an ephemeral `/tmp/...` snapshot that was removed), fall back to **`elixir/WORKFLOW.md`** in this monorepo—the canonical contract the orchestrator loads—and read it in full. Understand its actual content, structure, and term usage either way.
+     2. Only after a successful read (primary or fallback) may you proceed to audit `.agents/` and `AGENTS.md`. When reconfiguration relied on the fallback, add a **Change History** row in `AGENTS.md` noting the missing injected path.
    - **Manual invocation**: User-requested harness work without the Symphony dispatch signals above. Still check for a workflow file in the project when one is referenced, and read it before making changes. Use standard standalone protocols.
 3. Branch by current state:
    - **New build**: agent/skill directories are missing or empty → run all phases starting from Phase 1
@@ -476,7 +476,7 @@ Use these as quick dry-runs after reconfiguring `.agents/` or `AGENTS.md`:
 2. **Error:** `elixir/WORKFLOW.md` missing or unreadable. Expect harness to stop
    after reporting the blocker; no partial writes to skills.
 3. **Continuation:** Resume harness configuration from current tree. Expect
-   re-audit, no duplicate agent files, symphony-linear / symphony-land / symphony-pull alignment verified.
+   re-audit, no duplicate agent files, `pull` / `land` / `linear` skill trees aligned (including **`symphony-*`** mirrors where present).
 
 ## References
 
