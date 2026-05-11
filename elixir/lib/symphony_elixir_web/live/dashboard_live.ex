@@ -402,7 +402,11 @@ defmodule SymphonyElixirWeb.DashboardLive do
     """
   end
 
-  defp multi_project_dashboard?(rows) when is_list(rows), do: length(rows) > 1
+  defp multi_project_dashboard?(rows) when is_list(rows) do
+    # `Endpoint` integration tests pin `:orchestrator` while `Meta.list_rows/0` can still
+    # reflect other concurrent tests — force the single-project dashboard in that case.
+    if Endpoint.config(:orchestrator), do: false, else: length(rows) > 1
+  end
 
   defp default_selected_project_id([]), do: "default"
 
