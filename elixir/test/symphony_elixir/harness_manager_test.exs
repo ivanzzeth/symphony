@@ -63,6 +63,12 @@ defmodule SymphonyElixir.HarnessManagerTest do
       assert compute_hash_for_test(path) == ""
     end
 
+    test "returns empty string when WORKFLOW.md is whitespace-only", %{test_root: test_root} do
+      path = Path.join(test_root, "WORKFLOW.md")
+      File.write!(path, "   \n\t  \n")
+      assert compute_hash_for_test(path) == ""
+    end
+
     test "returns a SHA-256 hash when WORKFLOW.md exists", %{test_root: test_root} do
       path = Path.join(test_root, "WORKFLOW.md")
       File.write!(path, @test_workflow_content)
@@ -220,6 +226,38 @@ defmodule SymphonyElixir.HarnessManagerTest do
 
       assert GenServer.call(pid, :check) == :harness_busy
     end
+
+    test "returns :synced when WORKFLOW.md is missing and last_hash is nil (no harness dispatch)",
+         %{pid: pid, test_root: test_root, harness_state_path: harness_state_path} do
+      path = Path.join(test_root, "WORKFLOW.md")
+      refute File.exists?(path)
+
+      assert GenServer.call(pid, :check) == :synced
+
+      final_state = :sys.get_state(pid)
+      refute final_state.harness_running
+      assert final_state.last_hash == ""
+      assert load_last_hash_for_test(harness_state_path) == ""
+
+      assert GenServer.call(pid, :check) == :unchanged
+    end
+
+    test "returns :synced for whitespace-only WORKFLOW then :dispatched when real content appears",
+         %{pid: pid, test_root: test_root, harness_state_path: harness_state_path} do
+      path = Path.join(test_root, "WORKFLOW.md")
+      File.write!(path, "  \n  ")
+
+      assert GenServer.call(pid, :check) == :synced
+      assert load_last_hash_for_test(harness_state_path) == ""
+
+      File.write!(path, @test_workflow_content)
+      assert GenServer.call(pid, :check) == :dispatched
+
+      :sys.replace_state(pid, fn state -> %{state | harness_running: false} end)
+
+      assert GenServer.call(pid, :check) == :unchanged
+      assert load_last_hash_for_test(harness_state_path) != ""
+    end
   end
 
   describe "harness completion sync" do
@@ -327,9 +365,13 @@ defmodule SymphonyElixir.HarnessManagerTest do
   defp compute_hash_for_test(path) do
     case File.read(path) do
       {:ok, content} ->
-        content
-        |> then(&:crypto.hash(:sha256, &1))
-        |> Base.encode16(case: :lower)
+        if String.trim(content) == "" do
+          ""
+        else
+          content
+          |> then(&:crypto.hash(:sha256, &1))
+          |> Base.encode16(case: :lower)
+        end
 
       {:error, :enoent} ->
         ""
