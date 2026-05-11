@@ -324,6 +324,7 @@ Optional: repositories may also carry `symphony-*` skill directories (`symphony-
 | 2026-05-11 | Harness continuation (resume): State table vs `Backlog`, blocked-access tone | AGENTS.md, symphony-dispatch.md, issue-execution-checklist.md | Re-audit `elixir/WORKFLOW.md`: `Backlog` only in Step 0 (not State table); document blocked-access carve-out; continuation blockers include Linear prerequisite |
 | 2026-05-11 | Harness sync to WORKFLOW (blocked-access + Step 1 shape) | AGENTS.md, harness references, harness + symphony-harness SKILL.md, linear/SKILL.md | Match current `elixir/WORKFLOW.md`: escape hatch (GitHub fallbacks; non-GitHub missing auth → `In Review` + workpad brief); Contract bullets aligned; Step 1 = validation mirror + app-touching flow checks only |
 | 2026-05-12 | WEB-96 harness reconfigure: injected-path fallback + audit | AGENTS.md, harness-agent.md, harness/SKILL.md, symphony-dispatch.md, issue-execution-checklist.md | Ticket cited ephemeral `/tmp/.../WORKFLOW.md`; align harness docs with fallback to `elixir/WORKFLOW.md` when path missing/unreadable |
+| 2026-05-12 | WEB-96 retry: parity `symphony-harness` mirror | `.agents/skills/symphony-harness/` (SKILL.md Phase 0, `references/symphony-dispatch.md`, `references/issue-execution-checklist.md`) | Keep `symphony-harness` copies aligned with canonical `harness/` injected-path fallback |
 
 ## Harness: Symphony Development
 
