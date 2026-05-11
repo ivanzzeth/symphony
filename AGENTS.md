@@ -250,41 +250,38 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 │   ├── symphony-builder.md
 │   └── symphony-reviewer.md
 ├── skills/
-│   ├── commit/
-│   │   └── SKILL.md
+│   ├── commit/                    # canonical
+│   ├── symphony-commit/           # mirror (same SKILL content as commit/)
 │   ├── debug/
-│   │   └── SKILL.md
-│   ├── harness/
-│   │   ├── SKILL.md
-│   │   └── references/
+│   ├── symphony-debug/
+│   ├── harness/                   # meta-skill + references/
+│   ├── symphony-harness/          # mirror (kept in sync with harness/)
 │   ├── land/
 │   │   ├── SKILL.md
 │   │   └── land_watch.py
+│   ├── symphony-land/             # mirror
+│   │   ├── SKILL.md
+│   │   └── land_watch.py
 │   ├── linear/
-│   │   └── SKILL.md
+│   ├── symphony-linear/
 │   ├── pull/
-│   │   └── SKILL.md
+│   ├── symphony-pull/
 │   ├── push/
-│   │   └── SKILL.md
+│   ├── symphony-push/
 │   ├── symphony-dev/
 │   │   ├── SKILL.md
 │   │   └── references/
 │   │       └── orchestrator-workflow.md
 │   ├── elixir-planner/
-│   │   └── SKILL.md
 │   ├── elixir-developer/
-│   │   └── SKILL.md
 │   ├── elixir-tester/
-│   │   └── SKILL.md
 │   ├── elixir-builder/
-│   │   └── SKILL.md
 │   └── elixir-reviewer/
-│       └── SKILL.md
 ├── rules/ (empty — rules ≠ skills)
 └── worktree_init.sh
 ```
 
-Optional: repositories may also carry `symphony-*` skill directories (`symphony-pull`, `symphony-commit`, …) as IDE aliases — treat them as equivalent to the canonical `pull`, `commit`, … skills when present.
+Each `symphony-*` skill directory is an **IDE/cursor alias** of the matching canonical skill (`pull`, `commit`, `push`, `land`, `linear`, `debug`, `harness`). Prefer the canonical name in new docs; loading either tree is equivalent.
 
 **Change History:**
 | Date | Change | Target | Reason |
@@ -322,6 +319,7 @@ Optional: repositories may also carry `symphony-*` skill directories (`symphony-
 | 2026-05-11 | Harness continuation (resume): WORKFLOW literal `pull`/`commit`/`push`/`land sweep` | AGENTS.md, issue-execution-checklist.md, symphony-dispatch.md, push/SKILL.md, harness-agent.md | `elixir/WORKFLOW.md` Markdown now names skills directly; State table without `Backlog` row (Step 0 only); harness docs drop stale `symphony-*` as primary |
 | 2026-05-11 | Harness continuation (resume): State table vs `Backlog`, blocked-access tone | AGENTS.md, symphony-dispatch.md, issue-execution-checklist.md | Re-audit `elixir/WORKFLOW.md`: `Backlog` only in Step 0 (not State table); document blocked-access carve-out; continuation blockers include Linear prerequisite |
 | 2026-05-11 | Harness sync to WORKFLOW (blocked-access + Step 1 shape) | AGENTS.md, harness references, harness + symphony-harness SKILL.md, linear/SKILL.md | Match current `elixir/WORKFLOW.md`: escape hatch (GitHub fallbacks; non-GitHub missing auth → `In Review` + workpad brief); Contract bullets aligned; Step 1 = validation mirror + app-touching flow checks only |
+| 2026-05-12 | WEB-99: harness reconfigure — sync `symphony-harness/` with `harness/`, alias docs, AGENTS.md tree, stale-path fallback | `.agents/skills/harness/`, `symphony-harness/`, `harness-agent.md`, `AGENTS.md` | Phase 0–6 audit vs `elixir/WORKFLOW.md`; mirror skills; document `/tmp/.../WORKFLOW.md` unreadable → use `elixir/WORKFLOW.md` |
 
 ## Harness: Symphony Development
 
