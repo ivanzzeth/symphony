@@ -58,9 +58,10 @@ and the AGENTS.md harness context.
 
 ## Error Handling
 
-- **Missing WORKFLOW.md**: Report and exit; cannot configure harness without the
-  Symphony execution contract. In this monorepo the canonical file is
-  `elixir/WORKFLOW.md` (path passed to the running orchestrator).
+- **Missing or unreadable injected workflow path**: If the dispatch context path
+  cannot be read, fall back to the repository canonical contract at
+  **`elixir/WORKFLOW.md`**. If that file is also missing, report and exit; cannot
+  configure harness without the Symphony execution contract.
 - **Parse failures**: Log the error, skip the problematic file, continue with remaining work.
 - **Conflicting definitions**: Prefer the more specific definition; document the conflict in AGENTS.md change history.
 - **Disallowed WORKFLOW.md keys**: If WORKFLOW.md contains `server` or `observability` keys, note that these are process-level config that belongs in `~/.config/symphony/symphony.yaml`. Report to user but do not block — the runtime silently strips them with a warning.
