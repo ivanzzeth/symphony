@@ -184,9 +184,16 @@ defmodule SymphonyElixir.Harness.Manager do
         if normalized in ["done", "canceled", "duplicate"] do
           Logger.info("Harness issue #{issue_id} reached terminal state: #{state_name}; recording hash")
 
-          persist_harness_state(state.harness_state_path, state.last_hash, nil)
+          # Re-read current WORKFLOW.md hash from disk instead of using
+          # state.last_hash (which may be stale if the file changed during
+          # harness execution). This prevents a cascade of duplicate harness
+          # issues when WORKFLOW.md changes while a harness issue is active.
+          workflow_path = Map.get(state, :workflow_file_path) || Workflow.workflow_file_path()
+          current_hash = compute_hash(workflow_path)
 
-          %{state | harness_issue_id: nil, harness_running: false}
+          persist_harness_state(state.harness_state_path, current_hash, nil)
+
+          %{state | last_hash: current_hash, harness_issue_id: nil, harness_running: false}
         else
           state
         end
