@@ -194,6 +194,7 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 | harness | Configure and maintain the agent harness (meta-skill) | harness-agent |
 
 **Execution Rules:**
+- **Authoritative prompt:** Issue-execution behavior is defined by the Markdown half of `elixir/WORKFLOW.md` after the YAML front matter — **Contract**; **State → Skill routing**; **Step 0** (Route); **Step 1** (Workpad bootstrap); **Step 2** (Execute); **Step 3** (`In Review`); **Step 4** (`Rework`); **Completion bar before In Review**; **Guardrails**; **Blocked-access escape hatch**; **Prerequisite**. Bullets below summarize; on conflict, the workflow file wins.
 - Symphony orchestrator polls Linear for Todo issues and dispatches one Cursor-backed agent run per issue (polling interval: 5000ms)
 - **WORKFLOW Contract (Markdown template):** mirror `elixir/WORKFLOW.md` **Contract** — (1) **Unattended:** never ask the human for follow-up actions; final message = completed actions + blockers only; (2) **Workpad-first:** open `## Codex Workpad` and update it before new implementation; (3) **Reproduce first:** confirm current behavior/signal before changing code; (4) **Single workpad:** one workpad comment; no separate “done” comments; (5) **Ticket metadata:** keep state, checklist, acceptance criteria, and links current; do not edit the issue body for planning; (6) **Scope discipline:** out-of-scope discoveries → separate Backlog issue with `related` (+ `blockedBy` when dependent)
 - **State → Skill routing (WORKFLOW):** `Backlog` → do not modify the ticket; stop and wait for the human | `Todo` → `linear` + `pull` after moving to In Progress and bootstrapping workpad | `In Progress` → `pull` → implement → `commit` → `push` → land **sweep** before `In Review` | `In Review` → wait + poll, no code | `Merging` → `land` merge mode | `Rework` → `linear` (delete workpad) then `pull` on fresh branch | `Canceled` / `Duplicate` → shut down
@@ -278,13 +279,29 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 │   │   └── SKILL.md
 │   ├── elixir-builder/
 │   │   └── SKILL.md
-│   └── elixir-reviewer/
+│   ├── elixir-reviewer/
+│   │   └── SKILL.md
+│   ├── symphony-commit/   # mirror of commit/
+│   │   └── SKILL.md
+│   ├── symphony-debug/    # mirror of debug/
+│   │   └── SKILL.md
+│   ├── symphony-harness/  # mirror of harness/
+│   │   ├── SKILL.md
+│   │   └── references/
+│   ├── symphony-land/     # mirror of land/
+│   │   ├── SKILL.md
+│   │   └── land_watch.py
+│   ├── symphony-linear/   # mirror of linear/
+│   │   └── SKILL.md
+│   ├── symphony-pull/     # mirror of pull/
+│   │   └── SKILL.md
+│   └── symphony-push/     # mirror of push/
 │       └── SKILL.md
 ├── rules/ (empty — rules ≠ skills)
 └── worktree_init.sh
 ```
 
-Optional: repositories may also carry `symphony-*` skill directories (`symphony-pull`, `symphony-commit`, …) as IDE aliases — treat them as equivalent to the canonical `pull`, `commit`, … skills when present.
+Treat `symphony-*` trees as **IDE aliases** of the canonical `pull` / `commit` / `push` / `land` / `linear` / `debug` / `harness` skills — keep mirrors aligned when editing either copy.
 
 **Change History:**
 | Date | Change | Target | Reason |
@@ -322,6 +339,7 @@ Optional: repositories may also carry `symphony-*` skill directories (`symphony-
 | 2026-05-11 | Harness continuation (resume): WORKFLOW literal `pull`/`commit`/`push`/`land sweep` | AGENTS.md, issue-execution-checklist.md, symphony-dispatch.md, push/SKILL.md, harness-agent.md | `elixir/WORKFLOW.md` Markdown now names skills directly; State table without `Backlog` row (Step 0 only); harness docs drop stale `symphony-*` as primary |
 | 2026-05-11 | Harness continuation (resume): State table vs `Backlog`, blocked-access tone | AGENTS.md, symphony-dispatch.md, issue-execution-checklist.md | Re-audit `elixir/WORKFLOW.md`: `Backlog` only in Step 0 (not State table); document blocked-access carve-out; continuation blockers include Linear prerequisite |
 | 2026-05-11 | Harness sync to WORKFLOW (blocked-access + Step 1 shape) | AGENTS.md, harness references, harness + symphony-harness SKILL.md, linear/SKILL.md | Match current `elixir/WORKFLOW.md`: escape hatch (GitHub fallbacks; non-GitHub missing auth → `In Review` + workpad brief); Contract bullets aligned; Step 1 = validation mirror + app-touching flow checks only |
+| 2026-05-12 | Harness sync to WORKFLOW (WEB-125: Steps 0–4, checklist + dispatch) | AGENTS.md, `harness` + `symphony-harness` references (`issue-execution-checklist.md`, `symphony-dispatch.md`) | Injected `/tmp/.../WORKFLOW.md` unavailable — reconciled against repo `elixir/WORKFLOW.md`; authoritative prompt anchor + `symphony-*` tree; step numbering + State→Skill wording aligned with current contract |
 
 ## Harness: Symphony Development
 
