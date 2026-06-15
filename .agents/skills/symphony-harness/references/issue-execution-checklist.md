@@ -2,7 +2,7 @@
 
 Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
-only.
+only. **Step headings** in the contract are: `Step 0: Route`, `Step 1: Workpad bootstrap`, `Step 2: Execute`, `Step 3: In Review`, `Step 4: Rework`.
 
 ## WORKFLOW command names (Step 1–2)
 
