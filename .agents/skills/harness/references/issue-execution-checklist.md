@@ -4,6 +4,11 @@ Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
 only.
 
+**Step alignment:** Linear prompt **Step 0** (Route) through **Step 4** (Rework)
+matches `elixir/WORKFLOW.md` section headings. This checklist expands PR gates,
+workpad shape, and sweep details — subheadings here are **not** extra WORKFLOW
+steps beyond that 0–4 map.
+
 ## WORKFLOW command names (Step 1–2)
 
 `elixir/WORKFLOW.md` names **`pull`**, **`commit`**, **`push`**, and **`land sweep`**
