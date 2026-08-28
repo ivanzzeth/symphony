@@ -6,7 +6,11 @@ When the harness skill is invoked by the Symphony platform (not manually by a us
 
 ## Path Injection Mechanism
 
-The workflow file path is supplied to the harness agent as part of the dispatch context. The agent reads it from the context and uses it verbatim. There is no hardcoded default path — every invocation supplies the correct path for the running `symphony` process.
+The workflow file path is supplied to the harness agent as part of the dispatch context. The agent reads it from the context and uses it verbatim when the file is readable. There is no hardcoded default path — every invocation supplies the correct path for the running `symphony` process.
+
+### Unreadable or ephemeral injected paths
+
+Symphony may inject a **temporary** absolute path (for example under `/tmp/...`) that **does not exist** in the agent’s runtime environment (IDE session, different machine, cleaned tmp). When the injected path is **missing or unreadable**, read the repository’s canonical contract at **`elixir/WORKFLOW.md`** instead. For this monorepo the Markdown contract (Steps 0–4, State → Skill table, Prerequisite, blocked-access) matches what the orchestrator injects at runtime. Record in AGENTS.md **Change History** that the harness pass used the **`elixir/WORKFLOW.md` fallback** when applicable. Do **not** treat a stale tmp path as the sole long-lived authority in docs.
 
 ## Detection
 
@@ -61,7 +65,7 @@ When running under Symphony, these platform-level details are available:
 
 ### Phase 0 Modifications
 When Symphony dispatch is detected:
-1. Read the repo’s **Symphony** `WORKFLOW.md` (for this monorepo: `elixir/WORKFLOW.md`) to understand the execution contract
+1. Read the **injected workflow file** from context when the path exists and is readable; otherwise read **`elixir/WORKFLOW.md`** (same contract for this monorepo). Use the YAML + Markdown sections to understand the execution contract.
 2. Check `_workspace/symphony_context.json` (when present) for the current issue context
 3. Align the harness execution plan with the WORKFLOW.md requirements — the harness serves the platform's execution contract
 
