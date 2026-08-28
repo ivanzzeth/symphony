@@ -4,6 +4,18 @@ Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
 only.
 
+## WORKFLOW Steps 0–4 (heading alignment)
+
+`elixir/WORKFLOW.md` uses these Markdown headings; map them to this checklist when searching by step number:
+
+| WORKFLOW heading | Where it is covered here |
+|------------------|---------------------------|
+| **Step 0: Route** | `Backlog`; Todo kickoff sequencing; inconsistent state vs issue content; branch/PR hygiene |
+| **Step 1: Workpad bootstrap** | Workpad stamp; Plan / Acceptance Criteria / Validation / Notes; **`pull`** + pull evidence in **`Notes`**; ticket validation mirror |
+| **Step 2: Execute** | Kickoff sync gate; implementation + proof-edit rules; **`commit`** → **`push`**; **`land sweep`** before `In Review`; `Todo` + attached PR; completion bar |
+| **Step 3: In Review** | `In Review` freeze |
+| **Step 4: Rework** | Full reset protocol lives in **`linear`** skill + **AGENTS.md** (close PR, delete workpad, fresh branch) — not duplicated in full here |
+
 ## WORKFLOW command names (Step 1–2)
 
 `elixir/WORKFLOW.md` names **`pull`**, **`commit`**, **`push`**, and **`land sweep`**
