@@ -266,10 +266,26 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 │   │   └── SKILL.md
 │   ├── push/
 │   │   └── SKILL.md
+│   ├── symphony-commit/
+│   │   └── SKILL.md
+│   ├── symphony-debug/
+│   │   └── SKILL.md
 │   ├── symphony-dev/
 │   │   ├── SKILL.md
 │   │   └── references/
 │   │       └── orchestrator-workflow.md
+│   ├── symphony-harness/
+│   │   ├── SKILL.md
+│   │   └── references/
+│   ├── symphony-land/
+│   │   ├── SKILL.md
+│   │   └── land_watch.py
+│   ├── symphony-linear/
+│   │   └── SKILL.md
+│   ├── symphony-pull/
+│   │   └── SKILL.md
+│   ├── symphony-push/
+│   │   └── SKILL.md
 │   ├── elixir-planner/
 │   │   └── SKILL.md
 │   ├── elixir-developer/
@@ -284,7 +300,7 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 └── worktree_init.sh
 ```
 
-Optional: repositories may also carry `symphony-*` skill directories (`symphony-pull`, `symphony-commit`, …) as IDE aliases — treat them as equivalent to the canonical `pull`, `commit`, … skills when present.
+`symphony-*` directories above mirror the canonical `pull`, `commit`, `push`, `land`, `linear`, `debug`, and `harness` skills for `symphony init` / IDE layouts that expect prefixed names.
 
 **Change History:**
 | Date | Change | Target | Reason |
@@ -322,6 +338,8 @@ Optional: repositories may also carry `symphony-*` skill directories (`symphony-
 | 2026-05-11 | Harness continuation (resume): WORKFLOW literal `pull`/`commit`/`push`/`land sweep` | AGENTS.md, issue-execution-checklist.md, symphony-dispatch.md, push/SKILL.md, harness-agent.md | `elixir/WORKFLOW.md` Markdown now names skills directly; State table without `Backlog` row (Step 0 only); harness docs drop stale `symphony-*` as primary |
 | 2026-05-11 | Harness continuation (resume): State table vs `Backlog`, blocked-access tone | AGENTS.md, symphony-dispatch.md, issue-execution-checklist.md | Re-audit `elixir/WORKFLOW.md`: `Backlog` only in Step 0 (not State table); document blocked-access carve-out; continuation blockers include Linear prerequisite |
 | 2026-05-11 | Harness sync to WORKFLOW (blocked-access + Step 1 shape) | AGENTS.md, harness references, harness + symphony-harness SKILL.md, linear/SKILL.md | Match current `elixir/WORKFLOW.md`: escape hatch (GitHub fallbacks; non-GitHub missing auth → `In Review` + workpad brief); Contract bullets aligned; Step 1 = validation mirror + app-touching flow checks only |
+| 2026-05-12 | Harness sync WEB-91 (WORKFLOW contract verification) | `.agents/skills/harness/SKILL.md`, `symphony-dispatch.md`, AGENTS.md | Read `elixir/WORKFLOW.md` (injected `/tmp/.../WORKFLOW.md` unavailable in workspace); verified issue-execution harness matches simplified Steps 0–4 + Contract; added fallback guidance when injected workflow path is unreadable |
+| 2026-05-12 | Harness continuation WEB-91 (retry) | AGENTS.md, `.agents/agents/harness-agent.md`, merge `origin/develop` | Merged latest `develop` into `web-91-harness-reconfigure`; resolved change-history conflict; aligned harness-agent error handling with harness SKILL `elixir/WORKFLOW.md` fallback; refreshed `AGENTS.md` skills tree for `symphony-*` aliases |
 
 ## Harness: Symphony Development
 
