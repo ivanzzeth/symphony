@@ -39,21 +39,21 @@ When running under Symphony, these platform-level details are available:
 
 ### Execution Contract
 - `WORKFLOW.md` defines what Symphony expects from this harness run
-- The file has two layers: YAML config (tracker, polling, workspace, hooks, `agent` pool limits including **`stream_timeout_ms`**, `codex` runner) **and** the Markdown prompt after the second `---` (status routing, Default posture, workpad rules, PR feedback sweep, completion bar). Harness reconfiguration must keep **AGENTS.md** and issue-execution skills (`pull`, `push`, `land`, `linear`, …) aligned with **both** layers.
+- The file has two layers: YAML config (tracker, polling, workspace, hooks, `agent` pool limits including **`stream_timeout_ms`**, `codex` runner) **and** the Markdown prompt after the second `---` (**State → Skill routing**, **Step 0: Route** through **Step 4: Rework**, Contract, Guardrails, Completion bar, Blocked-access, Prerequisite). Harness reconfiguration must keep **AGENTS.md** and issue-execution skills (`pull`, `push`, `land`, `linear`, …) aligned with **both** layers.
 - The Markdown template may include a **`{% if attempt %}` continuation block**: retry attempt number, resume-from-current-workspace instructions, and constraints on repeating completed work. Issue-execution agents must treat that as **continuation semantics**, not a cold start—see `issue-execution-checklist.md` → *Continuation / retry attempts*.
-- **WORKFLOW Contract (numbered list):** unattended output, workpad-first, reproduce first, single workpad, ticket metadata rules, scope discipline — see `elixir/WORKFLOW.md` heading **Contract**.
-- **State → Skill routing:** follow the Markdown **State → Skill routing** table in WORKFLOW for `Todo` through `Canceled` / `Duplicate`. For **`Backlog`**, use **Step 0** point 2 (do not modify the ticket — stop and wait for the human); `Backlog` is **not** a row in that table but is still routed in Step 0.
+- **WORKFLOW Contract (numbered list):** unattended output, workpad-first, reproduce first, single workpad, ticket metadata rules, scope discipline — see the loaded WORKFLOW heading **Contract** (this monorepo: `elixir/WORKFLOW.md` when no other path is injected).
+- **State → Skill routing:** follow the Markdown **State → Skill routing** table in WORKFLOW for `Todo` through `Canceled` / `Duplicate`. For **`Backlog`**, use **Step 0: Route** (do not modify the ticket — stop and wait for the human); `Backlog` is **not** a row in that table but is still routed in Step 0.
 - **WORKFLOW command names:** the Markdown template uses **`pull`**, **`commit`**, **`push`**, and **`land sweep`** — same responsibilities as the harness **`pull`**, **`commit`**, **`push`**, and **`land`** skills (`land` sweep vs merge per `land` skill). Legacy prompts may still say `symphony-*`; treat as equivalent to **`pull`** / **`commit`** / **`push`** / **`land`**.
-- **Workpad Step 1 shape:** mirror ticket **`Validation` / `Test Plan` / `Testing`** into the workpad as required items; **app-touching** work needs **app-specific flow checks** in `Acceptance Criteria` (not only generic commands); pull evidence lives in **`Notes`** after the Step 1 **`pull`** sync — see `issue-execution-checklist.md` → *Step 1 — workpad bootstrap + acceptance criteria*.
-- **Ticket-authored validation:** `Validation` / `Test Plan` / `Testing` content must be **mirrored** into the workpad as required checkboxes (**no optional downgrade**, WORKFLOW Step 1) and **executed in full** before completion (WORKFLOW Step 2; unmet items = incomplete work).
-- **`Todo` + attached PR at kickoff:** run the **full PR feedback sweep** after the workpad exists and **before** new feature work (WORKFLOW State map + Step 2); before `In Review`, **`push`** required branch updates when fixes land.
-- **Kickoff sync:** confirm **`pull`** evidence is in the workpad **`Notes`** and repo state is understood before substantive implementation (WORKFLOW Step 1).
-- **Before `In Review`:** run **`land sweep`**; refresh the workpad so `Plan` / `Acceptance Criteria` / `Validation` match shipped reality; confirm every ticket-provided validation item is checked off; read **Manual QA Plan** when present (WORKFLOW Step 2 + Completion bar).
+- **Step 1: Workpad bootstrap:** mirror ticket **`Validation` / `Test Plan` / `Testing`** into the workpad as required items; **app-touching** work needs **app-specific flow checks** in `Acceptance Criteria` (not only generic commands); **`pull`** before code edits; pull evidence lives in **`Notes`** — see `issue-execution-checklist.md` → *Step 1: Workpad bootstrap*.
+- **Ticket-authored validation:** `Validation` / `Test Plan` / `Testing` content must be **mirrored** into the workpad as required checkboxes (**no optional downgrade**, WORKFLOW **Step 1**) and **executed in full** before completion (WORKFLOW **Step 2**; unmet items = incomplete work).
+- **`Todo` + attached PR at kickoff:** run the **full PR feedback sweep** after the workpad exists and **before** new feature work (WORKFLOW State map + **Step 2**); before `In Review`, **`push`** required branch updates when fixes land.
+- **Kickoff sync:** confirm **`pull`** evidence is in the workpad **`Notes`** and repo state is understood before substantive implementation (WORKFLOW **Step 1**).
+- **Before `In Review`:** run **`land sweep`**; refresh the workpad so `Plan` / `Acceptance Criteria` / `Validation` match shipped reality; confirm every ticket-provided validation item is checked off; read **Manual QA Plan** when present (WORKFLOW **Step 2** + Completion bar).
 - **Unattended Contract:** final agent output must list **completed actions** and **blockers only**—no open-ended “next steps for user” (see WORKFLOW Contract point 1).
 - **Blocked-access escape hatch:** GitHub is **not** a default blocker — try fallbacks, document in workpad. **Non-GitHub** missing tool/auth → move to **`In Review`** with workpad brief (what/why/unblock); exception to unattended tone — **workpad only**.
 - **Prerequisite:** missing Linear MCP / `linear_graphql` → **blocked-access escape hatch** (record blocker; do not prompt the user to configure Linear mid-run).
 - **Ticket metadata vs issue body:** Default posture asks to keep ticket metadata current (**state**, **checklist**, **acceptance criteria**, **links**); Guardrails forbid using the issue **description/body** for planning/progress—that belongs in **`## Codex Workpad`** (see `issue-execution-checklist.md`).
-- **Workpad edit fallback:** MCP comment update preferred; if unavailable use the **update script** path documented in the `linear` skill—only block when both fail (WORKFLOW Guardrails).
+- **Workpad edit fallback:** MCP comment update preferred; if unavailable use the **update script** path documented in the `linear` skill (**`symphony-linear`** is the same skill tree)—only block when both fail (WORKFLOW Guardrails).
 - For a short operator checklist (PR sweep commands, merge→Done), see `issue-execution-checklist.md` in the same directory—still subordinate to the loaded workflow file.
 - May specify: target files, acceptance criteria, constraints, artifact paths
 
@@ -61,7 +61,7 @@ When running under Symphony, these platform-level details are available:
 
 ### Phase 0 Modifications
 When Symphony dispatch is detected:
-1. Read the repo’s **Symphony** `WORKFLOW.md` (for this monorepo: `elixir/WORKFLOW.md`) to understand the execution contract
+1. Read the **injected workflow file path** from dispatch context in full (verbatim path from the running `symphony` process). If no path is available, fall back to this monorepo’s canonical **`elixir/WORKFLOW.md`**. Do not edit the workflow file.
 2. Check `_workspace/symphony_context.json` (when present) for the current issue context
 3. Align the harness execution plan with the WORKFLOW.md requirements — the harness serves the platform's execution contract
 
@@ -86,7 +86,7 @@ When Symphony dispatch is detected:
 harness dispatch. After the first turn, follow-up prompts are worded like:
 “Continue the harness configuration. Resume from the current workspace and
 `.agents/` state.” Treat that as **continuation**, not a new harness build:
-re-read `elixir/WORKFLOW.md`, re-audit `.agents/` and `AGENTS.md`, finish
+re-read the **injected workflow file** (fallback: `elixir/WORKFLOW.md`), re-audit `.agents/` and `AGENTS.md`, finish
 incomplete edits only, and append **Change History** rather than replaying a
 greenfield Phase 1–3 design. If the repo maps `.cursor/` to `.agents/` via
 symlink, edits under `.agents/` are sufficient—do not maintain a second harness
