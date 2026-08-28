@@ -4,6 +4,8 @@ Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
 only.
 
+**Injected workflow path:** Issue-execution agents should read the workflow path supplied by Symphony when it resolves on disk. If that path is missing or unreadable, record it in workpad **`Notes`** and use repo **`elixir/WORKFLOW.md`** as the canonical contract (do not edit workflow files to “fix” loading).
+
 ## WORKFLOW command names (Step 1–2)
 
 `elixir/WORKFLOW.md` names **`pull`**, **`commit`**, **`push`**, and **`land sweep`**
