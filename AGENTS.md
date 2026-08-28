@@ -284,11 +284,12 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 └── worktree_init.sh
 ```
 
-Optional: repositories may also carry `symphony-*` skill directories (`symphony-pull`, `symphony-commit`, …) as IDE aliases — treat them as equivalent to the canonical `pull`, `commit`, … skills when present.
+Optional: `symphony init` / `elixir/priv/agents` templates may still ship **`symphony-*`** skill directory names for greenfield installs. In this repository’s checked-in harness, use the canonical **`pull`**, **`commit`**, **`push`**, **`land`**, **`linear`**, **`debug`**, and **`harness`** skills under `.agents/skills/`; treat **`symphony-*`** as legacy aliases for the same responsibilities when you encounter them elsewhere.
 
 **Change History:**
 | Date | Change | Target | Reason |
 |------|--------|--------|--------|
+| 2026-05-12 | WEB-110: harness reconfiguration vs `elixir/WORKFLOW.md` (Steps 0–4); workflow path fallback; canonical `push`/`land` skill IDs; remove duplicate `symphony-*` trees under `.agents/skills/` | `.agents/skills/*`, harness refs, `harness-agent.md`, `AGENTS.md` | Linear WEB-110 |
 | 2026-05-06 | Initial harness configuration | All | WORKFLOW.md hash change detected; created symphony-agent definition and AGENTS.md harness context |
 | 2026-05-06 | Updated for config split | AGENTS.md, symphony-agent.md | Process-level config (server/observability) moved from WORKFLOW.md to ~/.config/symphony/symphony.yaml; added --config/--host CLI flags; WORKFLOW.md disallows server/observability keys |
 | 2026-05-06 | Reconfiguration for v2 WORKFLOW.md | AGENTS.md, push/pull/land skills, land_watch.py | WORKFLOW.md significantly updated: base_branch=develop, polling=5000ms, workspace=~/code/symphony-workspaces, agent=claude with max_concurrent=10 + max_turns=20, codex=never-approve+workspace-write, tracker=linear/project_slug=symphony-079b97dd6409, new after_create/before_remove hooks, detailed Step 0-4 flow, PR feedback sweep, blocked-access escape hatch, workpad template; symphony-agent.md deleted (orchestrator now dispatches via prompt template directly) |

@@ -4,9 +4,9 @@ Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
 only.
 
-## WORKFLOW command names (Step 1–2)
+## WORKFLOW command names (Steps 1–2)
 
-`elixir/WORKFLOW.md` names **`pull`**, **`commit`**, **`push`**, and **`land sweep`**
+`elixir/WORKFLOW.md` **Step 1** (bootstrap) and **Step 2** (execute) name **`pull`**, **`commit`**, **`push`**, and **`land sweep`**
 directly. Use the matching harness skills **`pull`**, **`commit`**, **`push`**, and
 **`land`** (sweep mode). Older runners or snippets may still say `symphony-pull` /
 `symphony-*` — treat those as aliases for the same **`pull`** / **`commit`** /
