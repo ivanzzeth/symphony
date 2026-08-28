@@ -4,7 +4,14 @@ Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
 only.
 
-## WORKFLOW command names (Step 1–2)
+## WORKFLOW section map (Steps 0–4 + gates)
+
+The Markdown contract in `elixir/WORKFLOW.md` is organized as **Contract** → **State → Skill routing** → **Step 0** Route → **Step 1** Workpad bootstrap → **Step 2** Execute → **Step 3** In Review → **Step 4** Rework → **Completion bar** → **Guardrails** → **Blocked-access escape hatch** → **Prerequisite**. This file expands those steps for operators; do not treat legacy sub-step numbers (for example old “Step 2.13”) as authoritative.
+
+## WORKFLOW command names (Steps 1–2)
+
+- **Step 1** mandates **`pull`** to sync `origin/<base_branch>` before substantive edits and **pull skill evidence** in workpad **`Notes`**.
+- **Step 2** mandates **`commit`** → **`push`**, **`land sweep`** before `In Review`, plus the **Completion bar** checks.
 
 `elixir/WORKFLOW.md` names **`pull`**, **`commit`**, **`push`**, and **`land sweep`**
 directly. Use the matching harness skills **`pull`**, **`commit`**, **`push`**, and
@@ -26,7 +33,7 @@ wait for the human (no autonomous kickoff).
 - Keep **ticket metadata** current: **state**, **checklist**, **acceptance criteria**, and **links**—while keeping **all** planning and progress in the workpad, **not** the issue description (Guardrails).
 - Mirror ticket-authored **`Validation`**, **`Test Plan`**, or **`Testing`** sections into the workpad and treat them as non-negotiable acceptance input (Default posture).
 
-## Step 0 — branch and PR hygiene
+## Step 0 — branch and PR hygiene (WORKFLOW Step 0, item 4)
 
 - If a PR already exists for the current branch and GitHub reports it as
   **`CLOSED`** or **`MERGED`**, treat prior branch work as **non-reusable** for
@@ -44,7 +51,8 @@ substantive analysis or implementation:
 3. Only then begin planning, reproduction, or code work.
 
 If a **`Todo`** ticket already has a PR attached at kickoff, treat it as a
-feedback/rework loop (WORKFLOW Status map): run the **full PR feedback sweep**
+feedback/rework loop (align with **State → Skill routing** / **Step 2 Execute**):
+run the **full PR feedback sweep**
 immediately after the workpad exists—**before** new feature work—then address
 or post explicit justified pushback on every actionable thread, revalidate, and
 only then move back toward `In Review` when the completion bar is satisfied.
