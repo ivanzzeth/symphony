@@ -56,14 +56,14 @@ Run this before moving a ticket to `In Review` whenever a PR is attached.
 
 1. Locate the PR for the current branch.
 2. Confirm validation is green locally before any push.
-3. If uncommitted changes exist, run **`symphony-commit`** then **`symphony-push`** per WORKFLOW Step 2.
+3. If uncommitted changes exist, run **`commit`** then **`push`** per WORKFLOW Step 2 (same flows as **`symphony-commit`** / **`symphony-push`** IDE-alias skills).
 4. Check mergeability and conflicts against `base_branch`.
-5. If conflicts: run **`symphony-pull`** to merge `origin/<base_branch>`, resolve, then **`symphony-push`**.
+5. If conflicts: run **`pull`** to merge `origin/<base_branch>`, resolve, then **`push`** (equivalently **`symphony-pull`** / **`symphony-push`**).
 6. Ensure review comments are acknowledged and addressed (see Review Handling below).
 7. Watch checks until complete — prefer `python3 .agents/skills/symphony-land/land_watch.py`.
 8. If checks fail: pull logs, fix, commit, push, re-run checks.
 9. When all green and feedback addressed: squash-merge using PR title/body.
-10. After merge: transition the Linear issue to `Done` via **`symphony-linear`** skill.
+10. After merge: transition the Linear issue to `Done` via the **`linear`** skill (**`symphony-linear`** is the same skill tree).
 
 ### Async Watch Helper
 
@@ -138,5 +138,5 @@ gh pr merge --squash --subject "$pr_title" --body "$pr_body"
 
 ## Notes
 
-- The **`symphony-pull`** and **`symphony-push`** skills are used within the loop — do not call `gh pr merge` directly.
+- Use **`commit`**, **`pull`**, and **`push`** for branch updates (`symphony-*` skill dirs are aliases). Call `gh pr merge` only once checks and review are green.
 - Remote branches auto-delete on merge in this repo.

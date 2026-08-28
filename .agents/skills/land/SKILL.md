@@ -1,5 +1,5 @@
 ---
-name: symphony-land
+name: land
 description:
   Land a PR by monitoring conflicts, resolving them, waiting for checks, and
   squash-merging when green; use when asked to land, merge, or shepherd a PR to
@@ -138,5 +138,5 @@ gh pr merge --squash --subject "$pr_title" --body "$pr_body"
 
 ## Notes
 
-- The `pull` and `push` skills are called within the loop — do not call `gh pr merge` directly.
+- Use the **`commit`**, **`pull`**, and **`push`** skills for branch hygiene and publishing before the terminal squash step; run **`linear`** after merge for tracker state. The final merge uses `gh pr merge` only after checks and review are satisfied.
 - Remote branches auto-delete on merge in this repo.
