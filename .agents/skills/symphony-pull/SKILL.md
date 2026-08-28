@@ -35,7 +35,7 @@ When this skill runs inside the Linear issue-execution flow (`elixir/WORKFLOW.md
    - `git add <files>`
    - `git commit` (or `git merge --continue` if the merge is paused)
 8. Verify with project checks after the merge: from repo root run
-   `cd elixir && mise exec -- mix test` (same gate as **`symphony-push`** for
+   `cd elixir && mise exec -- mix test` (same gate as **`push`** for
    Symphony). Fix failures before reporting the merge complete.
 9. Summarize the merge:
    - Call out the most challenging conflicts/files and how they were resolved.

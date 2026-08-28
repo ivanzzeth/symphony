@@ -1,5 +1,5 @@
 ---
-name: symphony-push
+name: push
 description:
   Push current branch changes to origin and create or update the corresponding
   pull request; use when asked to push, publish updates, or create pull request.
@@ -23,8 +23,8 @@ These are injected by WORKFLOW.md. The skill reads them as session context.
 
 ## Related Skills
 
-- **`symphony-pull`**: use when push is rejected (non-fast-forward, stale branch).
-- **`symphony-commit`**: use to create clean commits before pushing.
+- **`pull`** (alias dir: `symphony-pull/`): use when push is rejected (non-fast-forward, stale branch).
+- **`commit`** (alias dir: `symphony-commit/`): use to create clean commits before pushing.
 
 ## Steps
 
@@ -32,7 +32,7 @@ These are injected by WORKFLOW.md. The skill reads them as session context.
 2. Run `<test_command>` before pushing. If it fails, fix and re-run until green.
 3. Push branch to `origin` with upstream tracking if needed.
 4. If push is rejected:
-   - Non-fast-forward or sync problem: run **`symphony-pull`** to merge `origin/<base_branch>`, resolve conflicts, rerun validation, push again.
+   - Non-fast-forward or sync problem: run **`pull`** to merge `origin/<base_branch>`, resolve conflicts, rerun validation, push again.
    - For `--force-with-lease`: use only when history was intentionally rewritten.
    - Auth/permissions failures: try documented fallbacks per WORKFLOW blocked-access posture, log attempts in workpad, then stop with exact error only if no safe path remains.
 5. Ensure a PR exists for the branch:
@@ -89,4 +89,4 @@ gh pr view --json url -q .url
 ## Notes
 
 - Do not use `--force`; only `--force-with-lease` as last resort.
-- Distinguish sync problems (use the **`symphony-pull`** skill) from auth/permissions problems (document fallbacks, then stop).
+- Distinguish sync problems (use the **`pull`** skill; alias dir `symphony-pull/`) from auth/permissions problems (document fallbacks, then stop).
