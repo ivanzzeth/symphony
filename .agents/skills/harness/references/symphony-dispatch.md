@@ -6,7 +6,11 @@ When the harness skill is invoked by the Symphony platform (not manually by a us
 
 ## Path Injection Mechanism
 
-The workflow file path is supplied to the harness agent as part of the dispatch context. The agent reads it from the context and uses it verbatim. There is no hardcoded default path — every invocation supplies the correct path for the running `symphony` process.
+The workflow file path is supplied to the harness agent as part of the dispatch context. The agent reads it from the context and uses it verbatim when the file is readable. There is no hardcoded default path in the orchestrator — each running `symphony` process supplies the path it loaded.
+
+### Unreadable or missing injected path
+
+When the dispatch-supplied path does not exist on the agent host (for example a stale `/tmp/.../WORKFLOW.md` path from another machine or a cleaned temp directory), **do not** invent contract text. Fall back to `elixir/WORKFLOW.md` in the checked-out repository workspace, read it in full, and record the fallback reason in **AGENTS.md** Change History for that harness pass. The injected file remains authoritative **when readable**; the repo copy is the supported fallback for harness alignment when the injection path cannot be opened.
 
 ## Detection
 

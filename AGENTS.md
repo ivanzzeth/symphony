@@ -116,11 +116,13 @@ This is a monorepo. The Symphony implementation lives entirely in the `elixir/` 
 |------|---------|
 | `elixir/lib/` | Production code (orchestrator, agents, config, tracker, HTTP server) |
 | `elixir/test/` | ExUnit tests |
-| `elixir/WORKFLOW.md` | Project-level workflow config (tracker, polling, agent, codex, hooks, workspace, prompt) — hot reloaded |
+| `elixir/WORKFLOW.md` | Project-level workflow config (tracker, polling, agent, codex, hooks, workspace, prompt) — hot reloaded; canonical copy of the Symphony execution contract in this monorepo |
 | `~/.config/symphony/symphony.yaml` | Daemon-level process config (server port/host, observability) — NOT in WORKFLOW.md |
 | `elixir/log/` | Disk log files (console handler removed at startup, all output lands here) |
 | `elixir/config/` | Compile-time Elixir config |
 | `elixir/mix.exs` | Elixir project manifest |
+
+**Symphony contract path:** The running orchestrator passes a `WORKFLOW.md` path into harness dispatch. Read that file in full when it exists on disk. If the injected path is missing (for example a `/tmp/.../WORKFLOW.md` artifact from another host), use `elixir/WORKFLOW.md` in this repo and record the fallback in **Change History** below. Never edit the contract file from the harness; only `.agents/` and `AGENTS.md` change.
 
 Other directories at the repo root are scaffolding/workpad artifacts from agents.
 
@@ -322,6 +324,7 @@ Optional: repositories may also carry `symphony-*` skill directories (`symphony-
 | 2026-05-11 | Harness continuation (resume): WORKFLOW literal `pull`/`commit`/`push`/`land sweep` | AGENTS.md, issue-execution-checklist.md, symphony-dispatch.md, push/SKILL.md, harness-agent.md | `elixir/WORKFLOW.md` Markdown now names skills directly; State table without `Backlog` row (Step 0 only); harness docs drop stale `symphony-*` as primary |
 | 2026-05-11 | Harness continuation (resume): State table vs `Backlog`, blocked-access tone | AGENTS.md, symphony-dispatch.md, issue-execution-checklist.md | Re-audit `elixir/WORKFLOW.md`: `Backlog` only in Step 0 (not State table); document blocked-access carve-out; continuation blockers include Linear prerequisite |
 | 2026-05-11 | Harness sync to WORKFLOW (blocked-access + Step 1 shape) | AGENTS.md, harness references, harness + symphony-harness SKILL.md, linear/SKILL.md | Match current `elixir/WORKFLOW.md`: escape hatch (GitHub fallbacks; non-GitHub missing auth → `In Review` + workpad brief); Contract bullets aligned; Step 1 = validation mirror + app-touching flow checks only |
+| 2026-05-12 | WEB-94 harness reconfigure: workflow path fallback + contract pointer | AGENTS.md, symphony-dispatch.md, harness/SKILL.md, harness-agent.md | Injected `/tmp/.../WORKFLOW.md` unavailable on agent host; document `elixir/WORKFLOW.md` fallback per harness Phase 0 |
 
 ## Harness: Symphony Development
 
