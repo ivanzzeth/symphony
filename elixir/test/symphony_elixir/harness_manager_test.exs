@@ -41,7 +41,9 @@ defmodule SymphonyElixir.HarnessManagerTest do
 
     # Start a Harness Manager scoped to the test directory
     workflow_file = Path.join(test_root, "WORKFLOW.md")
-    {:ok, pid} = GenServer.start_link(Manager, [project_dir: test_root, workflow_file_path: workflow_file], name: nil)
+
+    {:ok, pid} =
+      GenServer.start_link(Manager, [project_dir: test_root, workflow_file_path: workflow_file], name: nil)
 
     on_exit(fn ->
       if Process.alive?(pid), do: GenServer.stop(pid)
@@ -60,6 +62,17 @@ defmodule SymphonyElixir.HarnessManagerTest do
       path = Path.join(test_root, "WORKFLOW.md")
       refute File.exists?(path)
 
+      assert compute_hash_for_test(path) == ""
+    end
+
+    test "returns empty string when WORKFLOW.md is empty or whitespace-only", %{
+      test_root: test_root
+    } do
+      path = Path.join(test_root, "WORKFLOW.md")
+      File.write!(path, "")
+      assert compute_hash_for_test(path) == ""
+
+      File.write!(path, "  \n\t ")
       assert compute_hash_for_test(path) == ""
     end
 
@@ -98,16 +111,25 @@ defmodule SymphonyElixir.HarnessManagerTest do
 
   describe "harness-state.json persistence" do
     test "load_last_hash returns nil when state file is missing" do
-      missing_path = Path.join(System.tmp_dir!(), "nonexistent-#{System.unique_integer([:positive])}/harness-state.json")
+      missing_path =
+        Path.join(
+          System.tmp_dir!(),
+          "nonexistent-#{System.unique_integer([:positive])}/harness-state.json"
+        )
+
       assert load_last_hash_for_test(missing_path) == nil
     end
 
-    test "load_last_hash reads stored hash from state file", %{harness_state_path: harness_state_path} do
+    test "load_last_hash reads stored hash from state file", %{
+      harness_state_path: harness_state_path
+    } do
       persist_hash_for_test(harness_state_path, "abc123")
       assert load_last_hash_for_test(harness_state_path) == "abc123"
     end
 
-    test "persist_hash writes JSON with hash and updated_at", %{harness_state_path: harness_state_path} do
+    test "persist_hash writes JSON with hash and updated_at", %{
+      harness_state_path: harness_state_path
+    } do
       persist_hash_for_test(harness_state_path, "deadbeef")
       assert File.exists?(harness_state_path)
 
@@ -123,13 +145,17 @@ defmodule SymphonyElixir.HarnessManagerTest do
       assert File.exists?(path)
     end
 
-    test "load_last_hash handles invalid JSON gracefully", %{harness_state_path: harness_state_path} do
+    test "load_last_hash handles invalid JSON gracefully", %{
+      harness_state_path: harness_state_path
+    } do
       File.mkdir_p!(Path.dirname(harness_state_path))
       File.write!(harness_state_path, "not json")
       assert load_last_hash_for_test(harness_state_path) == nil
     end
 
-    test "load_last_hash handles JSON without hash key gracefully", %{harness_state_path: harness_state_path} do
+    test "load_last_hash handles JSON without hash key gracefully", %{
+      harness_state_path: harness_state_path
+    } do
       File.mkdir_p!(Path.dirname(harness_state_path))
       File.write!(harness_state_path, Jason.encode!(%{"other" => "value"}))
       assert load_last_hash_for_test(harness_state_path) == nil
@@ -183,6 +209,37 @@ defmodule SymphonyElixir.HarnessManagerTest do
   end
 
   describe "check/0" do
+    test "records empty baseline when WORKFLOW.md is missing without harness issue", %{
+      pid: pid,
+      harness_state_path: harness_state_path
+    } do
+      path = Path.join(:sys.get_state(pid).project_dir, "WORKFLOW.md")
+      refute File.exists?(path)
+
+      assert GenServer.call(pid, :check) == :unchanged
+
+      {:ok, raw} = File.read(harness_state_path)
+      {:ok, decoded} = Jason.decode(raw)
+      assert decoded["hash"] == ""
+      assert is_nil(decoded["harness_issue_id"])
+    end
+
+    test "records empty baseline when WORKFLOW.md is whitespace-only", %{
+      pid: pid,
+      harness_state_path: harness_state_path,
+      test_root: test_root
+    } do
+      path = Path.join(test_root, "WORKFLOW.md")
+      File.write!(path, "   \n\t  \n")
+
+      assert GenServer.call(pid, :check) == :unchanged
+
+      {:ok, raw} = File.read(harness_state_path)
+      {:ok, decoded} = Jason.decode(raw)
+      assert decoded["hash"] == ""
+      assert is_nil(decoded["harness_issue_id"])
+    end
+
     test "returns :unchanged when WORKFLOW.md has not changed", %{pid: pid, test_root: test_root} do
       path = Path.join(test_root, "WORKFLOW.md")
       File.write!(path, @test_workflow_content)
@@ -222,12 +279,17 @@ defmodule SymphonyElixir.HarnessManagerTest do
       assert result in [:dispatched, :unchanged]
     end
 
-    test "returns :harness_busy when harness is already running", %{pid: pid, test_root: test_root} do
+    test "returns :harness_busy when harness is already running", %{
+      pid: pid,
+      test_root: test_root
+    } do
       path = Path.join(test_root, "WORKFLOW.md")
       File.write!(path, @test_workflow_content)
 
       # Put the GenServer in harness_running state
-      :sys.replace_state(pid, fn state -> %{state | harness_running: true, harness_issue_id: "test-issue-id"} end)
+      :sys.replace_state(pid, fn state ->
+        %{state | harness_running: true, harness_issue_id: "test-issue-id"}
+      end)
 
       assert GenServer.call(pid, :check) == :harness_busy
     end
@@ -285,18 +347,29 @@ defmodule SymphonyElixir.HarnessManagerTest do
       assert prompt =~ path
     end
 
-    test "deletion prompt when current_hash is empty and last_hash was set", %{test_root: test_root} do
+    test "setup prompt after empty baseline when real WORKFLOW.md appears", %{
+      test_root: test_root
+    } do
+      path = Path.join(test_root, "WORKFLOW.md")
+      hash = compute_hash_for_test(path)
+      assert hash == ""
+
+      File.write!(path, @test_workflow_content)
+      real_hash = compute_hash_for_test(path)
+
+      prompt = build_harness_prompt_for_test("", real_hash, path)
+      assert prompt =~ "/harness"
+      assert prompt =~ "build a new agent harness"
+      assert prompt =~ path
+    end
+
+    test "deletion prompt when current_hash is empty and last_hash was set", %{
+      test_root: test_root
+    } do
       path = Path.join(test_root, "WORKFLOW.md")
       prompt = build_harness_prompt_for_test("some-hash", "", path)
       assert prompt =~ "/harness"
       assert prompt =~ "deleted"
-      assert prompt =~ path
-    end
-
-    test "empty prompt when both hashes are empty/nil", %{test_root: test_root} do
-      path = Path.join(test_root, "WORKFLOW.md")
-      prompt = build_harness_prompt_for_test(nil, "", path)
-      assert prompt =~ "does not exist"
       assert prompt =~ path
     end
   end
@@ -312,9 +385,13 @@ defmodule SymphonyElixir.HarnessManagerTest do
   defp compute_hash_for_test(path) do
     case File.read(path) do
       {:ok, content} ->
-        content
-        |> then(&:crypto.hash(:sha256, &1))
-        |> Base.encode16(case: :lower)
+        if content |> String.trim() |> String.length() == 0 do
+          ""
+        else
+          content
+          |> then(&:crypto.hash(:sha256, &1))
+          |> Base.encode16(case: :lower)
+        end
 
       {:error, :enoent} ->
         ""
@@ -366,10 +443,13 @@ defmodule SymphonyElixir.HarnessManagerTest do
   The workflow file at __WORKFLOW_PATH__ has been deleted. Use the /harness skill to clean up the agent harness configuration accordingly.
   """
 
-  @harness_empty_prompt "The workflow file at __WORKFLOW_PATH__ is empty or does not exist. No harness configuration is needed."
+  defp build_harness_prompt_for_test(last_hash, "", path) when last_hash not in [nil, ""],
+    do: String.replace(@harness_deletion_prompt, "__WORKFLOW_PATH__", path)
 
-  defp build_harness_prompt_for_test(nil, "", path), do: String.replace(@harness_empty_prompt, "__WORKFLOW_PATH__", path)
-  defp build_harness_prompt_for_test(nil, _current_hash, path), do: String.replace(@harness_setup_prompt, "__WORKFLOW_PATH__", path)
-  defp build_harness_prompt_for_test(_last_hash, "", path), do: String.replace(@harness_deletion_prompt, "__WORKFLOW_PATH__", path)
-  defp build_harness_prompt_for_test(_last_hash, _current_hash, path), do: String.replace(@harness_update_prompt, "__WORKFLOW_PATH__", path)
+  defp build_harness_prompt_for_test(last_hash, current_hash, path)
+       when last_hash in [nil, ""] and current_hash != "",
+       do: String.replace(@harness_setup_prompt, "__WORKFLOW_PATH__", path)
+
+  defp build_harness_prompt_for_test(_last_hash, _current_hash, path),
+    do: String.replace(@harness_update_prompt, "__WORKFLOW_PATH__", path)
 end
