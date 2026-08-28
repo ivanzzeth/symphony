@@ -4,7 +4,20 @@ Condensed from `elixir/WORKFLOW.md` for agents loading skills without the full
 prompt. Authoritative text remains in **WORKFLOW.md**; this file is a checklist
 only.
 
-## WORKFLOW command names (Step 1–2)
+## Mapping to `elixir/WORKFLOW.md` (Steps 0–4)
+
+The Markdown prompt uses **Step 0: Route** through **Step 4: Rework**, plus **Completion bar before In Review**, **Guardrails**, **Blocked-access escape hatch**, and **Prerequisite**. Sub-headings here are grouped under those sections (not legacy numbered sub-steps like “Step 1.6”).
+
+| WORKFLOW section | Where in this checklist |
+|------------------|-------------------------|
+| **Step 0: Route** | `Backlog`; Todo kickoff sequencing; Step 0 — branch and PR hygiene; Step 0 — inconsistent state |
+| **Step 1: Workpad bootstrap** | Step 1 — workpad bootstrap + acceptance criteria; workpad stamp; pull evidence / kickoff sync |
+| **Step 2: Execute** | Default posture; mandatory validation; execution phase; PR feedback sweep; before `In Review` |
+| **Step 3: In Review** | `In Review` — freeze |
+| **Step 4: Rework** | Fresh branch / full reset (coordinate with `linear` + `pull` skills and WORKFLOW Step 4) |
+| **Completion bar** | Completion bar (reminder); blocked-access brief |
+
+## Harness skill names vs WORKFLOW wording
 
 `elixir/WORKFLOW.md` names **`pull`**, **`commit`**, **`push`**, and **`land sweep`**
 directly. Use the matching harness skills **`pull`**, **`commit`**, **`push`**, and

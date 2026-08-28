@@ -278,13 +278,29 @@ Note: `LogFile.configure/0` removes the console handler at startup, so `mix run`
 │   │   └── SKILL.md
 │   ├── elixir-builder/
 │   │   └── SKILL.md
-│   └── elixir-reviewer/
+│   ├── elixir-reviewer/
+│   │   └── SKILL.md
+│   ├── symphony-commit/
+│   │   └── SKILL.md
+│   ├── symphony-debug/
+│   │   └── SKILL.md
+│   ├── symphony-harness/
+│   │   ├── SKILL.md
+│   │   └── references/
+│   ├── symphony-land/
+│   │   ├── SKILL.md
+│   │   └── land_watch.py
+│   ├── symphony-linear/
+│   │   └── SKILL.md
+│   ├── symphony-pull/
+│   │   └── SKILL.md
+│   └── symphony-push/
 │       └── SKILL.md
 ├── rules/ (empty — rules ≠ skills)
 └── worktree_init.sh
 ```
 
-Optional: repositories may also carry `symphony-*` skill directories (`symphony-pull`, `symphony-commit`, …) as IDE aliases — treat them as equivalent to the canonical `pull`, `commit`, … skills when present.
+`symphony-*` skill trees mirror the canonical `pull` / `commit` / `push` / `land` / `linear` / `debug` / `harness` skills (for example after `symphony init`); treat them as equivalent paths when present.
 
 **Change History:**
 | Date | Change | Target | Reason |
@@ -322,6 +338,11 @@ Optional: repositories may also carry `symphony-*` skill directories (`symphony-
 | 2026-05-11 | Harness continuation (resume): WORKFLOW literal `pull`/`commit`/`push`/`land sweep` | AGENTS.md, issue-execution-checklist.md, symphony-dispatch.md, push/SKILL.md, harness-agent.md | `elixir/WORKFLOW.md` Markdown now names skills directly; State table without `Backlog` row (Step 0 only); harness docs drop stale `symphony-*` as primary |
 | 2026-05-11 | Harness continuation (resume): State table vs `Backlog`, blocked-access tone | AGENTS.md, symphony-dispatch.md, issue-execution-checklist.md | Re-audit `elixir/WORKFLOW.md`: `Backlog` only in Step 0 (not State table); document blocked-access carve-out; continuation blockers include Linear prerequisite |
 | 2026-05-11 | Harness sync to WORKFLOW (blocked-access + Step 1 shape) | AGENTS.md, harness references, harness + symphony-harness SKILL.md, linear/SKILL.md | Match current `elixir/WORKFLOW.md`: escape hatch (GitHub fallbacks; non-GitHub missing auth → `In Review` + workpad brief); Contract bullets aligned; Step 1 = validation mirror + app-touching flow checks only |
+| 2026-05-12 | Harness sync: WORKFLOW Steps 0–4 mapping (WEB-95) | issue-execution-checklist.md, symphony-dispatch.md, harness/SKILL.md | Explicit mapping table for simplified `elixir/WORKFLOW.md` sections; rename skill/command heading; dispatch doc notes Step 0–4 prompt structure |
+| 2026-05-12 | Harness continuation (WEB-95 retry): injected workflow path fallback | harness/SKILL.md, symphony-dispatch.md, harness-agent.md, AGENTS.md | Dispatch context may point at a stale `/tmp/...` WORKFLOW copy; document fallback to `elixir/WORKFLOW.md` for audit-only reads |
+| 2026-05-12 | Harness continuation (WEB-95 retry #1): verification-only pass | AGENTS.md | Injected path `/tmp/symphony-elixir-harness-73410/WORKFLOW.md` missing on agent host; re-audited harness vs canonical `elixir/WORKFLOW.md`; no doc/skill drift; PR #73 open |
+| 2026-05-12 | Harness continuation (WEB-95 retry #2): merge `origin/develop` | harness/SKILL.md, AGENTS.md | Integrated develop harness commits (init, templates cleanup, issue-based dispatch); resolved reference-line + Change History conflicts; branch rebased on latest contract |
+| 2026-05-12 | AGENTS.md directory tree sync | AGENTS.md | List `symphony-*` skill dirs under `.agents/skills/` after merge (align AGENTS.md with workspace) |
 
 ## Harness: Symphony Development
 
